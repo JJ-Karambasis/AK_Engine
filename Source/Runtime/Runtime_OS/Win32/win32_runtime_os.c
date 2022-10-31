@@ -1,0 +1,39 @@
+runtime_os* OS_Init()
+{
+    local win32_runtime_os Result;
+    Zero_Struct(&Result, win32_runtime_os);
+    
+    Win32_Get_Main_Allocator(&Result.Allocator);
+    
+    OS_Set(&Result.OS);
+    return &Result.OS;
+}
+
+void OS_Shutdown()
+{
+    win32_runtime_os* OS = (win32_runtime_os*)OS_Get();
+    if(OS)
+    {
+    }
+    OS_Set(NULL);
+}
+
+allocator* OS_Get_Allocator()
+{
+    win32_runtime_os* OS = (win32_runtime_os*)OS_Get();
+    if(!OS) return NULL;
+    return &OS->Allocator.Allocator;
+}
+
+global runtime_os* G_OS;
+void OS_Set(runtime_os* OS)
+{
+    G_OS = OS;
+}
+
+runtime_os* OS_Get()
+{
+    return G_OS;
+}
+
+#include "Private/win32_allocator.c"

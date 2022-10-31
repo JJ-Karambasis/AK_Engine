@@ -1,0 +1,4 @@
+#ifndef STRING_STREAM_WRITERS_H
+#define STRING_STREAM_WRITERS_H
+
+#endif

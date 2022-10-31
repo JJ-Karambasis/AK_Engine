@@ -1,0 +1,11 @@
+version(1);
+
+project_name = "AK Engine";
+
+patterns = {"*.cpp", "*.c", "*.h", "*.bat", "*.hlsl", "*.shader", "*.glsl", "*.vert", "*.frag", "*.sh", "*.4coder", "*.hlsl", "*.hpp" };
+
+blacklist_patterns = { ".*" };
+
+load_paths_win = { {"."} };
+
+load_paths = { { load_paths_win, .os = "win"}, };
