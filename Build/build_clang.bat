@@ -18,8 +18,7 @@ IF NOT EXIST "%ClangPath%" (
 )
 
 IF %Optimized% == False (
-	set OptimizedFlags=%OptimizedFlags% -O0
-	echo Not Optimized
+	set OptimizedFlags=%OptimizedFlags% -O0	
 ) ELSE IF %Optimized% == True (
 	set OptimizedFlags=%OptimizedFlags% -O3
 )
@@ -28,6 +27,7 @@ set Warnings=-Wextra -Wno-unused-parameter -Wno-switch
 set CFlags=-std=c99 -g -fdiagnostics-absolute-paths -DOS_WIN32 -DCOMPILER_CLANG %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
 pushd "%InstallPath%"
+"%ClangPath%" %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -o AK_Engine_Tests.exe
 "%ClangPath%" %CFlags% %CurrentPath%../Source/Editor/editor.c -o AK_Engine.exe
 popd
 

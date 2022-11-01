@@ -6,8 +6,7 @@ FOR /F ="delims=" %%A IN ('call build/ini.bat /s CompilerSettings /i Optimized %
 )
 
 IF %Optimized% == False (
-	set OptimizedFlags=-DDEBUG_BUILD
-	echo Not Optimized
+	set OptimizedFlags=-DDEBUG_BUILD	
 ) ELSE IF %Optimized% == True (
 	set OptimizedFlags=
 ) ELSE (

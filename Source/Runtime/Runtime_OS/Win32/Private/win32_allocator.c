@@ -23,7 +23,7 @@ ALLOCATOR_FREE(Win32_Free_Memory)
     win32_allocator* Win32Allocator = (win32_allocator*)Allocator;
     size_t* SizePtr = (size_t*)Memory;
     int64_t Size = (int64_t)SizePtr[-1];
-    VirtualFree(SizePtr, 0, MEM_RELEASE);
+    VirtualFree(&SizePtr[-1], 0, MEM_RELEASE);
     
     Atomic_Increment64(&Win32Allocator->NumberOfFrees);
     Atomic_Decrement64(&Win32Allocator->NumberOfActiveAllocations);

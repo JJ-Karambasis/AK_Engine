@@ -29,8 +29,7 @@ where cl > nul
 IF %ERRORLEVEL% NEQ 0 (call "%VCVarsAllPath%" %BatchfileVersion%)
 
 IF %Optimized% == False (
-	set OptimizedFlags=%OptimizedFlags% -Od
-	echo Not Optimized
+	set OptimizedFlags=%OptimizedFlags% -Od	
 ) ELSE IF %Optimized% == True (
 	set OptimizedFlags=%OptimizedFlags% -O2
 )
@@ -39,6 +38,7 @@ set Warnings=-W4 -wd4100 -wd4189 -wd4201
 set CFlags=-nologo -Z7 -FC -D -D_HAS_EXCEPTIONS=0 -DCOMPILER_MSVC -GR- %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
 pushd "%InstallPath%"
+cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link -out:AK_Engine_Tests.exe
 cl %CFlags% %CurrentPath%../Source/Editor/editor.c -link -out:AK_Engine.exe
 popd
 

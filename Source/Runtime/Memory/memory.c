@@ -14,3 +14,4 @@ void Memory_Copy(void* DstMemory, const void* SrcMemory, size_t Size)
 }
 
 #include "Private/arena.c"
+#include "Private/heap.c"

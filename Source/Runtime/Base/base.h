@@ -41,16 +41,18 @@ typedef int32_t bool32_t;
 #endif
 
 #define Abs(a) (((a) < 0) ? -(a) : (a))
+#define Max(a, b) (((a) > (b)) ? (a) : (b))
+#define Min(a, b) (((a) < (b)) ? (a) : (b))
 
 #define Static_Assert(c) char Glue(__Ignore__Value__, LINE_NUMBER)[(c) ? 1 : -1]
 
 #define Stringify_(a) #a
 #define Stringify(a) Stringify_(a)
 
-#define Kilo(x) ((x)*1024LL)
-#define Mega(x) (Kilo(x)*1024LL)
-#define Giga(x) (Mega(x)*1024LL)
-#define Tera(x) (Giga(x)*1024LL)
+#define Kilo(x) ((x)*1024LLU)
+#define Mega(x) (Kilo(x)*1024LLU)
+#define Giga(x) (Mega(x)*1024LLU)
+#define Tera(x) (Giga(x)*1024LLU)
 
 #define MAX_U8 0xFF
 #define MAX_U16 0xFFFF

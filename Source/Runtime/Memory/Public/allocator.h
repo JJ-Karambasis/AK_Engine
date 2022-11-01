@@ -9,6 +9,12 @@ typedef ALLOCATOR_ALLOCATE(allocator_allocate);
 #define ALLOCATOR_FREE(name) void name(allocator* Allocator, void* Memory)
 typedef ALLOCATOR_FREE(allocator_free);
 
+typedef enum memory_clear_flag
+{
+    MEMORY_CLEAR,
+    MEMORY_NO_CLEAR
+} memory_clear_flag;
+
 struct allocator
 {
     allocator_allocate* Allocate;

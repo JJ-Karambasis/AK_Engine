@@ -3,6 +3,7 @@
 
 #include "Public/allocator.h"
 #include "Public/arena.h"
+#include "Public/heap.h"
 
 void Memory_Set(void* Memory, uint8_t Value, size_t Size);
 void Memory_Clear(void* Memory, size_t Size);
