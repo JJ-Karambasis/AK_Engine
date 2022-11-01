@@ -2,8 +2,8 @@
 #define CORE_H
 
 #include <Base/base.h>
-#include <Memory/memory.h>
 #include <Containers/containers.h>
+#include <Memory/memory.h>
 #include <Strings/strings.h>
 
 #ifdef EDITOR_BUILD

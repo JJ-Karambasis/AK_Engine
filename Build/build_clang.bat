@@ -13,7 +13,7 @@ IF NOT DEFINED ClangPath (
 )
 
 IF NOT EXIST "%ClangPath%" (
-	ECHO VCVarsall batch file "%ClangPath%" does not exist
+	ECHO Clang compiler "%ClangPath%" does not exist
 	EXIT /b 1
 )
 

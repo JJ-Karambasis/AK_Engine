@@ -8,26 +8,25 @@ typedef struct heap_memory_block
     struct heap_memory_block* Next;
 } heap_memory_block;
 
-typedef struct heap_block
+typedef struct heap_block_value
 {
     heap_memory_block*      Block;
     size_t                  Offset;
     size_t                  Size;
-    struct heap_block_node* Nodes[2];
-} heap_block;
+} heap_block_value;
 
-typedef struct heap_block_node
+typedef struct heap_block
 {
-    heap_block*             Block;
-    size_t                  Color;
-    struct heap_block_node* LeftChild;
-    struct heap_block_node* RightChild;
-} heap_block_node;
+    heap_block_value   Value;
+    size_t             Color;
+    struct heap_block* LeftChild;
+    struct heap_block* RightChild;
+} heap_block;
 
 typedef struct heap_block_tree
 {
-    heap_block_node* RootNodeSize;
-    heap_block_node* RootNodeOffset;
+    heap_block* Root;
+    heap_block* OrphanBlocks;
 } heap_block_tree;
 
 typedef struct heap
@@ -37,8 +36,8 @@ typedef struct heap
     heap_memory_block* FirstBlock;
     size_t             InitialBlockSize;
     
-    heap_block_tree  FreeBlockTree;
-    heap_block_node* OrphanNodes;
+    hashmap*           OffsetMap;
+    heap_block_tree    FreeBlockTree;
 } heap;
 
 heap* Heap_Create(allocator* Allocator, size_t InitialBlockSize);

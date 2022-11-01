@@ -43,10 +43,6 @@ void*   Hashmap_Find_(hashmap* Hashmap, void* Key);
 void    Hashmap_Remove(hashmap* Hashmap, void* Key);
 void    Hashmap_Clear(hashmap* Hashmap);
 
-HASH_FUNCTION(Hash_U32);
-
-KEY_COMPARE(Key_Compare_U32);
-
 #define Hashmap_Create(Allocator, KeyType, ValueType, Hash, KeyCompare, SlotCapacity, EntryCapacity) Hashmap_Create_(Allocator, sizeof(KeyType), sizeof(ValueType), Hash, KeyCompare, SlotCapacity, EntryCapacity)
 #define Hashmap_Find(Hashmap, ValueType, Key) (ValueType*)Hashmap_Find_(Hashmap, Key)
 
