@@ -31,6 +31,7 @@ typedef struct arena
 arena*       Arena_Create(allocator* Allocator, size_t InitialBlockSize);
 void         Arena_Delete(arena* Arena);
 void*        Arena_Push(arena* Arena, size_t Size, memory_clear_flag ClearFlag);
+void*        Arena_Push_Aligned(arena* Arena, size_t Size, size_t Alignment, memory_clear_flag ClearFlag);
 arena_marker Arena_Get_Marker(arena* Arena);
 void         Arena_Set_Marker(arena* Arena, arena_marker* Marker);
 void         Arena_Clear(arena* Arena, memory_clear_flag ClearFlag);

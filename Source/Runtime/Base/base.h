@@ -43,6 +43,7 @@ typedef int32_t bool32_t;
 #define Abs(a) (((a) < 0) ? -(a) : (a))
 #define Max(a, b) (((a) > (b)) ? (a) : (b))
 #define Min(a, b) (((a) < (b)) ? (a) : (b))
+#define Is_Pow2(x) ((x != 0) && ((x & (x - 1)) == 0))
 
 #define Static_Assert(c) char Glue(__Ignore__Value__, LINE_NUMBER)[(c) ? 1 : -1]
 

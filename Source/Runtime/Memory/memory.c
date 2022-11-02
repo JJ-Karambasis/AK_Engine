@@ -13,5 +13,6 @@ void Memory_Copy(void* DstMemory, const void* SrcMemory, size_t Size)
     memcpy(DstMemory, SrcMemory, Size);
 }
 
+#include "Private/allocator.c"
 #include "Private/arena.c"
 #include "Private/heap.c"
