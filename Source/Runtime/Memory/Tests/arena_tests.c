@@ -1,50 +1,13 @@
-
 typedef struct ArenaTest
 {
     custom_allocator* Allocator;
     arena* Arena;
 } ArenaTest;
 
-ALLOCATOR_ALLOCATE(Allocate_Memory)
-{
-    custom_allocator* CustomAllocator = (custom_allocator*)Allocator;
-    
-    void* Result = malloc(Size+sizeof(size_t));
-    if(Result)
-    {
-        size_t* SizePtr = (size_t*)Result;
-        *SizePtr = Size;
-        
-        Atomic_Increment64(&CustomAllocator->NumberOfAllocations);
-        Atomic_Increment64(&CustomAllocator->NumberOfActiveAllocations);
-        Atomic_Add64(&CustomAllocator->NumberOfAllocatedBytes, Size);
-        Atomic_Add64(&CustomAllocator->NumberOfActiveBytes, Size);
-        
-        return SizePtr+1;
-    }
-    return NULL;
-}
-
-ALLOCATOR_FREE(Free_Memory)
-{
-    custom_allocator* CustomAllocator = (custom_allocator*)Allocator;
-    size_t* SizePtr = (size_t*)Memory;
-    int64_t Size = (int64_t)SizePtr[-1];
-    free(&SizePtr[-1]);
-    
-    Atomic_Increment64(&CustomAllocator->NumberOfFrees);
-    Atomic_Decrement64(&CustomAllocator->NumberOfActiveAllocations);
-    Atomic_Add64(&CustomAllocator->NumberOfFreedBytes, Size);
-    Atomic_Add64(&CustomAllocator->NumberOfActiveBytes, -Size);
-}
-
 UTEST_F_SETUP(ArenaTest)
 {
-    custom_allocator* Allocator = (custom_allocator*)malloc(sizeof(custom_allocator));
-    Zero_Struct(Allocator, custom_allocator);
+    custom_allocator* Allocator = Allocate_Custom_Allocator();
     utest_fixture->Allocator = Allocator;
-    Allocator->Allocator.Allocate = Allocate_Memory;
-    Allocator->Allocator.Free = Free_Memory;
     
     arena* Arena = Arena_Create(&utest_fixture->Allocator->Allocator, Kilo(512));
     utest_fixture->Arena = Arena;
@@ -121,10 +84,6 @@ UTEST_F_TEARDOWN(ArenaTest)
     custom_allocator* Allocator = utest_fixture->Allocator;
     
     Arena_Delete(Arena);
-    ASSERT_EQ(Allocator->NumberOfAllocations, Allocator->NumberOfFrees);
-    ASSERT_EQ(Allocator->NumberOfActiveAllocations, 0);
-    ASSERT_EQ(Allocator->NumberOfAllocatedBytes, Allocator->NumberOfFreedBytes);
-    ASSERT_EQ(Allocator->NumberOfActiveBytes, 0);
-    
-    free(Allocator);
+    Test_Custom_Allocator_Is_Not_Leaking(utest_result, Allocator);
+    Free_Custom_Allocator(Allocator);
 }

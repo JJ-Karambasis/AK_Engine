@@ -1,8 +1,6 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
-typedef struct hashmap hashmap;
-
 #include "Public/allocator.h"
 #include "Public/arena.h"
 #include "Public/heap.h"

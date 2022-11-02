@@ -1,13 +1,14 @@
-//heap* Heap_Create(allocator* Allocator, size_t InitialBlockSize);
-//void  Heap_Delete(heap* Heap);
+#define HEAP__RED_NODE 0
+#define HEAP__BLACK_NODE 1
+
+#define Heap__Get_Parent(Node) ((heap_block*)((Node)->Color & ~HEAP__BLACK_NODE))
+#define Heap__Get_Color(Node) ((Node)->Color & HEAP__BLACK_NODE)
+
+#define Heap__Set_Red(Node)            ((Node)->Color &= (~(size_t)HEAP__BLACK_NODE))
+#define Heap__Set_Black(Node)          ((Node)->Color |= ((size_t)HEAP__BLACK_NODE))
+#define Heap__Set_Parent(Node, Parent) ((Node)->Color = Heap__Get_Color(Node) | (size_t)(Parent))
 
 typedef int32_t heap__comparision_func(heap_block* BlockA, heap_block* BlockB);
-
-typedef struct heap__block_key
-{
-    heap_memory_block* Block;
-    size_t             Offset;
-} heap__block_key;
 
 ALLOCATOR_ALLOCATE(Heap__Allocate)
 {
@@ -21,19 +22,9 @@ ALLOCATOR_FREE(Heap__Free)
     Heap_Free(Heap, Memory);
 }
 
-HASH_FUNCTION(Hash__Heap_Block)
+inline bool8_t Heap__Is_Block_Free(heap_block* Block)
 {
-    heap__block_key* BlockKey = (heap__block_key*)Key;
-    uint32_t Hash = Hash_Ptr(BlockKey->Block);
-    Hash_Combine(&Hash, Hash_Ptr((void*)BlockKey->Offset));
-    return Hash;
-}
-
-KEY_COMPARE(Hash__Heap_Key_Compare)
-{
-    heap__block_key* BlockKeyA = (heap__block_key*)LeftKey;
-    heap__block_key* BlockKeyB = (heap__block_key*)RightKey;
-    return Key_Compare_Ptr(BlockKeyA->Block, BlockKeyB->Block) && Key_Compare_Ptr((void*)BlockKeyA->Offset, (void*)BlockKeyB->Offset);
+    return Block && !Block->Color;
 }
 
 heap_block* Heap__Get_Min_Block(heap* Heap, heap_block* Block)
@@ -44,7 +35,101 @@ heap_block* Heap__Get_Min_Block(heap* Heap, heap_block* Block)
     return Node;
 }
 
-void Heap__Add_Free_Block_To_Tree(heap* Heap, heap_block* Block)
+void Heap__Swap_Block_Values(heap* Heap, heap_block* BlockA, heap_block* BlockB)
+{
+    heap_block_value Tmp = BlockA->Value;
+    BlockB->Value = BlockA->Value;
+    BlockA->Value = Tmp;
+}
+
+void Heap__Rot_Tree_Left(heap* Heap, heap_block* Block)
+{
+    heap_block* RightChild = Block->RightChild;
+    if((Block->RightChild = RightChild->LeftChild) != NULL)
+        Heap__Set_Parent(RightChild->LeftChild, Block);
+    
+    heap_block* Parent = Heap__Get_Parent(Block);
+    Heap__Set_Parent(RightChild, Parent);
+    *(Parent ? (Parent->LeftChild == Block ? &Parent->LeftChild : &Parent->RightChild) : &Heap->FreeBlockTree.Root) = RightChild;
+    RightChild->LeftChild = Block;
+    Heap__Set_Parent(Block, RightChild);
+}
+
+void Heap__Rot_Tree_Right(heap* Heap, heap_block* Block)
+{
+    heap_block* LeftChild = Block->LeftChild;
+    if((Block->LeftChild = LeftChild->RightChild) != NULL)
+        Heap__Set_Parent(LeftChild->RightChild, Block);
+    
+    heap_block* Parent = Heap__Get_Parent(Block);
+    Heap__Set_Parent(LeftChild, Parent);
+    *(Parent ? (Parent->LeftChild == Block ? &Parent->LeftChild : &Parent->RightChild) : &Heap->FreeBlockTree.Root) = LeftChild;
+    LeftChild->RightChild = Block;
+    Heap__Set_Parent(Block, LeftChild);
+}
+
+void Heap__Fixup_Tree_Add(heap* Heap, heap_block* Block)
+{
+    while(Block != Heap->FreeBlockTree.Root && Heap__Get_Color(Heap__Get_Parent(Block)) == HEAP__RED_NODE)
+    {
+        if(Heap__Get_Parent(Block) == Heap__Get_Parent(Heap__Get_Parent(Block))->LeftChild)
+        {
+            heap_block* Temp = Heap__Get_Parent(Heap__Get_Parent(Block))->RightChild;
+            if(Temp && (Heap__Get_Color(Temp) == HEAP__RED_NODE))
+            {
+                Heap__Set_Black(Temp);
+                Block = Heap__Get_Parent(Block);
+                Heap__Set_Black(Block);
+                Block = Heap__Get_Parent(Block);
+                Heap__Set_Red(Block);
+            }
+            else
+            {
+                if(Block == Heap__Get_Parent(Block)->RightChild)
+                {
+                    Block = Heap__Get_Parent(Block);
+                    Heap__Rot_Tree_Left(Heap, Block);
+                }
+                
+                Temp = Heap__Get_Parent(Block);
+                Heap__Set_Black(Temp);
+                Temp = Heap__Get_Parent(Temp);
+                Heap__Set_Red(Temp);
+                Heap__Rot_Tree_Right(Heap, Temp);
+            }
+        }
+        else 
+        {
+            heap_block* Temp = Heap__Get_Parent(Heap__Get_Parent(Block))->LeftChild;
+            if(Temp && (Heap__Get_Color(Temp) == HEAP__RED_NODE))
+            {
+                Heap__Set_Black(Temp);
+                Block = Heap__Get_Parent(Block);
+                Heap__Set_Black(Block);
+                Block = Heap__Get_Parent(Block);
+                Heap__Set_Red(Block);
+            } 
+            else 
+            {
+                if(Block == Heap__Get_Parent(Block)->LeftChild)
+                {
+                    Block = Heap__Get_Parent(Block);
+                    Heap__Rot_Tree_Right(Heap, Block);
+                }
+                
+                Temp = Heap__Get_Parent(Block);
+                Heap__Set_Black(Temp);
+                Temp = Heap__Get_Parent(Block);
+                Heap__Set_Red(Temp);
+                Heap__Rot_Tree_Left(Heap, Temp);
+            }
+        }
+    }
+    
+    Heap__Set_Black(Heap->FreeBlockTree.Root);
+}
+
+void Heap__Add_Free_Block(heap* Heap, heap_block* Block)
 {
     heap_block* Node = Heap->FreeBlockTree.Root;
     heap_block* Parent = NULL;
@@ -77,20 +162,90 @@ void Heap__Add_Free_Block_To_Tree(heap* Heap, heap_block* Block)
     }
 }
 
-void Heap__Swap_Block_Values(heap* Heap, heap_block* BlockA, heap_block* BlockB)
+void Heap__Fixup_Tree_Remove(heap* Heap, heap_block* Block, heap_block* Parent, bool32_t ChooseLeft)
 {
-    heap__block_key KeyA = {BlockA->Value.Block, BlockA->Value.Offset};
-    heap__block_key KeyB = {BlockB->Value.Block, BlockB->Value.Offset};
+    while(Block != Heap->FreeBlockTree.Root && (Block == NULL || Heap__Get_Color(Block) == HEAP__BLACK_NODE))
+    {
+        if(ChooseLeft)
+        {
+            heap_block* Temp = Parent->RightChild;
+            if(Heap__Get_Color(Temp) == HEAP__RED_NODE)
+            {
+                Heap__Set_Black(Temp);
+                Heap__Set_Red(Parent);
+                Heap__Rot_Tree_Left(Heap, Parent);
+                Temp = Parent->RightChild;
+            }
+            
+            if((Temp->LeftChild == NULL  || Heap__Get_Color(Temp->LeftChild)  == HEAP__BLACK_NODE) &&
+               (Temp->RightChild == NULL || Heap__Get_Color(Temp->RightChild) == HEAP__BLACK_NODE))
+            {
+                Heap__Set_Red(Temp);
+                Block = Parent;
+                Parent = Heap__Get_Parent(Parent);
+                ChooseLeft = Parent && (Parent->LeftChild == Block);
+            }
+            else
+            {
+                if(Temp->RightChild == NULL || Heap__Get_Color(Temp->RightChild) == HEAP__BLACK_NODE)
+                {
+                    Heap__Set_Black(Temp->LeftChild);
+                    Heap__Set_Red(Temp);
+                    Heap__Rot_Tree_Right(Heap, Temp);
+                    Temp = Parent->RightChild;
+                }
+                
+                (Heap__Get_Color(Parent) == HEAP__RED_NODE) ? Heap__Set_Red(Temp) : Heap__Set_Black(Temp);
+                
+                if(Temp->RightChild) Heap__Set_Black(Temp->RightChild);
+                Heap__Set_Black(Parent);
+                Heap__Rot_Tree_Left(Heap, Parent);
+                break;
+            }
+        }
+        else
+        {
+            heap_block* Temp = Parent->LeftChild;
+            if(Heap__Get_Color(Temp) == HEAP__RED_NODE)
+            {
+                Heap__Set_Black(Temp);
+                Heap__Set_Red(Parent);
+                Heap__Rot_Tree_Right(Heap, Parent);
+                Temp = Parent->LeftChild;
+            }
+            
+            if((Temp->LeftChild == NULL || Heap__Get_Color(Temp->LeftChild) == HEAP__BLACK_NODE) &&
+               (Temp->RightChild == NULL || Heap__Get_Color(Temp->RightChild) == HEAP__BLACK_NODE))
+            {
+                Heap__Set_Red(Temp);
+                Block = Parent;
+                Parent = Heap__Get_Parent(Parent);
+                ChooseLeft = Parent && (Parent->LeftChild == Block);
+            }
+            else
+            {
+                if(Temp->LeftChild == NULL || Heap__Get_Color(Temp->LeftChild) == HEAP__BLACK_NODE)
+                {
+                    Heap__Set_Black(Temp->RightChild);
+                    Heap__Set_Red(Temp);
+                    Heap__Rot_Tree_Left(Heap, Temp);
+                    Temp = Parent->LeftChild;
+                }
+                
+                (Heap__Get_Color(Parent) == HEAP__RED_NODE) ? Heap__Set_Red(Temp) : Heap__Set_Black(Temp);
+                
+                if(Temp->LeftChild) Heap__Set_Black(Temp->LeftChild);
+                Heap__Set_Black(Parent);
+                Heap__Rot_Tree_Right(Heap, Parent);
+                break;
+            }
+        }
+    }
     
-    *Hashmap_Find(Heap->OffsetMap, heap_block*, &KeyA) = BlockB;
-    *Hashmap_Find(Heap->OffsetMap, heap_block*, &KeyB) = BlockA;
-    
-    heap_block_value Tmp = BlockA->Value;
-    BlockB->Value = BlockA->Value;
-    BlockA->Value = Tmp;
+    if(Block) Heap__Set_Black(Block);
 }
 
-heap_block* Heap__Remove_Free_Block_From_Tree(heap* Heap, heap_block* Block)
+heap_block* Heap__Remove_Free_Block(heap* Heap, heap_block* Block)
 {
     heap_block* Out;
     if(!Block->LeftChild || !Block->RightChild)
@@ -118,25 +273,6 @@ heap_block* Heap__Remove_Free_Block_From_Tree(heap* Heap, heap_block* Block)
     return Out;
 }
 
-heap_block* Heap__Remove_Free_Block(heap* Heap, heap_block* Block)
-{
-    heap_block* Out = Heap__Remove_Free_Block_From_Tree(Heap, Block);
-    heap__block_key Key;
-    Key.Block  = Out->Value.Block;
-    Key.Offset = Out->Value.Offset;
-    Hashmap_Remove(Heap->OffsetMap, &Key);
-    return Out;
-}
-
-void Heap__Add_Free_Block(heap* Heap, heap_block* Block)
-{
-    Heap__Add_Free_Block_To_Tree(Heap, Block);
-    heap__block_key Key;
-    Key.Block  = Block->Value.Block;
-    Key.Offset = Block->Value.Offset;
-    Hashmap_Add(Heap->OffsetMap, &Key, Block);
-}
-
 heap_block* Heap__Create_Heap_Block(heap* Heap)
 {
     heap_block* Result = Heap->FreeBlockTree.OrphanBlocks;
@@ -149,31 +285,28 @@ heap_block* Heap__Create_Heap_Block(heap* Heap)
 void Heap__Delete_Heap_Block(heap* Heap, heap_block* Block)
 {
     heap_block* Out = Block;
-    if(!Block->Color) Out = Heap__Remove_Free_Block(Heap, Block);
+    if(Heap__Is_Block_Free(Block)) Out = Heap__Remove_Free_Block(Heap, Block);
     Out->LeftChild = Heap->FreeBlockTree.OrphanBlocks;
     Heap->FreeBlockTree.OrphanBlocks = Out;
 }
 
 heap_block* Heap__Find_Best_Fitting_Block(heap* Heap, size_t Size)
 {
-    return NULL;
-}
-
-heap_block* Heap__Find_Best_Offset(heap* Heap, heap_memory_block* MemoryBlock, size_t Offset)
-{
-    heap__block_key Key;
-    Key.Block  = MemoryBlock;
-    Key.Offset = Offset;
-    heap_block** Block = Hashmap_Find(Heap->OffsetMap, heap_block*, &Key);
-    if(!Block) return NULL;
-    return *Block;
+    heap_block* Result = Heap->FreeBlockTree.Root;
+    while(Result)
+    {
+        int64_t Diff = (int64_t)Size - (int64_t)Result->Value.Size;
+        if(!Diff) return Result;
+        Result = (Diff < 0) ? Result->LeftChild : Result->RightChild;
+    }
+    return Result;
 }
 
 void Heap__Increase_Block_Size(heap* Heap, heap_block* Block, size_t Addend)
 {
-    heap_block* Out = Heap__Remove_Free_Block_From_Tree(Heap, Block);
+    heap_block* Out = Heap__Remove_Free_Block(Heap, Block);
     Out->Value.Size += Addend;
-    Heap__Add_Free_Block_To_Tree(Heap, Out);
+    Heap__Add_Free_Block(Heap, Out);
 }
 
 heap_block* Heap__Split_Block(heap* Heap, heap_block* Block, size_t Size)
@@ -190,6 +323,9 @@ heap_block* Heap__Split_Block(heap* Heap, heap_block* Block, size_t Size)
         NewBlock->Value.Block  = Block->Value.Block;
         NewBlock->Value.Size   = (size_t)BlockDiff;
         NewBlock->Value.Offset = Offset;
+        NewBlock->Value.Prev   = Block;
+        Block->Value.Next      = NewBlock;
+        
         Heap__Add_Free_Block(Heap, NewBlock);
     }
     
@@ -235,15 +371,11 @@ heap* Heap_Create(allocator* Allocator, size_t InitialBlockSize)
     Result->Arena            = Arena;
     Result->InitialBlockSize = InitialBlockSize;
     
-    Result->OffsetMap  = Arena_Push_Struct(Arena, hashmap);
-    *Result->OffsetMap = Hashmap_Create(Allocator, heap__block_key, heap_block*, Hash__Heap_Block, Hash__Heap_Key_Compare, 512, 64);
-    
     return Result;
 }
 
 void Heap_Delete(heap* Heap)
 {
-    Hashmap_Delete(Heap->OffsetMap);
     Arena_Delete(Heap->Arena);
 }
 
@@ -275,26 +407,48 @@ void Heap_Free(heap* Heap, void* Memory)
         heap_block** BlockPtr = (heap_block**)((heap_block**)Memory - 1);
         heap_block* Block = *BlockPtr;
         
-        heap_block* LeftBlock  = Heap__Find_Best_Offset(Heap, Block->Value.Block, Block->Value.Offset);
-        heap_block* RightBlock = Heap__Find_Best_Offset(Heap, Block->Value.Block, Block->Value.Offset+sizeof(heap_block*)+Block->Value.Size);
+        heap_block* LeftBlock  = Block->Value.Prev;
+        heap_block* RightBlock = Block->Value.Next;
         
-        if(!LeftBlock && !RightBlock)
+        bool32_t IsLeftBlockFree  = Heap__Is_Block_Free(Block->Value.Prev);
+        bool32_t IsRightBlockFree = Heap__Is_Block_Free(Block->Value.Next);
+        
+        if(!IsLeftBlockFree && !IsRightBlockFree)
         {
             Heap__Add_Free_Block(Heap, Block);
         }
         else if(LeftBlock && !RightBlock)
         {
+            Assert(LeftBlock->Value.Block == Block->Value.Block);
+            Assert((LeftBlock->Value.Offset+LeftBlock->Value.Size+sizeof(heap_block*)) == Block->Value.Offset);
+            
+            LeftBlock->Value.Next = Block->Value.Next;
+            if(Block->Value.Next) Block->Value.Next->Value.Prev = LeftBlock;
+            
             Heap__Increase_Block_Size(Heap, LeftBlock, Block->Value.Size);
             Heap__Delete_Heap_Block(Heap, Block);
         }
         else if(!LeftBlock && RightBlock)
         {
+            Assert(RightBlock->Value.Block == Block->Value.Block);
+            Assert((Block->Value.Offset+Block->Value.Size+sizeof(heap_block*)) == RightBlock->Value.Offset);
+            
+            Block->Value.Next = RightBlock->Value.Next;
+            if(RightBlock->Value.Next) RightBlock->Value.Next->Value.Prev = Block;
+            
             Block->Value.Size += RightBlock->Value.Size;
             Heap__Delete_Heap_Block(Heap, RightBlock);
             Heap__Add_Free_Block(Heap, Block);
         }
         else
         {
+            Assert(LeftBlock->Value.Block  == Block->Value.Block);
+            Assert(RightBlock->Value.Block == Block->Value.Block);
+            Assert((LeftBlock->Value.Offset+LeftBlock->Value.Size+sizeof(heap_block*)) == Block->Value.Offset);
+            Assert((Block->Value.Offset+Block->Value.Size+sizeof(heap_block*)) == RightBlock->Value.Offset);
+            
+            LeftBlock->Value.Next = RightBlock->Value.Next;
+            if(RightBlock->Value.Next) RightBlock->Value.Next->Value.Prev = LeftBlock;
             Heap__Increase_Block_Size(Heap, LeftBlock, Block->Value.Size+RightBlock->Value.Size);
             Heap__Delete_Heap_Block(Heap, Block);
             Heap__Delete_Heap_Block(Heap, RightBlock);
@@ -304,7 +458,6 @@ void Heap_Free(heap* Heap, void* Memory)
 
 void Heap_Clear(heap* Heap, memory_clear_flag ClearFlag)
 {
-    Hashmap_Clear(Heap->OffsetMap);
     Arena_Clear(Heap->Arena, ClearFlag);
     Zero_Struct(&Heap->FreeBlockTree, heap_block_tree);
     
@@ -313,5 +466,3 @@ void Heap_Clear(heap* Heap, memory_clear_flag ClearFlag)
         Heap__Add_Free_Block_From_Memory_Block(Heap, MemoryBlock);
     }
 }
-
-//void  Heap_Clear(heap* Heap, memory_clear_flag ClearFlag);

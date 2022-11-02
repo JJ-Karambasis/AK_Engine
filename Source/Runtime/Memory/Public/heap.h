@@ -1,6 +1,8 @@
 #ifndef HEAP_H
 #define HEAP_H
 
+typedef struct heap_block heap_block;
+
 typedef struct heap_memory_block
 {
     uint8_t*                  Memory;
@@ -10,9 +12,11 @@ typedef struct heap_memory_block
 
 typedef struct heap_block_value
 {
-    heap_memory_block*      Block;
-    size_t                  Offset;
-    size_t                  Size;
+    heap_memory_block* Block;
+    size_t             Offset;
+    size_t             Size;
+    heap_block*        Prev;
+    heap_block*        Next;
 } heap_block_value;
 
 typedef struct heap_block
@@ -35,8 +39,6 @@ typedef struct heap
     arena*             Arena;
     heap_memory_block* FirstBlock;
     size_t             InitialBlockSize;
-    
-    hashmap*           OffsetMap;
     heap_block_tree    FreeBlockTree;
 } heap;
 
