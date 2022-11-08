@@ -4,11 +4,14 @@
 #include <Core/core.h>
 #include <windows.h>
 #include "Public/win32_allocator.h"
+#include "Public/win32_thread.h"
 
 typedef struct win32_runtime_os
 {
     runtime_os      OS;
     win32_allocator Allocator;
+    arena*          Arena;
+    win32_thread*   FreeThreads;
 } win32_runtime_os;
 
 #endif

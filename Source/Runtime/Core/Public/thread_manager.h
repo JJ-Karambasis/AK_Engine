@@ -6,6 +6,8 @@ typedef struct thread_context thread_context;
 #define CORE_THREAD_CALLBACK(name) int32_t name(thread_context* ThreadContext, void* UserData)
 typedef CORE_THREAD_CALLBACK(core_thread_callback);
 
+#define MAX_THREAD_CONTEXT_SLOT_COUNT 64
+
 typedef struct thread_context
 {
     pool_handle           Handle;
@@ -14,13 +16,23 @@ typedef struct thread_context
     os_thread*            Thread;
     core_thread_callback* Callback;
     void*                 UserData;
+    thread_context*       Next;
+    thread_context*       Prev;
 } thread_context;
+
+typedef struct thread_slot
+{
+    thread_context* First;
+    thread_context* Last;
+    uint64_t        Count;
+} thread_slot;
 
 typedef struct thread_manager
 {
-    pool    ThreadPool;
-    hashmap ThreadMap;
-    async_lock Lock;
+    arena*          Arena;
+    thread_slot     ThreadSlots[MAX_THREAD_CONTEXT_SLOT_COUNT];
+    thread_context* FreeThreads;
+    async_spin_lock Lock;
 } thread_manager;
 
 thread_manager Thread_Manager_Create();

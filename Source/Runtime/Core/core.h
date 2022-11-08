@@ -12,9 +12,11 @@
 #include <Runtime_OS/runtime_os.h>
 #endif
 
+#include <Random/random.h>
+
 typedef struct core core;
 
-#include "Public/async_lock.h"
+#include "Public/async_spin_lock.h"
 #include "Public/thread_manager.h"
 
 typedef struct core

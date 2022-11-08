@@ -3,7 +3,7 @@
 
 typedef struct win32_allocator
 {
-    allocator Allocator;
+    allocator BaseAllocator;
     volatile  int64_t NumberOfAllocations;
     volatile  int64_t NumberOfFrees;
     volatile  int64_t NumberOfActiveAllocations;

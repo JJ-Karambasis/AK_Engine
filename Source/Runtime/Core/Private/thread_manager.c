@@ -1,12 +1,21 @@
+inline uint32_t Thread_Manager__Hash_Thread_ID(uint32_t Key)
+{
+    Key = (Key+0x7ed55d16) + (Key<<12);
+    Key = (Key^0xc761c23c) ^ (Key>>19);
+    Key = (Key+0x165667b1) + (Key<<5);
+    Key = (Key+0xd3a2646c) ^ (Key<<9);
+    Key = (Key+0xfd7046c5) + (Key<<3);
+    Key = (Key^0xb55a4f09) ^ (Key>>16);
+    return Key;
+}
+
 thread_manager Thread_Manager_Create()
 {
     thread_manager Result;
     Zero_Struct(&Result, thread_manager);
     
     allocator* Allocator = OS_Get_Allocator();
-    Result.ThreadPool = Pool_Create(Allocator, thread_context, 64);
-    Result.ThreadMap = Hashmap_Create(Allocator, uint32_t, thread_context*, Hash_U32, Key_Compare_U32, 512, 64);
-    Result.Lock = Async_Lock_Create(5000);
+    Result.Arena = Arena_Create(Allocator, Kilo(16));
     return Result;
 }
 
@@ -14,15 +23,16 @@ void Thread_Manager_Delete(thread_manager* ThreadManager)
 {
     Thread_Manager_Wait_For_All_Threads(ThreadManager);
     
-    for(pool_iter Iter = Pool_Begin_Iter(&ThreadManager->ThreadPool); Iter.IsValid; Pool_Next_Iter(&Iter))
+    for(uint32_t SlotIndex = 0; SlotIndex < MAX_THREAD_CONTEXT_SLOT_COUNT; SlotIndex++)
     {
-        thread_context* Thread = Pool_Get_Iter_Entry(&Iter, thread_context);
-        Arena_Delete(Thread->Scratch);
-        OS_Delete_Thread(Thread->Thread);
+        thread_slot* Slot = ThreadManager->ThreadSlots + SlotIndex;
+        for(thread_context* Thread = Slot->First; Thread; Thread = Thread->Next)
+        {
+            Arena_Delete(Thread->Scratch);
+            OS_Delete_Thread(Thread->Thread);
+        }
     }
-    
-    Hashmap_Delete(&ThreadManager->ThreadMap);
-    Pool_Delete(&ThreadManager->ThreadPool);
+    Arena_Delete(ThreadManager->Arena);
 }
 
 OS_THREAD_CALLBACK(Thread_Manager__Thread_Callback)
@@ -33,7 +43,18 @@ OS_THREAD_CALLBACK(Thread_Manager__Thread_Callback)
     uint32_t ThreadID = OS_Get_Current_Thread_ID();
     
     Async_Lock(&ThreadManager->Lock);
-    Hashmap_Add(&ThreadManager->ThreadMap, &ThreadID, &ThreadContext);
+    uint32_t SlotMask  = MAX_THREAD_CONTEXT_SLOT_COUNT-1;
+    uint32_t Hash      = Thread_Manager__Hash_Thread_ID(ThreadID);
+    uint32_t SlotIndex = Hash & SlotMask;
+    thread_slot* Slot  = ThreadManager->ThreadSlots + SlotIndex;
+    if(!Slot->First) Slot->First = Slot->Last = ThreadContext;
+    else
+    {
+        ThreadContext->Prev = Slot->Last;
+        Slot->Last->Next = ThreadContext;
+        Slot->Last = ThreadContext;
+    }
+    Slot->Count++;
     Async_Unlock(&ThreadManager->Lock);
     
     return ThreadContext->Callback(ThreadContext, ThreadContext->UserData);
@@ -41,10 +62,11 @@ OS_THREAD_CALLBACK(Thread_Manager__Thread_Callback)
 
 thread_context* Thread_Manager_Create_Thread(thread_manager* ThreadManager, core_thread_callback* Callback, void* UserData)
 {
-    pool_handle ThreadHandle = Pool_Allocate(&ThreadManager->ThreadPool);
-    thread_context* Result = Pool_Get(&ThreadManager->ThreadPool, thread_context, ThreadHandle);
+    thread_context* Result = ThreadManager->FreeThreads;
+    if(!Result) Result = Arena_Push_Struct(ThreadManager->Arena, thread_context);
+    else ThreadManager->FreeThreads = ThreadManager->FreeThreads->Next;
+    Zero_Struct(Result, thread_context);
     
-    Result->Handle        = ThreadHandle;
     Result->MainAllocator = OS_Get_Allocator();
     Result->Scratch       = Arena_Create(Result->MainAllocator, Mega(1));
     Result->Callback      = Callback;
@@ -60,12 +82,32 @@ void Thread_Manager_Delete_Thread(thread_manager* ThreadManager, thread_context*
     OS_Wait_Thread(ThreadContext->Thread);
     
     Async_Lock(&ThreadManager->Lock);
-    Hashmap_Remove(&ThreadManager->ThreadMap, &ThreadID);
+    
+    uint32_t SlotMask  = MAX_THREAD_CONTEXT_SLOT_COUNT-1;
+    uint32_t Hash      = Thread_Manager__Hash_Thread_ID(ThreadID);
+    uint32_t SlotIndex = Hash & SlotMask;
+    thread_slot* Slot  = ThreadManager->ThreadSlots + SlotIndex;
+    if(Slot->First == ThreadContext)
+    {
+        Slot->First = Slot->First->Next;
+        if(Slot->First) Slot->First->Prev = NULL;
+    }
+    
+    if(Slot->Last == ThreadContext)
+    {
+        Slot->Last = Slot->Last->Prev;
+        if(Slot->Last) Slot->Last->Next = NULL;
+    }
+    
+    if(ThreadContext->Prev) ThreadContext->Prev->Next = ThreadContext->Next;
+    if(ThreadContext->Next) ThreadContext->Next->Prev = ThreadContext->Prev;
+    Slot->Count--;
     Async_Unlock(&ThreadManager->Lock);
     
     OS_Delete_Thread(ThreadContext->Thread);
     Arena_Delete(ThreadContext->Scratch);
-    Pool_Free(&ThreadManager->ThreadPool, ThreadContext->Handle);
+    ThreadContext->Next = ThreadManager->FreeThreads;
+    ThreadManager->FreeThreads = ThreadContext;
 }
 
 thread_local global thread_context* G_ThreadContext;
@@ -76,14 +118,27 @@ thread_context* Thread_Manager_Get_Thread_Context(thread_manager* ThreadManager)
         uint32_t ThreadID = OS_Get_Current_Thread_ID();
         
         Async_Lock(&ThreadManager->Lock);
-        thread_context** PThreadContext = Hashmap_Find(&ThreadManager->ThreadMap, thread_context*, &ThreadID);
-        if(PThreadContext) G_ThreadContext = *PThreadContext;
+        uint32_t SlotMask  = MAX_THREAD_CONTEXT_SLOT_COUNT-1;
+        uint32_t Hash      = Thread_Manager__Hash_Thread_ID(ThreadID);
+        uint32_t SlotIndex = Hash & SlotMask;
+        thread_slot* Slot  = ThreadManager->ThreadSlots + SlotIndex;
+        
+        for(thread_context* Context = Slot->First; Context; Context = Context->Next)
+        {
+            uint32_t ThreadContextID = OS_Get_Thread_ID(Context->Thread);
+            if(ThreadContextID == ThreadID) 
+            {
+                G_ThreadContext = Context;
+                break;
+            }
+        }
+        
         Async_Unlock(&ThreadManager->Lock);
     }
     
-    return NULL;
+    return G_ThreadContext;
 }
 
-void            Thread_Manager_Wait_For_All_Threads(thread_manager* ThreadManager)
+void Thread_Manager_Wait_For_All_Threads(thread_manager* ThreadManager)
 {
 }

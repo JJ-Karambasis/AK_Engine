@@ -33,6 +33,6 @@ ALLOCATOR_FREE(Win32_Free_Memory)
 
 void Win32_Get_Main_Allocator(win32_allocator* Allocator)
 {
-    Allocator->Allocator.Allocate = Win32_Allocate_Memory;
-    Allocator->Allocator.Free = Win32_Free_Memory;
+    Allocator->BaseAllocator.Allocate = Win32_Allocate_Memory;
+    Allocator->BaseAllocator.Free = Win32_Free_Memory;
 }

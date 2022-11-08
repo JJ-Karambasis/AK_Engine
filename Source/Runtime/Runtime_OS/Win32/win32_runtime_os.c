@@ -4,6 +4,7 @@ runtime_os* OS_Init()
     Zero_Struct(&Result, win32_runtime_os);
     
     Win32_Get_Main_Allocator(&Result.Allocator);
+    Result.Arena = Arena_Create(Get_Base_Allocator(&Result.Allocator), Kilo(32));
     
     OS_Set(&Result.OS);
     return &Result.OS;
@@ -30,7 +31,7 @@ allocator* OS_Get_Allocator()
 {
     win32_runtime_os* OS = (win32_runtime_os*)OS_Get();
     if(!OS) return NULL;
-    return &OS->Allocator.Allocator;
+    return Get_Base_Allocator(&OS->Allocator);
 }
 
 global runtime_os* G_OS;
@@ -45,3 +46,4 @@ runtime_os* OS_Get()
 }
 
 #include "Private/win32_allocator.c"
+#include "Private/win32_thread.c"

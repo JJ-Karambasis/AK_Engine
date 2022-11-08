@@ -30,9 +30,11 @@ void  Free_Aligned(allocator* Allocator, void* Memory);
 
 #define Allocate_Struct(Allocator, Type) Allocate_Aligned(Allocator, sizeof(Type), alignof(Type), MEMORY_CLEAR)
 #define Allocate_Array(Allocator, Type, Count) Allocate_Aligned(Allocator, sizeof(Type)*Count, alignof(Type), MEMORY_CLEAR)
+#define Allocate_Struct_No_Clear(Allocator, Type) Allocate_Aligned(Allocator, sizeof(Type), alignof(Type), MEMORY_NO_CLEAR)
+#define Allocate_Array_No_Clear(Allocator, Type, Count) Allocate_Aligned(Allocator, sizeof(Type)*Count, alignof(Type), MEMORY_NO_CLEAR)
 #define Free_Struct(Allocator, Memory) Free_Aligned(Allocator, Memory)
 #define Free_Array(Allocator, Memory)  Free_Aligned(Allocator, Memory)
 
-#define Get_Base_Allocator(Allocator) &Allocator->BaseAllocator
+#define Get_Base_Allocator(Allocator) &(Allocator)->BaseAllocator
 
 #endif

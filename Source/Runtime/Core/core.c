@@ -47,9 +47,12 @@ core* Core_Get()
 }
 
 #include "Private/thread_manager.c"
+#include "Private/async_spin_lock.c"
 
 #include <Base/base.c>
 #include <Memory/memory.c>
+#include <Strings/strings.c>
+#include <Random/random.c>
 
 #ifdef EDITOR_BUILD
 #include <Editor_OS/editor_os.c>

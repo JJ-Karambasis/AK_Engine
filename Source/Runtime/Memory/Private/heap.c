@@ -1,3 +1,4 @@
+//NOTE(EVERYONE): Helper red black tree macros
 #define HEAP__RED_NODE 0
 #define HEAP__BLACK_NODE 1
 
@@ -8,27 +9,31 @@
 #define Heap__Set_Black(Node)          ((Node)->Color |= ((size_t)HEAP__BLACK_NODE))
 #define Heap__Set_Parent(Node, Parent) ((Node)->Color = Heap__Get_Color(Node) | (size_t)(Parent))
 
+//NOTE(EVERYONE): Debug macros to help verify heap is working correct and some protection against freeing
+//memory that is already freed
 #ifdef DEBUG_BUILD
 bool8_t Heap__Has_Allocated_Block(heap* Heap, heap_block* Block);
-
+#define Heap__Add_To_Allocated_List(Heap, Block) \
+if(Heap->AllocatedList) Heap->AllocatedList->PreviousAllocated = Block; \
+Block->NextAllocated = Heap->AllocatedList; \
+Heap->AllocatedList = Block->NextAllocated
 #define Heap__Check_If_Block_Is_Allocated(Heap, block) \
 Assert(Heap__Has_Allocated_Block(Heap, Block)); \
-if(Block->Value.PreviousAllocated) Block->Value.PreviousAllocated->Value.NextAllocated = Block->Value.NextAllocated; \
-if(Block->Value.NextAllocated) Block->Value.NextAllocated->Value.PreviousAllocated = Block->Value.PreviousAllocated; \
-Block->Value.PreviousAllocated = Block->Value.NextAllocated = NULL
-
-#define Heap__Verify(Condition) \
+if(Block == Heap->AllocatedList) Heap->AllocatedList = Heap->AllocatedList->Next; \
+if(Block->PreviousAllocated) Block->PreviousAllocated->NextAllocated = Block->NextAllocated; \
+if(Block->NextAllocated) Block->NextAllocated->PreviousAllocated = Block->PreviousAllocated; \
+Block->PreviousAllocated = Block->NextAllocated = NULL
+#define Heap__Verify_Check(Condition) \
 do \
 { \
 if(!(Condition)) \
 return false; \
 } while(0)
 #else
+#define Heap__Add_To_Allocated_List(Heap, Block)
 #define Heap__Check_If_Block_Is_Allocated(Heap, Block)
-#define Heap__Verify(Condition)
+#define Heap__Verify_Check(Condition)
 #endif
-
-typedef int32_t heap__comparision_func(heap_block* BlockA, heap_block* BlockB);
 
 ALLOCATOR_ALLOCATE(Heap__Allocate)
 {
@@ -42,6 +47,7 @@ ALLOCATOR_FREE(Heap__Free)
     Heap_Free(Heap, Memory);
 }
 
+//~NOTE(EVERYONE): Heap red-black tree implementation
 inline bool8_t Heap__Is_Block_Free(heap_block* Block)
 {
     return Block && Block->Node;
@@ -324,6 +330,7 @@ void Heap__Remove_Free_Block(heap* Heap, heap_block* Block)
     Heap__Delete_Tree_Node(Heap, Out);
     Block->Node = NULL;
 }
+//~End of heap red-black tree implementation
 
 heap_block* Heap__Create_Heap_Block(heap* Heap)
 {
@@ -374,11 +381,15 @@ void Heap__Increase_Block_Size(heap* Heap, heap_block* Block, size_t Addend)
 
 void Heap__Split_Block(heap* Heap, heap_block* Block, size_t Size)
 {
+    //NOTE(EVERYONE): When splitting a block, it is super important to check that the block has the requested size
+    //plus a pointer size. We need to make sure that each new block has a pointer to its metadata before the actual
+    //memory block starts. If the block is not large enough, we cannot split the block
     int64_t BlockDiff = (int64_t)Block->Size - (int64_t)(Size+sizeof(heap_block*));
     if(BlockDiff > 0)
     {
         size_t Offset = Block->Offset + sizeof(heap_block*) + Size;
         
+        //NOTE(EVERYONE): If we can split the block, add the blocks metadata to the beginning of the blocks memory
         heap_block* NewBlock = Heap__Create_Heap_Block(Heap);
         heap_block** NewBlockPtr = (heap_block**)(Block->Block->Memory + Offset);
         *NewBlockPtr = NewBlock;
@@ -408,11 +419,16 @@ heap_block* Heap__Add_Free_Block_From_Memory_Block(heap* Heap, heap_memory_block
     heap_block** BlockPtr = (heap_block**)(MemoryBlock->Memory);
     *BlockPtr = Block;
     
+    //NOTE(EVERYONE): Similar to splitting a block. When a new memory block is created, the underlying heap block
+    //needs to have its sized take into accout the heaps metadata. So we always shrink the block by a pointer size
     Block->Block  = MemoryBlock;
     Block->Size   = MemoryBlock->Size-sizeof(heap_block*);
     Heap__Add_Free_Block(Heap, Block);
     
 #ifdef DEBUG_BUILD
+    //NOTE(EVERYONE): To verify that the heap offsets are working properly. Each memory block contains
+    //a pointer to its first heap block in the memory block. These will then get properly split when
+    //allocations are requested
     MemoryBlock->FirstBlock = Block;
 #endif
     
@@ -421,6 +437,8 @@ heap_block* Heap__Add_Free_Block_From_Memory_Block(heap* Heap, heap_memory_block
 
 heap_block* Heap__Create_Memory_Block(heap* Heap, size_t BlockSize)
 {
+    //NOTE(EVERYONE): When we allocate a memory block, we need the block size, plus the memory block metadata, and
+    //addtional pointer size so we can add an underlying heap block that is BlockSize
     heap_memory_block* MemoryBlock = (heap_memory_block*)Arena_Push(Heap->Arena, BlockSize+sizeof(heap_memory_block)+sizeof(heap_block*), MEMORY_NO_CLEAR);
     Zero_Struct(MemoryBlock, heap_memory_block);
     
@@ -454,6 +472,11 @@ void Heap_Delete(heap* Heap)
 
 void* Heap_Allocate(heap* Heap, size_t Size, memory_clear_flag ClearFlag)
 {
+    //NOTE(EVERYONE): Allocating a block conceptually is a super simple process.
+    //1. Find the best fitting block. 
+    //2. Split it if the size requested is smaller than the block size
+    //3. Get the pointer from the heap block
+    
     if(!Size) return NULL;
     heap_block* Block = Heap__Find_Best_Fitting_Block(Heap, Size);
     if(!Block)
@@ -465,9 +488,15 @@ void* Heap_Allocate(heap* Heap, size_t Size, memory_clear_flag ClearFlag)
     
     Heap__Split_Block(Heap, Block, Size);
     
+    //NOTE(EVERYONE): The block offset always starts at the beginning of the blocks metadata.
+    //This is not where the returned memory starts. It always starts right after the metadata 
+    //so we must offset an additional pointer size
     size_t Offset = Block->Offset + sizeof(heap_block*);
     Assert(Offset + Size <= Block->Block->Size);
     void* Result = Block->Block->Memory + Offset;
+    
+    Heap__Add_To_Allocated_List(Heap, Block);
+    Heap_Verify(Heap);
     
     if(ClearFlag == MEMORY_CLEAR) Memory_Clear(Result, Size);
     return Result;
@@ -477,12 +506,19 @@ void Heap_Free(heap* Heap, void* Memory)
 {
     if(Memory)
     {
+        //NOTE(EVERYTONE): Freeing a block is a little more complex
+        //1. Get the block's metadata from the memory address. Validate that its the correct block
+        //2. Check to see if the blockers neighboring blocks are free. And do the following:
+        //    -If no neighboring blocks are free, add the block to the free block tree
+        //    -If the left block is free, merge the left and current block, and delete the current block
+        //    -If the right block is free, merge the current and right block, and delete the right block
+        //    -If both are free, merge left block with the current and right block, and delete the current and right block
+        
         heap_block** BlockPtr = (heap_block**)((heap_block**)Memory - 1);
         heap_block* Block = *BlockPtr;
         
         Assert((Block->Block->Memory + Block->Offset + sizeof(heap_block*)) == Memory);
-        
-        //Heap__Check_If_Block_Is_Allocated(Heap, Block);
+        Heap__Check_If_Block_Is_Allocated(Heap, Block);
         
         heap_block* LeftBlock  = Block->Prev;
         heap_block* RightBlock = Block->Next;
@@ -532,6 +568,8 @@ void Heap_Free(heap* Heap, void* Memory)
             Heap__Delete_Heap_Block(Heap, Block);
             Heap__Delete_Heap_Block(Heap, RightBlock);
         }
+        
+        Heap_Verify(Heap);
     }
 }
 
@@ -557,39 +595,41 @@ void Heap_Clear(heap* Heap, memory_clear_flag ClearFlag)
 #ifdef DEBUG_BUILD
 bool8_t Heap__Has_Allocated_Block(heap* Heap, heap_block* Block)
 {
-    return true;
+    for(heap_block* TargetBlock = Heap->AllocatedList; TargetBlock; TargetBlock = TargetBlock->Next)
+        if(Block == TargetBlock) return true;
+    return false;
 }
 
 bool8_t Heap__Tree_Verify(heap_block_tree* Tree, heap_block_node* Parent, heap_block_node* Node, uint32_t BlackNodeCount, uint32_t LeafBlackNodeCount)
 {
     if(Parent == NULL)
     {
-        Heap__Verify(Tree->Root == Node);
-        Heap__Verify(Node == NULL || Heap__Get_Color(Node) == HEAP__BLACK_NODE);
+        Heap__Verify_Check(Tree->Root == Node);
+        Heap__Verify_Check(Node == NULL || Heap__Get_Color(Node) == HEAP__BLACK_NODE);
     }
     else
     {
-        Heap__Verify(Parent->LeftChild == Node || Parent->RightChild == Node);
+        Heap__Verify_Check(Parent->LeftChild == Node || Parent->RightChild == Node);
     }
     
     if(Node)
     {
-        Heap__Verify(Heap__Get_Parent(Node) == Parent);
+        Heap__Verify_Check(Heap__Get_Parent(Node) == Parent);
         if(Parent)
         {
             if(Parent->LeftChild == Node)
-                Heap__Verify(Parent->Block->Size >= Node->Block->Size);
+                Heap__Verify_Check(Parent->Block->Size >= Node->Block->Size);
             else
             {
-                Heap__Verify(Parent->RightChild == Node);
-                Heap__Verify(Parent->Block->Size <= Node->Block->Size);
+                Heap__Verify_Check(Parent->RightChild == Node);
+                Heap__Verify_Check(Parent->Block->Size <= Node->Block->Size);
             }
         }
         
         if(Heap__Get_Color(Node) == HEAP__RED_NODE)
         {
-            if(Node->LeftChild)  Heap__Verify(Heap__Get_Color(Node->LeftChild)  == HEAP__BLACK_NODE);
-            if(Node->RightChild) Heap__Verify(Heap__Get_Color(Node->RightChild) == HEAP__BLACK_NODE);
+            if(Node->LeftChild)  Heap__Verify_Check(Heap__Get_Color(Node->LeftChild)  == HEAP__BLACK_NODE);
+            if(Node->RightChild) Heap__Verify_Check(Heap__Get_Color(Node->RightChild) == HEAP__BLACK_NODE);
         }
         else
         {
@@ -597,7 +637,7 @@ bool8_t Heap__Tree_Verify(heap_block_tree* Tree, heap_block_node* Parent, heap_b
         }
         
         if(!Node->LeftChild && !Node->RightChild)
-            Heap__Verify(BlackNodeCount == LeafBlackNodeCount);
+            Heap__Verify_Check(BlackNodeCount == LeafBlackNodeCount);
         
         bool32_t LeftResult  = Heap__Tree_Verify(Tree, Node, Node->LeftChild,  BlackNodeCount, LeafBlackNodeCount);
         bool32_t RightResult = Heap__Tree_Verify(Tree, Node, Node->RightChild, BlackNodeCount, LeafBlackNodeCount);
@@ -607,7 +647,7 @@ bool8_t Heap__Tree_Verify(heap_block_tree* Tree, heap_block_node* Parent, heap_b
     return true;
 }
 
-bool8_t Heap__Verify_Offsets(heap* Heap)
+bool8_t Heap__Verify_Check_Offsets(heap* Heap)
 {
     for(heap_memory_block* MemoryBlock = Heap->FirstBlock; MemoryBlock; MemoryBlock = MemoryBlock->Next)
     {
@@ -627,15 +667,15 @@ bool8_t Heap__Verify_Offsets(heap* Heap)
     return true;
 }
 
-bool8_t Heap_Verify(heap* Heap)
+bool8_t Heap__Verify(heap* Heap)
 {
-    bool8_t OffsetVerified = Heap__Verify_Offsets(Heap);
+    bool8_t OffsetVerified = Heap__Verify_Check_Offsets(Heap);
     Assert(OffsetVerified);
     if(!OffsetVerified) return false;
     
     
     heap_block_tree* Tree = &Heap->FreeBlockTree;
-    if(Tree->Root) Heap__Verify(Heap__Get_Color(Tree->Root) == HEAP__BLACK_NODE);
+    if(Tree->Root) Heap__Verify_Check(Heap__Get_Color(Tree->Root) == HEAP__BLACK_NODE);
     
     uint32_t LeafBlackNodeCount = 0;
     if(Tree->Root)

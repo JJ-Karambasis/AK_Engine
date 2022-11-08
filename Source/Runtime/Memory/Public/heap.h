@@ -65,7 +65,10 @@ void    Heap_Free(heap* Heap, void* Memory);
 void    Heap_Clear(heap* Heap, memory_clear_flag ClearFlag);
 
 #ifdef DEBUG_BUILD
-bool8_t Heap_Verify(heap* Heap);
+bool8_t Heap__Verify(heap* Heap);
+#define Heap_Verify(Heap) Heap__Verify(Heap)
+#else
+#define Heap_Verify(Heap)
 #endif
 
 #define Heap_Allocate_Struct(Heap, Type) (Type*)Heap_Allocate(Heap, sizeof(Type), MEMORY_CLEAR)

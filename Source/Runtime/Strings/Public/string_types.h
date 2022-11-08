@@ -33,4 +33,30 @@ str8     Str8_Concat(allocator* Allocator, str8 StrA, str8 StrB);
 str8     Str8_FormatV(allocator* Allocator, str8 Str, va_list Args);
 str8     Str8_Format(allocator* Allocator, str8 Str, ...);
 
+typedef struct str16
+{
+    const uint16_t* Str;
+    uint64_t        Length;
+} str16;
+
+uint64_t Str16_Length(const uint16_t* Str);
+str16    Str16(const uint16_t* Str, uint64_t Length);
+str16    Str16_Null_Term(const uint16_t* Str);
+bool8_t  Str16_Equal(str16 StrA, str16 StrB);
+int32_t  Str16_Compare(str16 StrA, str16 StrB);
+str16    Str16_Concat(allocator* Allocator, str16 StrA, str16 StrB);
+
+typedef struct str32
+{
+    const uint32_t* Str;
+    uint64_t        Length;
+} str32;
+
+uint64_t Str32_Length(const uint32_t* Str);
+str32    Str32(const uint32_t* Str, uint64_t Length);
+str32    Str32_Null_Term(const uint32_t* Str);
+bool8_t  Str32_Equal(str32 StrA, str32 StrB);
+int32_t  Str32_Compare(str32 StrA, str32 StrB);
+str32    Str32_Concat(allocator* Allocator, str32 StrA, str32 StrB);
+
 #endif
