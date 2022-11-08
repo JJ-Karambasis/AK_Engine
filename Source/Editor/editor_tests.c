@@ -1,4 +1,7 @@
 #include <utest/utest.h>
+#ifndef DEBUG_BUILD
+#define DEBUG_BUILD
+#endif
 
 UTEST_MAIN();
 

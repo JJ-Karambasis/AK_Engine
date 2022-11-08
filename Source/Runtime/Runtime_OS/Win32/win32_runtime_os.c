@@ -18,6 +18,14 @@ void OS_Shutdown()
     OS_Set(NULL);
 }
 
+void OS_Get_Random_Seed(void* Data, uint32_t Size)
+{
+    HCRYPTPROV Prov = 0;
+    CryptAcquireContextW(&Prov, 0, 0, PROV_DSS, CRYPT_VERIFYCONTEXT);
+    CryptGenRandom(Prov, Size, (BYTE*)Data);
+    CryptReleaseContext(Prov, 0);
+}
+
 allocator* OS_Get_Allocator()
 {
     win32_runtime_os* OS = (win32_runtime_os*)OS_Get();

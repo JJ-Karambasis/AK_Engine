@@ -38,8 +38,8 @@ set Warnings=-W4 -wd4100 -wd4189 -wd4201
 set CFlags=-nologo -Z7 -FC -D -D_HAS_EXCEPTIONS=0 -DCOMPILER_MSVC -GR- %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
 pushd "%InstallPath%"
-cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link -out:AK_Engine_Tests.exe
-cl %CFlags% %CurrentPath%../Source/Editor/editor.c -link -out:AK_Engine.exe
+cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link %Libs% -out:AK_Engine_Tests.exe
+cl %CFlags% %CurrentPath%../Source/Editor/editor.c -link %Libs% -out:AK_Engine.exe
 popd
 
 EXIT /b %ERRORLEVEL%

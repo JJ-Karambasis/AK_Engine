@@ -488,6 +488,16 @@ inline double Round_F64(double V)
     return round(V);
 }
 
+float Lerp_F32(float a, float t, float b)
+{
+    return a + t*(b-a);
+}
+
+double Lerp_F64(double a, double t, double b)
+{
+    return a + t*(b-a);
+}
+
 inline char To_UpperC(char C)
 {
     if (('a' <= C) && (C <= 'z'))

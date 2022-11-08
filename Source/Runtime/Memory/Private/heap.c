@@ -56,7 +56,7 @@ heap_block_node* Heap__Get_Min_Block(heap_block_node* Node)
 
 void Heap__Swap_Block_Values(heap_block_node* NodeA, heap_block_node* NodeB)
 {
-    heap_block* Tmp = NodeA->Block;
+    heap_block* Tmp = NodeB->Block;
     NodeB->Block    = NodeA->Block;
     NodeA->Block    = Tmp;
     
@@ -95,8 +95,9 @@ heap_block_node* Heap__Create_Tree_Node(heap* Heap)
     heap_block_tree* Tree = &Heap->FreeBlockTree;
     heap_block_node* Result = Tree->FreeNodes;
     if(Result) Tree->FreeNodes = Tree->FreeNodes->LeftChild;
-    else Result = Arena_Push_Struct(Heap->Arena, heap_block_node);
+    else Result = Allocate_Struct(Get_Base_Allocator(Heap->Arena), heap_block_node);
     Zero_Struct(Result, heap_block_node);
+    Assert((((size_t)Result) & 1) == 0);
     return Result;
 }
 
@@ -157,7 +158,7 @@ void Heap__Fixup_Tree_Add(heap_block_tree* Tree, heap_block_node* Node)
                 
                 Temp = Heap__Get_Parent(Node);
                 Heap__Set_Black(Temp);
-                Temp = Heap__Get_Parent(Node);
+                Temp = Heap__Get_Parent(Temp);
                 Heap__Set_Red(Temp);
                 Heap__Rot_Tree_Left(Tree, Temp);
             }
@@ -298,6 +299,8 @@ void Heap__Remove_Free_Block(heap* Heap, heap_block* Block)
     heap_block_tree* Tree = &Heap->FreeBlockTree;
     
     heap_block_node* Node = Block->Node;
+    Assert(Node->Block == Block);
+    
     heap_block_node* Out = Node;
     
     if(Node->LeftChild && Node->RightChild)
@@ -358,7 +361,7 @@ heap_block* Heap__Find_Best_Fitting_Block(heap* Heap, size_t Size)
         }
     }
     
-    if(Result->Block) return Result->Block;
+    if(Result) return Result->Block;
     return NULL;
 }
 
@@ -384,12 +387,14 @@ void Heap__Split_Block(heap* Heap, heap_block* Block, size_t Size)
         NewBlock->Size   = (size_t)BlockDiff;
         NewBlock->Offset = Offset;
         NewBlock->Prev   = Block;
+        NewBlock->Next   = Block->Next;
+        if(NewBlock->Next) NewBlock->Next->Prev = NewBlock;
         Block->Next      = NewBlock;
+        Block->Size = Size;
         
         Heap__Add_Free_Block(Heap, NewBlock);
     }
     
-    Block->Size = Size;
     Heap__Remove_Free_Block(Heap, Block);
 }
 
@@ -460,9 +465,9 @@ void* Heap_Allocate(heap* Heap, size_t Size, memory_clear_flag ClearFlag)
     
     Heap__Split_Block(Heap, Block, Size);
     
-    Assert(Block->Size == Size);
-    Assert(Block->Offset + Size + sizeof(heap_block) <= Block->Block->Size);
-    void* Result = Block->Block->Memory + Block->Offset + sizeof(heap_block*);
+    size_t Offset = Block->Offset + sizeof(heap_block*);
+    Assert(Offset + Size <= Block->Block->Size);
+    void* Result = Block->Block->Memory + Offset;
     
     if(ClearFlag == MEMORY_CLEAR) Memory_Clear(Result, Size);
     return Result;
@@ -489,7 +494,7 @@ void Heap_Free(heap* Heap, void* Memory)
         {
             Heap__Add_Free_Block(Heap, Block);
         }
-        else if(LeftBlock && !RightBlock)
+        else if(IsLeftBlockFree && !IsRightBlockFree)
         {
             Assert(LeftBlock->Block == Block->Block);
             Assert((LeftBlock->Offset+LeftBlock->Size+sizeof(heap_block*)) == Block->Offset);
@@ -497,10 +502,10 @@ void Heap_Free(heap* Heap, void* Memory)
             LeftBlock->Next = Block->Next;
             if(Block->Next) Block->Next->Prev = LeftBlock;
             
-            Heap__Increase_Block_Size(Heap, LeftBlock, Block->Size);
+            Heap__Increase_Block_Size(Heap, LeftBlock, Block->Size+sizeof(heap_block*));
             Heap__Delete_Heap_Block(Heap, Block);
         }
-        else if(!LeftBlock && RightBlock)
+        else if(!IsLeftBlockFree && IsRightBlockFree)
         {
             Assert(RightBlock->Block == Block->Block);
             Assert((Block->Offset+Block->Size+sizeof(heap_block*)) == RightBlock->Offset);
@@ -508,7 +513,7 @@ void Heap_Free(heap* Heap, void* Memory)
             Block->Next = RightBlock->Next;
             if(RightBlock->Next) RightBlock->Next->Prev = Block;
             
-            Block->Size += RightBlock->Size;
+            Block->Size += RightBlock->Size+sizeof(heap_block*);
             Heap__Delete_Heap_Block(Heap, RightBlock);
             Heap__Add_Free_Block(Heap, Block);
         }
@@ -519,9 +524,11 @@ void Heap_Free(heap* Heap, void* Memory)
             Assert((LeftBlock->Offset+LeftBlock->Size+sizeof(heap_block*)) == Block->Offset);
             Assert((Block->Offset+Block->Size+sizeof(heap_block*)) == RightBlock->Offset);
             
+            size_t Addend = Block->Size+RightBlock->Size+sizeof(heap_block*)*2;
+            
             LeftBlock->Next = RightBlock->Next;
             if(RightBlock->Next) RightBlock->Next->Prev = LeftBlock;
-            Heap__Increase_Block_Size(Heap, LeftBlock, Block->Size+RightBlock->Size);
+            Heap__Increase_Block_Size(Heap, LeftBlock, Addend);
             Heap__Delete_Heap_Block(Heap, Block);
             Heap__Delete_Heap_Block(Heap, RightBlock);
         }
@@ -532,6 +539,7 @@ void Heap_Clear(heap* Heap, memory_clear_flag ClearFlag)
 {
     Arena_Clear(Heap->Arena, ClearFlag);
     Zero_Struct(&Heap->FreeBlockTree, heap_block_tree);
+    Heap->OrphanBlocks = NULL;
     
 #ifdef DEBUG_BUILD
     Heap->AllocatedList = NULL;
@@ -574,7 +582,7 @@ bool8_t Heap__Tree_Verify(heap_block_tree* Tree, heap_block_node* Parent, heap_b
             else
             {
                 Heap__Verify(Parent->RightChild == Node);
-                Heap__Verify(Parent->Block->Size < Node->Block->Size);
+                Heap__Verify(Parent->Block->Size <= Node->Block->Size);
             }
         }
         
@@ -599,8 +607,33 @@ bool8_t Heap__Tree_Verify(heap_block_tree* Tree, heap_block_node* Parent, heap_b
     return true;
 }
 
+bool8_t Heap__Verify_Offsets(heap* Heap)
+{
+    for(heap_memory_block* MemoryBlock = Heap->FirstBlock; MemoryBlock; MemoryBlock = MemoryBlock->Next)
+    {
+        heap_block* Block = MemoryBlock->FirstBlock;
+        if(Block->Prev) { Assert(false); return false; }
+        
+        size_t Offset = 0;
+        while(Block)
+        {
+            if(Block->Offset != Offset) { Assert(false); return false; }
+            Offset += (sizeof(heap_block*)+Block->Size);
+            Block = Block->Next;
+            if(!Block)  if(Offset != MemoryBlock->Size) { Assert(false); return false; }
+        }
+    }
+    
+    return true;
+}
+
 bool8_t Heap_Verify(heap* Heap)
 {
+    bool8_t OffsetVerified = Heap__Verify_Offsets(Heap);
+    Assert(OffsetVerified);
+    if(!OffsetVerified) return false;
+    
+    
     heap_block_tree* Tree = &Heap->FreeBlockTree;
     if(Tree->Root) Heap__Verify(Heap__Get_Color(Tree->Root) == HEAP__BLACK_NODE);
     
@@ -614,6 +647,8 @@ bool8_t Heap_Verify(heap* Heap)
         }
     }
     
-    return Heap__Tree_Verify(Tree, NULL, Tree->Root, 0, LeafBlackNodeCount);
+    bool8_t TreeVerified = Heap__Tree_Verify(Tree, NULL, Tree->Root, 0, LeafBlackNodeCount);
+    Assert(TreeVerified);
+    return TreeVerified;
 }
 #endif

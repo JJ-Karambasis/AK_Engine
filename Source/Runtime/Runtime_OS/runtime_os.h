@@ -6,12 +6,15 @@ typedef struct runtime_os
     void* EditorOS;
 } runtime_os;
 
+typedef struct allocator allocator;
+
 #include "Public/os_thread.h"
 #include "Public/os_mutex.h"
 
 runtime_os* OS_Init();
 void        OS_Shutdown();
 allocator*  OS_Get_Allocator();
+void        OS_Get_Random_Seed(void* Data, uint32_t Size);
 void        OS_Set(runtime_os* OS);
 runtime_os* OS_Get();
 

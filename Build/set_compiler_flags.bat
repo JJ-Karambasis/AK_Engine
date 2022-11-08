@@ -60,3 +60,4 @@ IF NOT EXIST "%InstallPath%" (
 
 SET IncludePaths=-I%CurrentPath%../Source/Runtime -I%CurrentPath%../Source/Editor -I%CurrentPath%../Source/ThirdParty
 set CommonFlags=-DOS_WIN32 -DEDITOR_BUILD
+set Libs=advapi32.lib

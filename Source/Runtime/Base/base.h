@@ -40,12 +40,19 @@ typedef int32_t bool32_t;
 #define Assert(c)
 #endif
 
+#if defined(COMPILER_MSVC)
+#define alignof(x) __alignof(x)
+#elif defined(COMPILER_CLANG)
+#define alignof(x) __alignof__(x)
+#endif
+
 #define Abs(a) (((a) < 0) ? -(a) : (a))
 #define Max(a, b) (((a) > (b)) ? (a) : (b))
 #define Min(a, b) (((a) < (b)) ? (a) : (b))
 #define Is_Pow2(x) ((x != 0) && ((x & (x - 1)) == 0))
 
 #define Static_Assert(c) char Glue(__Ignore__Value__, LINE_NUMBER)[(c) ? 1 : -1]
+Static_Assert(alignof(int) == 4);
 
 #define Stringify_(a) #a
 #define Stringify(a) Stringify_(a)
@@ -172,6 +179,8 @@ float  Ceil_F32(float V);
 double Ceil_F64(double V);
 float  Round_F32(float V);
 double Round_F64(double V);
+float  Lerp_F32(float a, float t, float b);
+double Lerp_F64(double a, double t, double b);
 char     To_UpperC(char C);
 uint8_t  To_Upper8(uint8_t C);
 uint16_t To_Upper16(uint16_t C);
