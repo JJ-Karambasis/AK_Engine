@@ -57,7 +57,7 @@ IF %CompileFreetype% == True (
 )
 
 cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link %Libs% -out:AK_Engine_Tests.exe
-cl %CFlags% %CurrentPath%../Source/Editor/editor.c -link %Libs% -out:AK_Engine.exe
+cl %CFlags% %FreeTypeIncludePath% %CurrentPath%../Source/Editor/editor.c -link %Libs% ftsystem.lib -out:AK_Engine.exe
 popd
 
 EXIT /b %ERRORLEVEL%

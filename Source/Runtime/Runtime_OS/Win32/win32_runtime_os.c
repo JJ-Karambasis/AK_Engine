@@ -27,6 +27,33 @@ void OS_Get_Random_Seed(void* Data, uint32_t Size)
     CryptReleaseContext(Prov, 0);
 }
 
+str8 OS_Get_Application_Path(arena* Arena)
+{
+    arena* Scratch = Core_Get_Thread_Context()->Scratch;
+    DWORD     Capacity = 2048;
+    uint64_t  Length   = 0;
+    uint16_t* Buffer = NULL;
+    for(;;)
+    {
+        Buffer = Arena_Push_Array(Scratch, uint16_t, Capacity);
+        DWORD ReadSize = GetModuleFileNameW(0, (wchar_t*)Buffer, Capacity);
+        if(ReadSize == Capacity && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+        {
+            Capacity *= 4;
+        }
+        else
+        {
+            Length = ReadSize;
+            break;
+        }
+    }
+    
+    str8 FullExePath = UTF16_To_UTF8(Get_Base_Allocator(Scratch), Str16(Buffer, Length));
+    str8 FullPath    = Str8_Prefix(FullExePath, Str8_Find_Last(FullExePath, '\\'));
+    str8 Result      = Str8_Concat(Get_Base_Allocator(Arena), Str8_Copy(Get_Base_Allocator(Scratch), FullPath), Str8_Lit("\\"));
+    return Result;
+}
+
 allocator* OS_Get_Allocator()
 {
     win32_runtime_os* OS = (win32_runtime_os*)OS_Get();

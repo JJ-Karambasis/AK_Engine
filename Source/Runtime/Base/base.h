@@ -230,6 +230,12 @@ Static_Assert(alignof(int) == 4);
 #define BITMASK_62 0x3fffffffffffffff
 #define BITMASK_63 0x7fffffffffffffff
 
+#ifdef OS_WIN32
+#define OS_FILE_DELIMTER "\\"
+#else
+#define OS_FILE_DELIMTER "/"
+#endif
+
 uint64_t Align_U64(uint64_t Value, uint64_t Alignment);
 int64_t  Align_S64(int64_t Value,  int64_t Alignment);
 uint64_t Ceil_Pow2_U64(uint64_t V);

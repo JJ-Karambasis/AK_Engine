@@ -161,6 +161,52 @@ str8 Str8_Format(allocator* Allocator, str8 Str, ...)
     return Result;
 }
 
+str8 Str8_Prefix(str8 Str, uint64_t Size)
+{
+    Size = Min(Size, Str.Length);
+    return Str8(Str.Str, Size);
+}
+
+str8 Str8_Postifx(str8 Str, uint64_t Size)
+{
+    Size = Min(Size, Str.Length);
+    return Str8(Str.Str+(Str.Length-Size), Size);
+}
+
+str8 Str8_Skip(str8 Str, uint64_t Size)
+{
+    Size = Min(Size, Str.Length);
+    return Str8(Str.Str+Size, Str.Length-Size);
+}
+
+str8 Str8_Chop(str8 Str, uint64_t Size)
+{
+    Size = Min(Size, Str.Length);
+    return Str8(Str.Str, Str.Length-Size);
+}
+
+str8 Str8_Copy(allocator* Allocator, str8 Str)
+{
+    uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, Str.Length+1);
+    Memory_Copy(Buffer, Str.Str, Str.Length*sizeof(uint8_t));
+    Buffer[Str.Length] = 0;
+    return Str8(Buffer, Str.Length);
+}
+
+uint64_t Str8_Find_First(str8 Str, uint8_t Char)
+{
+    for(uint64_t i = 0; i < Str.Length; i++)
+        if(Str.Str[i] == Char) return i;
+    return STR_INVALID_FIND;
+}
+
+uint64_t Str8_Find_Last(str8 Str,  uint8_t Char)
+{
+    for(uint64_t i = Str.Length-1; i != STR_INVALID_FIND; i--)
+        if(Str.Str[i] == Char) return i;
+    return STR_INVALID_FIND;
+}
+
 uint64_t Str16_Length(const uint16_t* Str)
 {
     uint64_t Result = 0;

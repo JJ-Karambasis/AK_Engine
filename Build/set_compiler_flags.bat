@@ -70,6 +70,8 @@ IF NOT EXIST "%InstallPath%" (
 	EXIT /b 1
 )
 
+xcopy "%CurrentPath%..\Data\" "%InstallPath%\Data\" /E /Y
+
 SET IncludePaths=-I%CurrentPath%../Source/Runtime -I%CurrentPath%../Source/Editor -I%CurrentPath%../Source/ThirdParty
 set CommonFlags=-DOS_WIN32 -DEDITOR_BUILD
 set Libs=advapi32.lib

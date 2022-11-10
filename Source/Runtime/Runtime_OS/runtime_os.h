@@ -15,6 +15,7 @@ runtime_os* OS_Init();
 void        OS_Shutdown();
 allocator*  OS_Get_Allocator();
 void        OS_Get_Random_Seed(void* Data, uint32_t Size);
+str8        OS_Get_Application_Path(arena* Arena);
 void        OS_Set(runtime_os* OS);
 runtime_os* OS_Get();
 

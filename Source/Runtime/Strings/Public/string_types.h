@@ -1,6 +1,8 @@
 #ifndef STRING_TYPES_H
 #define STRING_TYPES_H
 
+#define STR_INVALID_FIND ((uint64_t)-1)
+
 typedef struct allocator allocator;
 
 #define StrC_Lit(s) StrC((s), sizeof((s))-1)
@@ -34,6 +36,13 @@ int32_t  Str8_Compare(str8 StrA, str8 StrB);
 str8     Str8_Concat(allocator* Allocator, str8 StrA, str8 StrB);
 str8     Str8_FormatV(allocator* Allocator, str8 Str, va_list Args);
 str8     Str8_Format(allocator* Allocator, str8 Str, ...);
+str8     Str8_Prefix(str8 Str, uint64_t Size);
+str8     Str8_Postifx(str8 Str, uint64_t Size);
+str8     Str8_Skip(str8 Str, uint64_t Size);
+str8     Str8_Chop(str8 Str, uint64_t Size);
+str8     Str8_Copy(allocator* Allocator, str8 Str);
+uint64_t Str8_Find_First(str8 Str, uint8_t Char);
+uint64_t Str8_Find_Last(str8 Str,  uint8_t Char);
 
 typedef struct str16
 {
