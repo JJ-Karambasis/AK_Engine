@@ -47,3 +47,4 @@ runtime_os* OS_Get()
 
 #include "Private/win32_allocator.c"
 #include "Private/win32_thread.c"
+#include "Private/win32_file.c"

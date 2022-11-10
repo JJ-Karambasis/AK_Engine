@@ -5,6 +5,7 @@
 #include <windows.h>
 #include "Public/win32_allocator.h"
 #include "Public/win32_thread.h"
+#include "Public/win32_file.h"
 
 typedef struct win32_runtime_os
 {
@@ -12,6 +13,7 @@ typedef struct win32_runtime_os
     win32_allocator Allocator;
     arena*          Arena;
     win32_thread*   FreeThreads;
+    win32_file*     FreeFiles;
 } win32_runtime_os;
 
 #endif

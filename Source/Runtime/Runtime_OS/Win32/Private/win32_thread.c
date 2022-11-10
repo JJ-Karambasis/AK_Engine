@@ -11,7 +11,7 @@ os_thread* OS_Create_Thread(os_thread_callback* Callback, void* UserData)
     
     win32_thread* Thread = OS->FreeThreads;
     if(!Thread) Thread = Arena_Push_Struct(OS->Arena, win32_thread);
-    else OS->FreeThreads = OS->FreeThreads->Next;
+    else SLL_Pop_Front(OS->FreeThreads);
     Zero_Struct(Thread, win32_thread);
     
     Thread->Callback = Callback;
@@ -35,8 +35,7 @@ void OS_Delete_Thread(os_thread* Thread)
     
     win32_thread* OSThread = (win32_thread*)Thread;
     CloseHandle(OSThread->Handle);
-    OSThread->Next = OS->FreeThreads;
-    OS->FreeThreads = OSThread;
+    SLL_Push_Front(OS->FreeThreads, OSThread);
 }
 
 uint32_t OS_Get_Current_Thread_ID()

@@ -1,3 +1,6 @@
 [submodule "Source/ThirdParty/stb"]
 	path = Source/ThirdParty/stb
 	url = https://github.com/nothings/stb.git
+[submodule "Source/ThirdParty/freetype"]
+	path = Source/ThirdParty/freetype
+	url = https://github.com/freetype/freetype.git

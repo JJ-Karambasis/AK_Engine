@@ -1,5 +1,17 @@
 set CurrentPath=%~dp0
 
+SET CompileFreetype=False
+FOR /F ="delims=" %%A IN ('call build/ini.bat /s CompilerSettings /i CompileFreetype %CurrentPath%..\Configs\build.ini') DO (
+	SET CompileFreetype=%%A
+)
+
+IF NOT %CompileFreetype% == False (
+	IF NOT %CompileFreetype% == True (
+		echo Unknown CompileFreetype value %CompileFreetype%. Must be True or False
+		EXIT /b 1
+	)
+)
+
 SET Optimized=False
 FOR /F ="delims=" %%A IN ('call build/ini.bat /s CompilerSettings /i Optimized %CurrentPath%..\Configs\build.ini') DO (
 	SET Optimized=%%A

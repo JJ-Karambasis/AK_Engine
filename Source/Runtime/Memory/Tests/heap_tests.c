@@ -11,7 +11,7 @@ UTEST_F_SETUP(HeapTest)
     custom_allocator* Allocator = Allocate_Custom_Allocator();
     utest_fixture->Allocator = Allocator;
     
-    heap* Heap = Heap_Create(&utest_fixture->Allocator->Allocator, Kilo(512));
+    heap* Heap = Heap_Create(Get_Base_Allocator(utest_fixture->Allocator), Kilo(512));
     utest_fixture->Heap = Heap;
     
     ASSERT_TRUE(Heap_Verify(Heap));
@@ -58,7 +58,7 @@ Heap_Free(Heap, Memory); ASSERT_TRUE(Heap_Verify(Heap))
 
 UTEST_F(HeapTest, Heap_Stress_Test)
 {
-    heap* LargeHeap = Heap_Create(&utest_fixture->Allocator->Allocator, Mega(64));
+    heap* LargeHeap = Heap_Create(Get_Base_Allocator(utest_fixture->Allocator), Mega(64));
     uint32_t Loops = 1;
     for(uint32_t k = 0; k < Loops; k++)
     {

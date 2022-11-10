@@ -9,7 +9,7 @@ UTEST_F_SETUP(ArenaTest)
     custom_allocator* Allocator = Allocate_Custom_Allocator();
     utest_fixture->Allocator = Allocator;
     
-    arena* Arena = Arena_Create(&utest_fixture->Allocator->Allocator, Kilo(512));
+    arena* Arena = Arena_Create(Get_Base_Allocator(utest_fixture->Allocator), Kilo(512));
     utest_fixture->Arena = Arena;
     
     ASSERT_NE(Arena, NULL);

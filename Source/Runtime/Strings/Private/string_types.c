@@ -58,8 +58,8 @@ strc StrC_Concat(allocator* Allocator, strc StrA, strc StrB)
     NodeA.Str = StrA;
     NodeB.Str = StrB;
     
-    StrC_List_Push_Node(&NodeA);
-    StrC_List_Push_Node(&NodeB);
+    StrC_List_Push_Node(&List, &NodeA);
+    StrC_List_Push_Node(&List, &NodeB);
     return StrC_List_Join(Allocator, &List);
 }
 
@@ -138,8 +138,8 @@ str8 Str8_Concat(allocator* Allocator, str8 StrA, str8 StrB)
     NodeA.Str = StrA;
     NodeB.Str = StrB;
     
-    Str8_List_Push_Node(&NodeA);
-    Str8_List_Push_Node(&NodeB);
+    Str8_List_Push_Node(&List, &NodeA);
+    Str8_List_Push_Node(&List, &NodeB);
     return Str8_List_Join(Allocator, &List);
 }
 
@@ -218,8 +218,8 @@ str16 Str16_Concat(allocator* Allocator, str16 StrA, str16 StrB)
     NodeA.Str = StrA;
     NodeB.Str = StrB;
     
-    Str16_List_Push_Node(&NodeA);
-    Str16_List_Push_Node(&NodeB);
+    Str16_List_Push_Node(&List, &NodeA);
+    Str16_List_Push_Node(&List, &NodeB);
     return Str16_List_Join(Allocator, &List);
 }
 
@@ -280,7 +280,202 @@ str32 Str32_Concat(allocator* Allocator, str32 StrA, str32 StrB)
     NodeA.Str = StrA;
     NodeB.Str = StrB;
     
-    Str32_List_Push_Node(&NodeA);
-    Str32_List_Push_Node(&NodeB);
+    Str32_List_Push_Node(&List, &NodeA);
+    Str32_List_Push_Node(&List, &NodeB);
     return Str32_List_Join(Allocator, &List);
+}
+
+
+str8 Ascii_To_UTF8(allocator* Allocator, strc Str)
+{
+    str8 Result;
+    Result.Length = Str.Length;
+    uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, Result.Length+1);
+    Buffer[Result.Length] = 0;
+    
+    for(size_t i = 0; i < Str.Length; i++)
+        Buffer[i] = ((uint8_t)Str.Str[i]) & BITMASK_7;
+    
+    Result.Str = Buffer;
+    return Result;
+}
+
+str16 Ascii_To_UTF16(allocator* Allocator, strc Str)
+{
+    str16 Result;
+    Result.Length = Str.Length;
+    uint16_t* Buffer = Allocate_Array_No_Clear(Allocator, uint16_t, Result.Length+1);
+    Buffer[Result.Length] = 0;
+    
+    for(size_t i = 0; i < Str.Length; i++)
+        Buffer[i] = ((uint16_t)Str.Str[i]) & BITMASK_7;
+    
+    Result.Str = Buffer;
+    return Result;
+}
+
+str32 Ascii_To_UTF32(allocator* Allocator, strc Str)
+{
+    str32 Result;
+    Result.Length = Str.Length;
+    uint32_t* Buffer = Allocate_Array_No_Clear(Allocator, uint32_t, Result.Length+1);
+    Buffer[Result.Length] = 0;
+    
+    for(size_t i = 0; i < Str.Length; i++)
+        Buffer[i] = ((uint32_t)Str.Str[i]) & BITMASK_7;
+    
+    Result.Str = Buffer;
+    return Result;
+}
+
+strc  UTF8_To_Ascii(allocator* Allocator, str8 Str)
+{
+    strc Result;
+    Result.Length = 0;
+    char* Buffer = (char*)Allocate_Array_No_Clear(Allocator, char, Str.Length+1);
+    
+    utf8_stream_reader Reader = UTF8_Begin_Stream_Reader(Str);
+    while(UTF8_Stream_Reader_Is_Valid(&Reader))
+    {
+        uint32_t Codepoint = UTF8_Stream_Reader_Consume(&Reader);
+        Buffer[Result.Length++] = (Codepoint <= 127) ? (char)Codepoint : '?';
+        Assert(Result.Length <= Str.Length);
+    }
+    
+    Buffer[Result.Length] = 0;
+    Result.Str = Buffer;
+    return Result;
+}
+
+str16 UTF8_To_UTF16(allocator* Allocator, str8 Str)
+{
+    utf16_stream_writer Writer = UTF16_Begin_Stream_Writer(Allocator, Str.Length+1);
+    utf8_stream_reader Reader = UTF8_Begin_Stream_Reader(Str);
+    
+    while(UTF8_Stream_Reader_Is_Valid(&Reader))
+    {
+        uint32_t Codepoint = UTF8_Stream_Reader_Consume(&Reader);
+        UTF16_Stream_Write(&Writer, Codepoint);
+    }
+    
+    str16 Result = UTF16_Stream_Writer_To_String(&Writer, true);
+    return Result;
+}
+
+str32 UTF8_To_UTF32(allocator* Allocator, str8 Str)
+{
+    str32 Result;
+    Result.Length = 0;
+    uint32_t* Buffer = Allocate_Array_No_Clear(Allocator, uint32_t, Str.Length+1);
+    
+    utf8_stream_reader Reader = UTF8_Begin_Stream_Reader(Str);
+    while(UTF8_Stream_Reader_Is_Valid(&Reader))
+    {
+        uint32_t Codepoint = UTF8_Stream_Reader_Consume(&Reader);
+        Buffer[Result.Length++] = (Codepoint == 0xFFFFFFFF) ? '?' : Codepoint;
+        Assert(Result.Length <= Str.Length);
+    }
+    
+    Buffer[Result.Length] = 0;
+    Result.Str = Buffer;
+    return Result;
+}
+
+strc UTF16_To_Ascii(allocator* Allocator, str16 Str)
+{
+    utf16_stream_reader Reader = UTF16_Begin_Stream_Reader(Str);
+    
+    strc Result;
+    Result.Length = 0;
+    char* Buffer = Allocate_Array_No_Clear(Allocator, char, Str.Length+1);
+    
+    while(UTF16_Stream_Reader_Is_Valid(&Reader))
+    {
+        uint32_t Codepoint = UTF16_Stream_Reader_Consume(&Reader);
+        Buffer[Result.Length++] = (Codepoint <= 127) ? (char)Codepoint : '?';
+        Assert(Result.Length <= Str.Length);
+    }
+    
+    Buffer[Result.Length] = 0;
+    Result.Str = Buffer;
+    return Result;
+}
+
+str8 UTF16_To_UTF8(allocator* Allocator, str16 Str)
+{
+    utf16_stream_reader Reader = UTF16_Begin_Stream_Reader(Str);
+    utf8_stream_writer Writer = UTF8_Begin_Stream_Writer(Allocator, (Str.Length*3)+1);
+    
+    while(UTF16_Stream_Reader_Is_Valid(&Reader))
+    {
+        uint32_t Codepoint = UTF16_Stream_Reader_Consume(&Reader);
+        UTF8_Stream_Write(&Writer, Codepoint);
+    }
+    
+    str8 Result = UTF8_Stream_Writer_To_String(&Writer, true);
+    return Result;
+}
+
+str32 UTF16_To_UTF32(allocator* Allocator, str16 Str)
+{
+    str32 Result;
+    Result.Length = 0;
+    uint32_t* Buffer = (uint32_t*)Allocate_Array_No_Clear(Allocator, uint32_t, Str.Length+1);
+    
+    utf16_stream_reader Reader = UTF16_Begin_Stream_Reader(Str);
+    while(UTF16_Stream_Reader_Is_Valid(&Reader))
+    {
+        uint32_t Codepoint = UTF16_Stream_Reader_Consume(&Reader);
+        Buffer[Result.Length++] = Codepoint;
+        Assert(Result.Length <= Str.Length);
+    }
+    
+    Buffer[Result.Length] = 0;
+    Result.Str = Buffer;
+    return Result;
+}
+
+strc UTF32_To_Ascii(allocator* Allocator, str32 Str)
+{
+    strc Result;
+    Result.Length = 0;
+    char* Buffer = (char*)Allocate_Array_No_Clear(Allocator, char, Str.Length+1);
+    
+    for(size_t i = 0; i < Str.Length; i++)
+    {
+        uint32_t Codepoint = Str.Str[i];
+        Buffer[Result.Length++] = (Codepoint <= 127) ? (char)Codepoint : '?';
+    }
+    
+    Buffer[Result.Length] = 0;
+    Result.Str = Buffer;
+    return Result;
+}
+
+str8 UTF32_To_UTF8(allocator* Allocator, str32 Str)
+{
+    utf8_stream_writer Writer = UTF8_Begin_Stream_Writer(Allocator, (Str.Length*4)+1);
+    
+    for(size_t i = 0; i < Str.Length; i++)
+    {
+        uint32_t Codepoint = Str.Str[i];
+        UTF8_Stream_Write(&Writer, Codepoint);
+    }
+    
+    str8 Result = UTF8_Stream_Writer_To_String(&Writer, true);
+    return Result;
+}
+
+str16 UTF32_To_UTF16(allocator* Allocator, str32 Str)
+{
+    utf16_stream_writer Writer = UTF16_Begin_Stream_Writer(Allocator, (Str.Length*2)+1);
+    
+    for(size_t i = 0; i < Str.Length; i++)
+    {
+        uint32_t Codepoint = Str.Str[i];
+        UTF16_Stream_Write(&Writer, Codepoint);
+    }
+    
+    str16 Result = UTF16_Stream_Writer_To_String(&Writer, true);
+    return Result;
 }

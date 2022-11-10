@@ -1,8 +1,6 @@
-#include "memory.h"
-
 typedef struct custom_allocator
 {
-    allocator Allocator;
+    allocator BaseAllocator;
     volatile  int64_t NumberOfAllocations;
     volatile  int64_t NumberOfFrees;
     volatile  int64_t NumberOfActiveAllocations;
@@ -48,8 +46,8 @@ custom_allocator* Allocate_Custom_Allocator()
 {
     custom_allocator* Allocator = (custom_allocator*)malloc(sizeof(custom_allocator));
     Zero_Struct(Allocator, custom_allocator);
-    Allocator->Allocator.Allocate = Allocate_Memory;
-    Allocator->Allocator.Free = Free_Memory;
+    Allocator->BaseAllocator.Allocate = Allocate_Memory;
+    Allocator->BaseAllocator.Free = Free_Memory;
     return Allocator;
 }
 
@@ -68,4 +66,3 @@ void Free_Custom_Allocator(custom_allocator* Allocator)
 
 #include "Tests/heap_tests.c"
 #include "Tests/arena_tests.c"
-#include "memory.c"

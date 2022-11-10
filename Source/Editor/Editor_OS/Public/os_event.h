@@ -13,7 +13,7 @@ typedef struct os_event
     os_window* Window;
 } os_event;
 
-void      OS_Poll_Events();
-os_event* OS_Get_Next_Event();
+void            OS_Poll_Events();
+const os_event* OS_Get_Next_Event();
 
 #endif

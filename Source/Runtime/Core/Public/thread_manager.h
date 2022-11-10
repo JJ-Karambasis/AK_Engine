@@ -10,7 +10,7 @@ typedef CORE_THREAD_CALLBACK(core_thread_callback);
 
 typedef struct thread_context
 {
-    pool_handle           Handle;
+    uint32_t              ThreadID;
     allocator*            MainAllocator;
     arena*                Scratch;
     os_thread*            Thread;

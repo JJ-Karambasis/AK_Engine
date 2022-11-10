@@ -19,7 +19,7 @@ void StrC_List_Push_Node(strc_list* List, strc_node* Node);
 void StrC_List_Push(strc_list* List, allocator* Allocator, strc Str);
 void StrC_List_Push_FormatV(strc_list* List, allocator* Allocator, strc Format, va_list Args);
 void StrC_List_Push_Format(strc_list* List, allocator* Allocator, strc Format, ...);
-strc StrC_List_Join(strc_list* List, allocator* Allocator, strc_list* List);
+strc StrC_List_Join(allocator* Allocator, strc_list* List);
 
 typedef struct str8_node
 {
@@ -39,7 +39,7 @@ void Str8_List_Push_Node(str8_list* List, str8_node* Node);
 void Str8_List_Push(str8_list* List, allocator* Allocator, str8 Str);
 void Str8_List_Push_FormatV(str8_list* List, allocator* Allocator, str8 Format, va_list Args);
 void Str8_List_Push_Format(str8_list* List, allocator* Allocator, str8 Format, ...);
-str8 Str8_List_Join(str8_list* List, allocator* Allocator, str8_list* List);
+str8 Str8_List_Join(allocator* Allocator, str8_list* List);
 
 typedef struct str16_node
 {
@@ -57,7 +57,7 @@ typedef struct str16_list
 
 void  Str16_List_Push_Node(str16_list* List, str16_node* Node);
 void  Str16_List_Push(str16_list* List, allocator* Allocator, str16 Str);
-str16 Str16_List_Join(str16_list* List, allocator* Allocator, str16_list* List);
+str16 Str16_List_Join(allocator* Allocator, str16_list* List);
 
 typedef struct str32_node
 {
@@ -75,6 +75,6 @@ typedef struct str32_list
 
 void  Str32_List_Push_Node(str32_list* List, str32_node* Node);
 void  Str32_List_Push(str32_list* List, allocator* Allocator, str32 Str);
-str32 Str32_List_Join(str32_list* List, allocator* Allocator, str32_list* List);
+str32 Str32_List_Join(allocator* Allocator, str32_list* List);
 
 #endif

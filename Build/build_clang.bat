@@ -26,8 +26,10 @@ IF %Optimized% == False (
 set Warnings=-Wextra -Wno-unused-parameter -Wno-switch
 set CFlags=-std=c99 -g -fdiagnostics-absolute-paths -DOS_WIN32 -DCOMPILER_CLANG %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
+set Libs=-ladvapi32 -luser32 -lgdi32
+
 pushd "%InstallPath%"
-"%ClangPath%" %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -o AK_Engine_Tests.exe
+"%ClangPath%" %CFlags% %Libs% %CurrentPath%../Source/Editor/editor_tests.c -o AK_Engine_Tests.exe
 "%ClangPath%" %CFlags% %CurrentPath%../Source/Editor/editor.c -o AK_Engine.exe
 popd
 

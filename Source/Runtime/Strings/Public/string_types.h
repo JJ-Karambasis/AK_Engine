@@ -1,6 +1,8 @@
 #ifndef STRING_TYPES_H
 #define STRING_TYPES_H
 
+typedef struct allocator allocator;
+
 #define StrC_Lit(s) StrC((s), sizeof((s))-1)
 typedef struct strc
 {
@@ -58,5 +60,21 @@ str32    Str32_Null_Term(const uint32_t* Str);
 bool8_t  Str32_Equal(str32 StrA, str32 StrB);
 int32_t  Str32_Compare(str32 StrA, str32 StrB);
 str32    Str32_Concat(allocator* Allocator, str32 StrA, str32 StrB);
+
+str8  Ascii_To_UTF8(allocator* Allocator, strc Str);
+str16 Ascii_To_UTF16(allocator* Allocator, strc Str);
+str32 Ascii_To_UTF32(allocator* Allocator, strc Str);
+
+strc  UTF8_To_Ascii(allocator* Allocator, str8  Str);
+str16 UTF8_To_UTF16(allocator* Allocator, str8 Str);
+str32 UTF8_To_UTF32(allocator* Allocator, str8 Str);
+
+strc  UTF16_To_Ascii(allocator* Allocator, str16  Str);
+str8  UTF16_To_UTF8( allocator* Allocator, str16 Str);
+str32 UTF16_To_UTF32(allocator* Allocator, str16 Str);
+
+strc  UTF32_To_Ascii(allocator* Allocator, str32  Str);
+str8  UTF32_To_UTF8( allocator* Allocator, str32 Str);
+str16 UTF32_To_UTF16(allocator* Allocator, str32 Str);
 
 #endif

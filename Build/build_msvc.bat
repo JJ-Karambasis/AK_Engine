@@ -34,10 +34,28 @@ IF %Optimized% == False (
 	set OptimizedFlags=%OptimizedFlags% -O2
 )
 
-set Warnings=-W4 -wd4100 -wd4189 -wd4201
+set Warnings=-W4 -wd4100 -wd4189 -wd4201 -wd4996 -wd4706
 set CFlags=-nologo -Z7 -FC -D -D_HAS_EXCEPTIONS=0 -DCOMPILER_MSVC -GR- %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
+set Libs=advapi32.lib user32.lib gdi32.lib opengl32.lib
+
+call %CurrentPath%set_free_type_flags.bat
+
 pushd "%InstallPath%"
+IF %CompileFreetype% == True (
+	call %CurrentPath%set_free_type_flags.bat
+	IF NOT EXIST "%InstallPath%\freetype" (
+		mkdir "%InstallPath%\freetype"
+	)		
+	pushd "%InstallPath%\freetype"
+
+	cl %CFlags% -DFT_DEBUG_LEVEL_ERROR -DFT2_BUILD_LIBRARY %FreeTypeIncludePath% -wd4244 -wd4267 -wd4701 -LD -c %FreetypeCFiles%
+	lib -nologo -out:..\ftsystem.lib *obj
+
+	popd
+	RMDIR /S /Q "%InstallPath%\freetype"
+)
+
 cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link %Libs% -out:AK_Engine_Tests.exe
 cl %CFlags% %CurrentPath%../Source/Editor/editor.c -link %Libs% -out:AK_Engine.exe
 popd

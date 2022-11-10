@@ -1,5 +1,3 @@
-#include "random.h"
-
 UTEST(random, Random)
 {
     for(uint64_t Seed = 0; Seed < 64; Seed++)
@@ -60,5 +58,3 @@ UTEST(random, Random)
         }
     }
 }
-
-#include "random.c"
