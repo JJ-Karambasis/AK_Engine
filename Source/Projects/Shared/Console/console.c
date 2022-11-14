@@ -32,6 +32,7 @@ typedef struct console
     console_arg* SetArgument;
     console_arg* FirstArg;
     console_arg* LastArg;
+    str8_list    ErrorList;
 } console;
 
 console_arg* Console__Find_Argument(console* Console, str8 Key)
@@ -56,6 +57,10 @@ void Console__Add_Value(console* Console, console_arg* Arg, console_value Value)
         List->Capacity = NewCapacity;
     }
     List->Values[List->Count++] = Value;
+}
+
+bool8_t Console__Parse_Argument(console* Console, console_arg* Arg, str8 Value)
+{
 }
 
 console* Console_Create(allocator* Allocator)
@@ -138,12 +143,15 @@ bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCoun
         console_arg* Argument = Console__Find_Argument(Console, ArgumentStr);
         if(!Argument && !TargetArgument)
         {
-            //TODO(JJ): This is an error
+            Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Unknown argument %.*s"), ArgumentStr.Length, ArgumentStr.Str);
             return false;
         }
         else if(!Argument && TargetArgument)
         {
             //TODO(JJ): This is an arguments value
+            str8 ArgumentValue = ArgumentStr;
+            if(!Console__Parse_Argument(Console, Argument, ArgumentValue))
+                return false;
         }
         else
         {
