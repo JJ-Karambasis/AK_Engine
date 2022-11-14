@@ -18,4 +18,6 @@ bool8_t  OS_Read_File(os_file* File,  void* Data, uint32_t DataSize, uint64_t Of
 bool8_t  OS_Write_File(os_file* File, void* Data, uint32_t DataSize, uint64_t Offset);
 void     OS_Delete_File(os_file* File);
 
+bool8_t OS_Read_Entire_File(buffer* Buffer, allocator* Allocator, str8 Path);
+
 #endif

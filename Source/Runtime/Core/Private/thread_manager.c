@@ -1,12 +1,6 @@
 inline uint32_t Thread_Manager__Hash_Thread_ID(uint32_t Key)
 {
-    Key = (Key+0x7ed55d16) + (Key<<12);
-    Key = (Key^0xc761c23c) ^ (Key>>19);
-    Key = (Key+0x165667b1) + (Key<<5);
-    Key = (Key+0xd3a2646c) ^ (Key<<9);
-    Key = (Key+0xfd7046c5) + (Key<<3);
-    Key = (Key^0xb55a4f09) ^ (Key>>16);
-    return Key;
+    return Hash_U32(Key);
 }
 
 thread_context* Thread_Manager__Allocate_Context(thread_manager* ThreadManager)

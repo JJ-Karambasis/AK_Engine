@@ -45,6 +45,17 @@ LRESULT Win32_Window_Proc(HWND Window, UINT Message, WPARAM WParam, LPARAM LPara
             }
         } break;
         
+        case WM_SIZE:
+        {
+            win32_window* OSWindow = (win32_window*)GetWindowLongPtr(Window, GWLP_USERDATA);
+            if(OSWindow)
+            {
+                os_event* Event = Win32__Enqueue_Event(OS_EVENT_TYPE_WINDOW_RESIZED);
+                Event->Window = (os_window*)OSWindow;
+                Event->Window->Dim = V2i(WIN32_GET_X_LPARAM(LParam), WIN32_GET_Y_LPARAM(LParam));
+            }
+        } break;
+        
         default:
         {
             Result = DefWindowProcW(Window, Message, WParam, LParam);

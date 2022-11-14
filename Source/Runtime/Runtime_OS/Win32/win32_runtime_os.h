@@ -14,6 +14,12 @@ typedef struct win32_runtime_os
     arena*          Arena;
     win32_thread*   FreeThreads;
     win32_file*     FreeFiles;
+    uint64_t        ClockFrequency;
 } win32_runtime_os;
+
+void Win32_Register_Window_Class(const wchar_t* ClassName, WNDPROC WindowProc);
+HWND Win32_Create_Window(uint32_t Width, uint32_t Height, str8 WindowName, const wchar_t* ClassName, DWORD Style, DWORD ExtendedStyle);
+void Win32_Destroy_Window(HWND Window);
+v2i  Win32_Get_Window_Dim(HWND Window);
 
 #endif

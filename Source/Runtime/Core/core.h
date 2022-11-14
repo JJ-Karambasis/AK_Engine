@@ -2,9 +2,9 @@
 #define CORE_H
 
 #include <Base/base.h>
-#include <Containers/containers.h>
 #include <Memory/memory.h>
 #include <Strings/strings.h>
+#include <Math/math.h>
 
 #ifdef EDITOR_BUILD
 #include <Editor_OS/editor_os.h>

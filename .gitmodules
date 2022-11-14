@@ -4,3 +4,9 @@
 [submodule "Source/ThirdParty/freetype"]
 	path = Source/ThirdParty/freetype
 	url = https://github.com/freetype/freetype.git
+[submodule "Source/ThirdParty/OpenGL-Registry"]
+	path = Source/ThirdParty/OpenGL-Registry
+	url = https://github.com/KhronosGroup/OpenGL-Registry.git
+[submodule "Source/ThirdParty/EGL-Registry"]
+	path = Source/ThirdParty/EGL-Registry
+	url = https://github.com/KhronosGroup/EGL-Registry.git

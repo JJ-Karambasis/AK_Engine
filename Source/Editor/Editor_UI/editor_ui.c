@@ -1,56 +1,79 @@
-void* FreeType_Alloc(FT_Memory Memory, long Size)
+editor_ui* EditorUI_Init(editor* Editor)
 {
-    heap* Heap = (heap*)Memory->user;
-    return Heap_Allocate(Heap, Size, MEMORY_NO_CLEAR);
-}
-
-void FreeType_Free(FT_Memory Memory, void* Block)
-{
-    heap* Heap = (heap*)Memory->user;
-    Heap_Free(Heap, Block);
-}
-
-void* FreeType_Realloc(FT_Memory Memory, long CurrentSize, long NewSize, void* Block)
-{
-    if(CurrentSize == NewSize) return Block;
-    heap* Heap = (heap*)Memory->user;
-    void* NewMemory = Heap_Allocate(Heap, NewSize, MEMORY_NO_CLEAR);
-    Memory_Copy(NewMemory, Block, Min(CurrentSize, NewSize));
-    if(Block) Heap_Free(Heap, Block);
-    return NewMemory;
-}
-
-FT_Library Init_Freetype(arena* Arena)
-{
-    FT_Memory Memory = Arena_Push_Struct(Arena, struct FT_MemoryRec_);
-    Memory->alloc   = FreeType_Alloc;
-    Memory->free    = FreeType_Free;
-    Memory->realloc = FreeType_Realloc;
-    Memory->user    = Heap_Create(Get_Base_Allocator(Arena), Kilo(512));
-    
-    FT_Library Library;
-    FT_Error Error = FT_New_Library(Memory, &Library);
-    if(Error != 0) return NULL;
-    
-    FT_Add_Default_Modules(Library);
-    FT_Set_Default_Properties(Library);
-    return Library;
-}
-
-editor_ui* EditorUI_Init(arena* Arena)
-{
-    arena* EditorUIArena = Arena_Create(Get_Base_Allocator(Arena), Mega(2));
+    arena* EditorUIArena = Arena_Create(Get_Base_Allocator(Editor->Arena), Mega(2));
     editor_ui* Result = Arena_Push_Struct(EditorUIArena, editor_ui);
     Result->Arena = EditorUIArena;
-    Result->Library = Init_Freetype(Result->Arena);
-    EditorUI_Set(Result);
     
+    EditorUI_Set(Result);
+    Result->MainWindow = EditorUI_Create_Window(1920, 1080, Str8_Lit("AK Engine"), 0);
+    Result->CmdBuffer = GPU_Allocate_Cmd_Buffers(Editor->DeviceGPU, 1)[0];
+    
+    arena* Scratch = Core_Get_Thread_Context()->Scratch;
+    
+    str8 FontPath = Str8_Concat(Get_Base_Allocator(Scratch), Editor->DataPath, Str8_Lit("Cousine-Regular.ttf"));
+    if(!OS_Read_Entire_File(&Result->MainFontBuffer, Get_Base_Allocator(Scratch), FontPath))
+        return NULL;
+    
+    Result->GlyphGenerator = FT_Glyph_Generator_Create(Get_Base_Allocator(Result->Arena));
+    Result->GlyphCache = Glyph_Cache_Create(Get_Base_Allocator(Result->Arena), Result->GlyphGenerator);
     return Result;
+}
+
+editor_window* EditorUI_Create_Window(uint32_t Width, uint32_t Height, str8 WindowTitle, uint64_t WindowFlags)
+{
+    editor_ui* UI = EditorUI_Get();
+    
+    editor_window* Window = UI->FreeWindows;
+    if(!Window) Window = Arena_Push_Struct(UI->Arena, editor_window);
+    else Window = SLL_Pop_Front(UI->FreeWindows);
+    Zero_Struct(Window, editor_window);
+    
+    gpu_device_context*  DeviceGPU      = Editor_Get()->DeviceGPU;
+    //gpu_display_manager* DisplayManager = GPU_Get_Display_Manager(DeviceGPU);
+    
+    Window->Window = OS_Create_Window(Width, Height, WindowTitle, WindowFlags, Window);
+#ifdef OS_WIN32
+    //Window->Display = GPU_Create_Display(DisplayManager, ((win32_window*)Window->Window)->Handle);
+#else
+#error Not Implemented
+#endif
+    return Window;
+}
+
+void EditorUI_Delete_Window(editor_window* Window)
+{
+    editor_ui* UI = EditorUI_Get();
+    gpu_device_context*  DeviceGPU      = Editor_Get()->DeviceGPU;
+    //gpu_display_manager* DisplayManager = GPU_Get_Display_Manager(DeviceGPU);
+    
+    //GPU_Delete_Display(DisplayManager, Window->Display);
+    OS_Delete_Window(Window->Window);
+    SLL_Push_Front(UI->FreeWindows, Window);
 }
 
 void EditorUI_Shutdown()
 {
     //TODO(JJ): Handle case
+}
+
+void EditorUI_Update(double dt)
+{
+    editor_ui* UI = EditorUI_Get();
+    
+    static font_face* DEBUGFontFace;
+    if(!DEBUGFontFace)
+    {
+        DEBUGFontFace = Glyph_Generator_Create_Font_Face(UI->GlyphGenerator, UI->MainFontBuffer.Ptr, UI->MainFontBuffer.Size, 16);
+    }
+    
+    glyph* Glyph = Glyph_Cache_Get(UI->GlyphCache, DEBUGFontFace, 'b');
+    Glyph_Cache_Generate(UI->GlyphCache);
+    
+    GPU_Cmd_Buffer_Reset(UI->CmdBuffer);
+    gpu_cmd_ui_pass* UIPass = GPU_Cmd_Buffer_Begin_UI_Pass(UI->CmdBuffer);
+    GPU_Cmd_UI_Pass_Draw_Rectangle(UIPass, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V3(0.0f, 1.0f, 0.0f), 1.0f);
+    
+    GPU_Dispatch_Cmds(Editor_Get()->DeviceGPU, &UI->CmdBuffer, 1);
 }
 
 global editor_ui* G_EditorUI;

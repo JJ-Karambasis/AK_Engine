@@ -5,6 +5,7 @@
 
 typedef struct allocator allocator;
 
+#define StrC_Expand(s) {(s), sizeof((s))-1}
 #define StrC_Lit(s) StrC((s), sizeof((s))-1)
 typedef struct strc
 {
@@ -20,6 +21,7 @@ int32_t  StrC_Compare(strc StrA, strc StrB);
 strc     StrC_Concat(allocator* Allocator, strc StrA, strc StrB);
 strc     StrC_FormatV(allocator* Allocator, strc Str, va_list Args);
 strc     StrC_Format(allocator* Allocator, strc Str, ...);
+strc     StrC_Copy(allocator* Allocator, strc Str);
 
 #define Str8_Lit(s) Str8((const uint8_t*)(s), sizeof((s))-1)
 typedef struct str8

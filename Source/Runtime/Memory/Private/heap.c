@@ -16,7 +16,8 @@ bool8_t Heap__Has_Allocated_Block(heap* Heap, heap_block* Block);
 #define Heap__Add_To_Allocated_List(Heap, Block) \
 if(Heap->AllocatedList) Heap->AllocatedList->PreviousAllocated = Block; \
 Block->NextAllocated = Heap->AllocatedList; \
-Heap->AllocatedList = Block->NextAllocated
+Heap->AllocatedList = Block
+
 #define Heap__Check_If_Block_Is_Allocated(Heap, block) \
 Assert(Heap__Has_Allocated_Block(Heap, Block)); \
 if(Block == Heap->AllocatedList) Heap->AllocatedList = Heap->AllocatedList->Next; \
@@ -595,7 +596,7 @@ void Heap_Clear(heap* Heap, memory_clear_flag ClearFlag)
 #ifdef DEBUG_BUILD
 bool8_t Heap__Has_Allocated_Block(heap* Heap, heap_block* Block)
 {
-    for(heap_block* TargetBlock = Heap->AllocatedList; TargetBlock; TargetBlock = TargetBlock->Next)
+    for(heap_block* TargetBlock = Heap->AllocatedList; TargetBlock; TargetBlock = TargetBlock->NextAllocated)
         if(Block == TargetBlock) return true;
     return false;
 }

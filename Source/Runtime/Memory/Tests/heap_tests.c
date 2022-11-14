@@ -42,7 +42,6 @@ UTEST_F(HeapTest, Test_Merge_Boundaries)
     ASSERT_EQ(Memory3, Tree->Root->Block->Block->Memory + Tree->Root->Block->Offset + sizeof(heap_block*));
     
     Heap_Free(Heap, Memory1);
-    Heap_Free(Heap, Memory1);
     ASSERT_TRUE(Heap_Verify(Heap));
     void* Memory8 = Heap_Allocate(Heap, Kilo(30), MEMORY_CLEAR);
     ASSERT_TRUE(Heap_Verify(Heap));

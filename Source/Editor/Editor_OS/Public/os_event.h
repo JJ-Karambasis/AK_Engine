@@ -4,7 +4,8 @@
 typedef enum event_type
 {
     OS_EVENT_TYPE_NONE,
-    OS_EVENT_TYPE_WINDOW_CLOSED
+    OS_EVENT_TYPE_WINDOW_CLOSED,
+    OS_EVENT_TYPE_WINDOW_RESIZED
 } event_type;
 
 typedef struct os_event

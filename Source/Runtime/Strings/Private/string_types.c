@@ -81,6 +81,14 @@ strc StrC_Format(allocator* Allocator, strc Str, ...)
     return Result;
 }
 
+strc StrC_Copy(allocator* Allocator, strc Str)
+{
+    char* Buffer = Allocate_Array_No_Clear(Allocator,char, Str.Length+1);
+    Memory_Copy(Buffer, Str.Str, Str.Length*sizeof(char));
+    Buffer[Str.Length] = 0;
+    return StrC(Buffer, Str.Length);
+}
+
 uint64_t Str8_Length(const uint8_t* Str)
 {
     uint64_t Result = 0;

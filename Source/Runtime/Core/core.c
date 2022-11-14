@@ -86,6 +86,7 @@ core* Core_Get()
 #include <Memory/memory.c>
 #include <Strings/strings.c>
 #include <Random/random.c>
+#include <Math/math.c>
 
 #ifdef EDITOR_BUILD
 #include <Editor_OS/editor_os.c>

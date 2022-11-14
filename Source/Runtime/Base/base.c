@@ -629,3 +629,40 @@ inline void* Atomic_Compare_ExchangePtr(void* volatile* Dst, void* Exchange, voi
 #else
 #error Not Implemented
 #endif
+
+uint32_t Hash_U32(uint32_t Key)
+{
+    Key = (Key+0x7ed55d16) + (Key<<12);
+    Key = (Key^0xc761c23c) ^ (Key>>19);
+    Key = (Key+0x165667b1) + (Key<<5);
+    Key = (Key+0xd3a2646c) ^ (Key<<9);
+    Key = (Key+0xfd7046c5) + (Key<<3);
+    Key = (Key^0xb55a4f09) ^ (Key>>16);
+    return Key;
+}
+
+uint32_t Hash_U64(uint64_t Key)
+{
+    Key = (~Key) + (Key << 18); // Key = (Key << 18) - Key - 1;
+    Key = Key ^ (Key >> 31);
+    Key = Key * 21; // Key = (Key + (Key << 2)) + (Key << 4);
+    Key = Key ^ (Key >> 11);
+    Key = Key + (Key << 6);
+    Key = Key ^ (Key >> 22);
+    return (uint32_t)Key;
+}
+
+uint32_t Hash_Ptr(size_t Key)
+{
+#ifdef BITNESS_32
+    return Hash_U32(Key);
+#else
+    return Hash_U64(Key);
+#endif
+}
+
+uint32_t Hash_Combine(uint32_t HashA, uint32_t HashB)
+{
+    uint32_t Result = HashB + 0x9e3779b9 + (HashA << 6) + (HashA >> 2);
+    return Result;
+}

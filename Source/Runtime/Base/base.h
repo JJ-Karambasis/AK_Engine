@@ -16,10 +16,22 @@ typedef int32_t bool32_t;
 
 #if defined(COMPILER_MSVC) || defined(COMPILER_CLANG)
 #define thread_local __declspec(thread)
+#else
+#error Not Implemented
+#endif
+
+#if defined(OS_WIN32)
+
+#if defined(COMPILER_MSVC) || defined(COMPILER_CLANG)
 #define shared_export __declspec(dllexport)
 #else
 #error Not Implemented
 #endif
+
+#else
+#error Not Implemented
+#endif
+
 
 #ifdef OS_WIN32
 #define Debug_Break() __debugbreak()
@@ -40,6 +52,9 @@ typedef int32_t bool32_t;
 #define Assert(c)
 #endif
 
+#define Invalid_Default_Case default: { Assert(false); } break
+#define Set_VTable(Struct, Table) (Struct)->_VTable = Table
+
 #if defined(COMPILER_MSVC)
 #define alignof(x) __alignof(x)
 #elif defined(COMPILER_CLANG)
@@ -57,6 +72,31 @@ Static_Assert(alignof(int) == 4);
 #define SLL_Push_Back(First, Last, Node) (!First ? (First = Last = Node) : (Last->Next = Node, Last = Node))
 #define SLL_Push_Front(First, Node) (Node->Next = First, First = Node)
 #define SLL_Pop_Front(First) (First = First->Next)
+
+#define DLL_Push_Back_NP(First, Last, Node, Next, Prev) (!First ? (First = Last = Node) : (Node->Prev = Last, Last->Next = Node, Last = Node))
+#define DLL_Remove_NP(First, Last, Node, Next, Prev) \
+do \
+{ \
+if(First == Node) \
+{ \
+First = First->Next; \
+if(First) First->Prev = NULL; \
+} \
+if(Last == Node) \
+{ \
+Last = Last->Prev; \
+if(Last) Last->Next = NULL; \
+} \
+if(Node->Prev) Node->Prev->Next = Node->Next; \
+if(Node->Next) Node->Next->Prev = TargetEntry->Prev; \
+Node->Prev = NULL; \
+Node->Next = NULL; \
+} while(0)
+
+#define DLL_Push_Back(First, Last, Node) DLL_Push_Back(First, Last, Node)
+#define DLL_Remove(First, Last, Node) DLL_Remove_NP(First, Last, Node, Next, Prev)
+
+#define Array_Count(arr) (sizeof((arr))/sizeof((arr)[0]))
 
 #define Stringify_(a) #a
 #define Stringify(a) Stringify_(a)
@@ -342,5 +382,9 @@ void*   Atomic_ExchangePtr(void* volatile* Dst, void* Value);
 int32_t Atomic_Compare_Exchange32(volatile int32_t* Dst, int32_t Exchange, int32_t Comperand);
 int64_t Atomic_Compare_Exchange64(volatile int64_t* Dst, int64_t Exchange, int64_t Comperand);
 void*   Atomic_Compare_ExchangePtr(void* volatile* Dst, void* Exchange, void* Comperand);
+uint32_t Hash_U32(uint32_t Key);
+uint32_t Hash_U64(uint64_t Key);
+uint32_t Hash_Ptr(size_t Key);
+uint32_t Hash_Combine(uint32_t HashA, uint32_t HashB);
 
 #endif

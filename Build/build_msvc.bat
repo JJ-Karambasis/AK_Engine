@@ -3,6 +3,7 @@
 set CurrentPath=%~dp0
 
 call %CurrentPath%set_compiler_flags.bat
+call %CurrentPAth%set_gpu_flags.bat
 
 set BatchfileVersion=
 IF %Compile32Bit% == True (	
@@ -34,7 +35,7 @@ IF %Optimized% == False (
 	set OptimizedFlags=%OptimizedFlags% -O2
 )
 
-set Warnings=-W4 -wd4100 -wd4189 -wd4201 -wd4996 -wd4706
+set Warnings=-W4 -wd4100 -wd4189 -wd4201 -wd4996 -wd4706 -wd4101
 set CFlags=-nologo -Z7 -FC -D -D_HAS_EXCEPTIONS=0 -DCOMPILER_MSVC -GR- %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
 set Libs=advapi32.lib user32.lib gdi32.lib opengl32.lib
@@ -56,6 +57,11 @@ IF %CompileFreetype% == True (
 	RMDIR /S /Q "%InstallPath%\freetype"
 )
 
+set ProjectSharedIncludes=-I%CurrentPath%../Source/Projects/Shared
+
+cl %CFlags% %ProjectSharedIncludes% %CurrentPath%../Source/Projects/Shader_Builder/shader_builder.c -link %Libs% -out:Shader_Builder.exe
+
+cl %CFlags% %GPUFlags% -LD %GPUPath% -link %Libs% -out:GPU.dll
 cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link %Libs% -out:AK_Engine_Tests.exe
 cl %CFlags% %FreeTypeIncludePath% %CurrentPath%../Source/Editor/editor.c -link %Libs% ftsystem.lib -out:AK_Engine.exe
 popd

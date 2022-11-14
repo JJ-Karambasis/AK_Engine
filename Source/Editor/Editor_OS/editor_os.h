@@ -5,6 +5,7 @@
 
 #include "Public/os_window.h"
 #include "Public/os_event.h"
+#include "Public/os_library.h"
 
 typedef struct editor_os editor_os;
 
