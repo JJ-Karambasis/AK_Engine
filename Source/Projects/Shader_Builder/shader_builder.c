@@ -11,14 +11,14 @@ int main(int ArgumentCount, char** Arguments)
         Console_Arg_Add_Required_Value(Console, Str8_Lit("GL"));
         Console_Arg_Add_Required_Value(Console, Str8_Lit("Direct3D"));
         Console_Arg_Add_Required_Value(Console, Str8_Lit("Vulkan"));
-        Console_Arg_Set_Validation(Console, CONSOLE_VALIDATION_BIT_FLAG_STRING|CONSOLE_VALIDATION_BIT_FLAG_CASE_INSENSITIVE);
+        Console_Arg_Set_Validation(Console, CONSOLE_VALIDATION_TYPE_CASE_INSENSITIVE);
         Console_Arg_Set_Array_Restriction(Console, 1);
     }
     Console_End_Arg(Console);
     
     Console_Begin_Arg(Console, Str8_Lit("--shaderPath"));
     {
-        Console_Arg_Set_Validation(Console, CONSOLE_VALIDATION_BIT_FLAG_PATH);
+        Console_Arg_Set_Validation(Console, CONSOLE_VALIDATION_TYPE_DIRECTORY);
         Console_Arg_Set_Array_Restriction(Console, 1);
     }
     Console_End_Arg(Console);

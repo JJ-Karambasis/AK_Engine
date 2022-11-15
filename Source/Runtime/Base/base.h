@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include <intrin.h>
+#include <wchar.h>
 
 typedef int8_t  bool8_t;
 typedef int16_t bool16_t;

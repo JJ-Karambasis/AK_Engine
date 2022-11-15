@@ -15,6 +15,20 @@ void Editor_OS_Shutdown()
     OS_Poll_Events();
 }
 
+bool8_t OS_File_Exists(str8 File)
+{
+    str16 FileW = UTF8_To_UTF16(Get_Base_Allocator(Core_Get_Thread_Context()->Scratch), File);
+    DWORD FileAttributes = GetFileAttributesW(FileW.Str);
+    return FileAttributes != INVALID_FILE_ATTRIBUTES && !(FileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+bool8_t    OS_Directory_Exists(str8 Directory)
+{
+    str16 DirectoryW = UTF8_To_UTF16(Get_Base_Allocator(Core_Get_Thread_Context()->Scratch), Directory);
+    DWORD FileAttributes = GetFileAttributesW(DirectoryW.Str);
+    return FileAttributes != INVALID_FILE_ATTRIBUTES && (FileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+}
+
 #include "Private/win32_window.c"
 #include "Private/win32_event.c"
 #include "Private/win32_library.c"

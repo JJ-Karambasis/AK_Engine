@@ -1,9 +1,9 @@
 typedef struct console_value
 {
     console_value_type Type;
+    str8               ValueStr;
     union
     {
-        str8    ValueStr;
         int64_t ValueInt;
         double  ValueFloat;
     };
@@ -11,19 +11,19 @@ typedef struct console_value
 
 typedef struct console_value_list
 {
-    uint64_t       Count;
-    uint64_t       Capacity;
+    uint32_t       Count;
+    uint32_t       Capacity;
     console_value* Values;
 } console_value_list;
 
 typedef struct console_arg
 {
-    str8                Key;
-    str8_list           RequiredValues;
-    uint64_t            MaxLength;
-    uint64_t            ValidationBitFlag;
-    console_value_list  Values;
-    struct console_arg* Next;
+    str8                     Key;
+    str8_list                RequiredValues;
+    uint64_t                 MaxLength;
+    console_validation_type  ValidationType;
+    console_value_list       Values;
+    struct console_arg*      Next;
 } console_arg;
 
 typedef struct console
@@ -47,7 +47,7 @@ void Console__Add_Value(console* Console, console_arg* Arg, console_value Value)
     console_value_list* List = &Arg->Values;
     if(List->Count == List->Capacity)
     {
-        uint64_t NewCapacity = 32;
+        uint32_t NewCapacity = 32;
         if(List->Capacity) NewCapacity = List->Capacity*2;
         
         console_value* Values = Arena_Push_Array(Console->Arena, console_value, NewCapacity);
@@ -59,8 +59,119 @@ void Console__Add_Value(console* Console, console_arg* Arg, console_value Value)
     List->Values[List->Count++] = Value;
 }
 
-bool8_t Console__Parse_Argument(console* Console, console_arg* Arg, str8 Value)
+bool8_t Console__Perform_Value_Validation(console* Console, console_arg* Arg, console_value* Value)
 {
+    switch(Arg->ValidationType)
+    {
+        case CONSOLE_VALIDATION_TYPE_INTEGER:
+        {
+            if(Value->Type != CONSOLE_VALUE_TYPE_INTEGER) 
+            {
+                Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Validation failed on argument '%.*s' value '%.*s'. It must be an integer value"), 
+                                      Arg->Key.Length, Arg->Key.Str, Value->ValueStr.Length, Value->ValueStr.Str);
+                return false;
+            }
+        } break;
+        
+        case CONSOLE_VALIDATION_TYPE_FLOAT:
+        {
+            if(Value->Type != CONSOLE_VALUE_TYPE_FLOAT)
+            {
+                Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Validation failed on argument '%.*s' value '%.*s'. It must be a float value"), 
+                                      Arg->Key.Length, Arg->Key.Str, Value->ValueStr.Length, Value->ValueStr.Str);
+                return false;
+            }
+        } break;
+        
+        case CONSOLE_VALIDATION_TYPE_NUMERIC:
+        {
+            if(Value->Type == CONSOLE_VALUE_TYPE_STRING)
+            {
+                Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Validation failed on argument '%.*s' value '%.*s'. It must be a numeric value"), 
+                                      Arg->Key.Length, Arg->Key.Str, Value->ValueStr.Length, Value->ValueStr.Str);
+                return false;
+            }
+        } break;
+        
+        case CONSOLE_VALIDATION_TYPE_CASE_INSENSITIVE:
+        case CONSOLE_VALIDATION_TYPE_DIRECTORY:
+        case CONSOLE_VALIDATION_TYPE_FILE:
+        {
+            if(Value->Type != CONSOLE_VALUE_TYPE_STRING)
+            {
+                Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), 
+                                      Str8_Lit("Validation failed on argument '%.*s' value '%.*s'. It must be a string value"), 
+                                      Arg->Key.Length, Arg->Key.Str, Value->ValueStr.Length, Value->ValueStr.Str);
+                return false;
+            }
+            
+            if(Arg->ValidationType == CONSOLE_VALIDATION_TYPE_DIRECTORY)
+            {
+                if(!OS_Directory_Exists(Value->ValueStr))
+                {
+                    Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), 
+                                          Str8_Lit("Validation failed on argument '%.*s'. Directory '%.*s' does not exist"),
+                                          Arg->Key.Length, Arg->Key.Str, Value->ValueStr.Length, Value->ValueStr.Str);
+                    return false;
+                }
+            }
+            else if(Arg->ValidationType == CONSOLE_VALIDATION_TYPE_FILE)
+            {
+                if(!OS_File_Exists(Value->ValueStr))
+                {
+                    Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), 
+                                          Str8_Lit("Validation failed on argument '%.*s'. File '%.*s' does not exist"),
+                                          Arg->Key.Length, Arg->Key.Str, Value->ValueStr.Length, Value->ValueStr.Str);
+                    return false;
+                }
+            }
+        } break;
+    }
+    
+    return true;
+}
+
+bool8_t Console__Parse_Argument(console* Console, console_arg* Arg, str8 ValueStr)
+{
+    console_value Value;
+    Zero_Struct(&Value, console_value);
+    
+    Value.Type = CONSOLE_VALUE_TYPE_STRING;
+    Value.ValueStr = Str8_Copy(Get_Base_Allocator(Console->Arena), ValueStr);
+    
+    char* EndNumeric;
+    int64_t IntValue = strtol((char*)ValueStr.Str, &EndNumeric, 10);
+    if(EndNumeric == ((char*)ValueStr.Str + ValueStr.Length))
+    {
+        Value.Type = CONSOLE_VALUE_TYPE_INTEGER;
+        Value.ValueInt = IntValue;
+    }
+    else
+    {
+        char* EndFloat;
+        double FloatValue = strtod((char*)ValueStr.Str, &EndFloat);
+        if(EndFloat == ((char*)ValueStr.Str + ValueStr.Length))
+        {
+            Value.Type = CONSOLE_VALUE_TYPE_FLOAT;
+            Value.ValueFloat = FloatValue;
+        }
+    }
+    
+    if(Console__Perform_Value_Validation(Console, Arg, &Value))
+        return false;
+    
+    Console__Add_Value(Console, Arg, Value);
+    
+    return true;
+}
+
+console_arg* Console__Find_Arg(console* Console, str8 ArgStr)
+{
+    for(console_arg* Arg = Console->FirstArg; Arg; Arg = Arg->Next)
+    {
+        if(Str8_Equal(Arg->Key, ArgStr)) return Arg;
+    }
+    return NULL;
 }
 
 console* Console_Create(allocator* Allocator)
@@ -71,7 +182,7 @@ console* Console_Create(allocator* Allocator)
     return Console;
 }
 
-void Console_Begin_Argument(console* Console, str8 Key)
+void Console_Begin_Arg(console* Console, str8 Key)
 {
     Assert(!Console->SetArgument);
     console_arg* TargetArgument = NULL;
@@ -92,43 +203,28 @@ void Console_Begin_Argument(console* Console, str8 Key)
     Console->SetArgument = TargetArgument;
 }
 
-void Console_Add_Required_Value(console* Console, str8 Value)
+void Console_Arg_Add_Required_Value(console* Console, str8 Value)
 {
     Assert(Console->SetArgument);
     console_arg* TargetArgument = Console->SetArgument;
     Str8_List_Push(&TargetArgument->RequiredValues, Get_Base_Allocator(Console->Arena), Str8_Copy(Get_Base_Allocator(Console->Arena), Value));
 }
 
-void Console_Set_Validation(console* Console, uint64_t ValidationBitFlag)
+void Console_Arg_Set_Validation(console* Console, console_validation_type Validation)
 {
     Assert(Console->SetArgument);
     console_arg* TargetArgument = Console->SetArgument;
-    
-    bool8_t IsString = ValidationBitFlag & CONSOLE_VALIDATION_BIT_FLAG_STRING;
-    bool8_t IsInteger = ValidationBitFlag & CONSOLE_VALIDATION_BIT_FLAG_INTEGER;
-    bool8_t IsFloat = ValidationBitFlag & CONSOLE_VALIDATION_BIT_FLAG_FLOAT;
-    bool8_t IsNumeric = ValidationBitFlag & CONSOLE_VALIDATION_BIT_FLAG_NUMERIC;
-    bool8_t IsCaseInsensitive = ValidationBitFlag & CONSOLE_VALIDATION_BIT_FLAG_CASE_INSENSITIVE;
-    bool8_t IsPath = ValidationBitFlag & CONSOLE_VALIDATION_BIT_FLAG_PATH;
-    
-    Assert(IsString && !(IsInteger || IsFloat || IsNumeric));
-    Assert(IsInteger && !(IsString || IsFloat || IsNumeric || IsCaseInsensitive || IsPath));
-    Assert(IsFloat && !(IsString || IsInteger || IsNumeric || IsCaseInsensitive || IsPath));
-    Assert(IsNumeric && !(IsString || IsInteger || IsFloat || IsCaseInsensitive || IsPath));
-    Assert(IsCaseInsensitive && !(IsInteger || IsFloat || IsNumeric || IsPath));
-    Assert(IsPath && !(IsInteger || IsFloat || IsNumeric || IsCaseInsensitive));
-    
-    TargetArgument->ValidationBitFlag = ValidationBitFlag;
+    TargetArgument->ValidationType = Validation;
 }
 
-void Console_Add_Array_Restriction(console* Console, uint32_t LengthRestriction)
+void Console_Arg_Set_Array_Restriction(console* Console, uint32_t LengthRestriction)
 {
     Assert(Console->SetArgument);
     console_arg* TargetArgument = Console->SetArgument;
     TargetArgument->MaxLength = LengthRestriction;
 }
 
-void Console_End_Argument(console* Console)
+void Console_End_Arg(console* Console)
 {
     Assert(Console->SetArgument);
     Console->SetArgument = NULL;
@@ -136,11 +232,17 @@ void Console_End_Argument(console* Console)
 
 bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCount)
 {
+    if(ArgumentCount <= 1)
+    {
+        Console__Build_Help_Message(Console);
+        return false;
+    }
+    
     console_arg* TargetArgument = NULL;
-    for(int ArgIndex = 0; ArgIndex < ArgumentCount; ArgIndex++)
+    for(int ArgIndex = 1; ArgIndex < ArgumentCount; ArgIndex++)
     {
         str8 ArgumentStr = Str8_Null_Term((uint8_t*)Arguments[ArgIndex]);
-        console_arg* Argument = Console__Find_Argument(Console, ArgumentStr);
+        console_arg* Argument = Console__Find_Arg(Console, ArgumentStr);
         if(!Argument && !TargetArgument)
         {
             Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Unknown argument %.*s"), ArgumentStr.Length, ArgumentStr.Str);
@@ -161,14 +263,42 @@ bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCoun
     return true;
 }
 
-void             Console_Log_Error(console* Console);
-console_arg*       Console_Get_Arg(console* Console, str8 Arg);
-uint32_t           Console_Get_Arg_Array_Length(console* Console, console_arg* Arg);
-console_value_type Console_Get_Arg_Value_Type(console* Console, console_arg* Arg, uint32_t ArgumentIndex);
-str8               Console_Get_Arg_Value_Str(console* Console, console_arg* Arg, uint32_t ArgumentIndex);
-int64_t            Console_Get_Arg_Value_Integer(console* Console, console_arg* Arg, uint32_t ArgumentIndex);
-double             Console_Get_Arg_Value_Float(console* Console, console_arg* Arg, uint32_t ArgumentIndex);
-void               Console_Delete(console* Console);
+void Console_Log_Error(console* Console)
+{
+    str16 Error = UTF8_To_UTF16(Get_Base_Allocator(Console->Arena), 
+                                Str8_List_Join(Get_Base_Allocator(Console->Arena), &Console->ErrorList));
+    fwprintf(stderr, Error.Str);
+}
+
+console_arg* Console_Get_Arg(console* Console, str8 ArgStr)
+{
+    return Console__Find_Arg(Console, ArgStr);
+}
+
+uint32_t Console_Get_Arg_Array_Length(console* Console, console_arg* Arg)
+{
+    return Arg->Values.Count;
+}
+
+console_value_type Console_Get_Arg_Value_Type(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
+{
+    return Arg->Values.Values[ArgumentIndex].Type;
+}
+
+str8 Console_Get_Arg_Value_Str(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
+{
+    return Arg->Values.Values[ArgumentIndex].ValueStr;
+}
+
+int64_t Console_Get_Arg_Value_Integer(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
+{
+    return Arg->Values.Values[ArgumentIndex].ValueInt;
+}
+
+double Console_Get_Arg_Value_Float(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
+{
+    return Arg->Values.Values[ArgumentIndex].ValueFloat;
+}
 
 void Console_Delete(console* Console)
 {

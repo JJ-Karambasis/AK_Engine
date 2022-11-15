@@ -8,16 +8,16 @@ typedef enum console_value_type
     CONSOLE_VALUE_TYPE_STRING
 } console_value_type;
 
-enum
+typedef enum console_validation_type
 {
-    CONSOLE_VALIDATION_BIT_FLAG_NONE = 0,
-    CONSOLE_VALIDATION_BIT_FLAG_STRING = (1 << 0),
-    CONSOLE_VALIDATION_BIT_FLAG_INTEGER = (1 << 1),
-    CONSOLE_VALIDATION_BIT_FLAG_FLOAT = (1 << 2),
-    CONSOLE_VALIDATION_BIT_FLAG_NUMERIC = (1 << 3),
-    CONSOLE_VALIDATION_BIT_FLAG_CASE_INSENSITIVE = (1 << 4),
-    CONSOLE_VALIDATION_BIT_FLAG_PATH = (1 << 5)
-};
+    CONSOLE_VALIDATION_TYPE_NONE,
+    CONSOLE_VALIDATION_TYPE_INTEGER,
+    CONSOLE_VALIDATION_TYPE_FLOAT,
+    CONSOLE_VALIDATION_TYPE_NUMERIC,
+    CONSOLE_VALIDATION_TYPE_CASE_INSENSITIVE,
+    CONSOLE_VALIDATION_TYPE_DIRECTORY,
+    CONSOLE_VALIDATION_TYPE_FILE
+} console_validation_type;
 
 typedef struct console console;
 typedef struct console_arg console_arg;
@@ -25,7 +25,7 @@ typedef struct console_arg console_arg;
 console*           Console_Create(allocator* Allocator);
 void               Console_Begin_Arg(console* Console, str8 Argument);
 void               Console_Arg_Add_Required_Value(console* Console, str8 Value);
-void               Console_Arg_Set_Validation(console* Console, uint64_t ValidationBitFlag);
+void               Console_Arg_Set_Validation(console* Console, console_validation_type Validation);
 void               Console_Arg_Set_Array_Restriction(console* Console, uint32_t LengthRestriction);
 void               Console_End_Arg(console* Console);
 bool8_t            Console_Parse(console* Console, const char** Args, int ArgCount);
