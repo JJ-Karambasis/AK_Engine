@@ -113,7 +113,21 @@ bool8_t Str8_Equal(str8 StrA, str8 StrB)
 {
     if(StrA.Length != StrB.Length) return false;
     for(uint64_t i = 0; i < StrA.Length; i++)
-        if(StrA.Str[i] != StrB.Str[i]) return false;
+    {
+        if(StrA.Str[i] != StrB.Str[i]) 
+            return false;
+    }
+    return true;
+}
+
+bool8_t Str8_Equal_Insensitive(str8 StrA, str8 StrB)
+{
+    if(StrA.Length != StrB.Length) return false;
+    for(uint64_t i = 0; i < StrA.Length; i++) 
+    {
+        if(To_Lower8(StrA.Str[i]) != To_Lower8(StrB.Str[i])) 
+            return false;
+    }
     return true;
 }
 

@@ -20,7 +20,8 @@ typedef struct console_arg
 {
     str8                     Key;
     str8_list                RequiredValues;
-    uint64_t                 MaxLength;
+    uint32_t                 MinLength;
+    uint32_t                 MaxLength;
     console_validation_type  ValidationType;
     console_value_list       Values;
     struct console_arg*      Next;
@@ -34,6 +35,17 @@ typedef struct console
     console_arg* LastArg;
     str8_list    ErrorList;
 } console;
+
+static str8 G_ValidationTypes[CONSOLE_VALIDATION_TYPE_COUNT] = 
+{
+    Str8_Expand("None"), 
+    Str8_Expand("Integer"), 
+    Str8_Expand("Float"), 
+    Str8_Expand("Numeric"), 
+    Str8_Expand("?"), 
+    Str8_Expand("Directory"), 
+    Str8_Expand("File")
+};
 
 console_arg* Console__Find_Argument(console* Console, str8 Key)
 {
@@ -56,6 +68,7 @@ void Console__Add_Value(console* Console, console_arg* Arg, console_value Value)
         List->Values = Values;
         List->Capacity = NewCapacity;
     }
+    
     List->Values[List->Count++] = Value;
 }
 
@@ -131,7 +144,7 @@ bool8_t Console__Perform_Value_Validation(console* Console, console_arg* Arg, co
     return true;
 }
 
-bool8_t Console__Parse_Argument(console* Console, console_arg* Arg, str8 ValueStr)
+bool8_t Console__Parse_Argument_Value(console* Console, console_arg* Arg, str8 ValueStr)
 {
     console_value Value;
     Zero_Struct(&Value, console_value);
@@ -172,6 +185,81 @@ console_arg* Console__Find_Arg(console* Console, str8 ArgStr)
         if(Str8_Equal(Arg->Key, ArgStr)) return Arg;
     }
     return NULL;
+}
+
+bool8_t Console__Validate_Argument_Arrays(console* Console)
+{
+    for(console_arg* Arg = Console->FirstArg; Arg; Arg = Arg->Next)
+    {
+        Assert(Arg->MaxLength >= Arg->MinLength);
+        console_value_list* ValueList = &Arg->Values;
+        
+        if(Arg->MaxLength && Arg->MinLength == Arg->MaxLength)
+        {
+            if(ValueList->Count != Arg->MaxLength)
+            {
+                str8 ArgValueStr = Arg->MinLength == 1 ? Str8_Lit("value") : Str8_Lit("values");
+                str8 ValueStr = ValueList->Count == 1 ? Str8_Lit("value") : Str8_Lit("values");
+                Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Argument '%.*s' array validation failed. You must supply %d %.*s, supplied %d %.*s"), 
+                                      Arg->Key.Length, Arg->Key.Str, Arg->MaxLength, ArgValueStr.Length, ArgValueStr.Str, ValueList->Count, ValueStr.Length, ValueStr.Str);
+                return false;
+            }
+        }
+        else
+        {
+            if(ValueList->Count < Arg->MinLength)
+            {
+                str8 ArgValueStr = Arg->MinLength == 1 ? Str8_Lit("value") : Str8_Lit("values");
+                str8 ValueStr = ValueList->Count == 1 ? Str8_Lit("value") : Str8_Lit("values");
+                Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Argument '%.*s' array validation failed. Must have at least %d %.*s, supplied only %d %.*s"), 
+                                      Arg->Key.Length, Arg->Key.Str, Arg->MinLength, ArgValueStr.Length, ArgValueStr.Str, ValueList->Count, ValueStr.Length, ValueStr.Str);
+                return false;
+            }
+            
+            if(Arg->MaxLength)
+            {
+                if(Arg->MaxLength < ValueList->Count)
+                {
+                    str8 ArgValueStr = Arg->MaxLength == 1 ? Str8_Lit("value") : Str8_Lit("values");
+                    str8 ValueStr = ValueList->Count == 1 ? Str8_Lit("value") : Str8_Lit("values");
+                    Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Argument '%.*s' array validation failed. Must have at most %d %.*s, supplied %d %.*s"), 
+                                          Arg->Key.Length, Arg->Key.Str, Arg->MaxLength, ArgValueStr.Length, ArgValueStr.Str, ValueList->Count, ValueStr.Length, ValueStr.Str);
+                    return false;
+                }
+            }
+        }
+    }
+    
+    return true;
+}
+
+void Console__Build_Help_Message(console* Console)
+{
+    for(console_arg* Arg = Console->FirstArg; Arg; Arg = Arg->Next)
+    {
+        str8_list LineList;
+        Zero_Struct(&LineList, str8_list);
+        
+        Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Argument: '%.*s'"), Arg->Key.Length, Arg->Key.Str);
+        
+        if(Arg->RequiredValues.Count)
+        {
+            str8 RequiredValues = Str8_List_Join_Comma_Separated(Get_Base_Allocator(Console->Arena), &Arg->RequiredValues);
+            Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Required values: '%.*s'"), RequiredValues.Length, RequiredValues.Str);
+        }
+        
+        if(Arg->ValidationType != CONSOLE_VALIDATION_TYPE_NONE)
+        {
+            if(Arg->ValidationType != CONSOLE_VALIDATION_TYPE_CASE_INSENSITIVE)
+            {
+                str8 ValidationTypeStr = Str8_To_Lower(Get_Base_Allocator(Console->Arena), G_ValidationTypes[Arg->ValidationType]);
+                Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Value type: %.*s"), ValidationTypeStr.Length, ValidationTypeStr.Str);
+            }
+        }
+        
+        str8 Line = Str8_List_Join_Sentence(Get_Base_Allocator(Console->Arena), &LineList);
+        Str8_List_Push(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Line);
+    }
 }
 
 console* Console_Create(allocator* Allocator)
@@ -217,8 +305,25 @@ void Console_Arg_Set_Validation(console* Console, console_validation_type Valida
     TargetArgument->ValidationType = Validation;
 }
 
+void Console_Arg_Set_Array_Min_Restriction(console* Console, uint32_t Min)
+{
+    Assert(Console->SetArgument);
+    console_arg* TargetArgument = Console->SetArgument;
+    TargetArgument->MinLength = Min;
+}
+
+void Console_Arg_Set_Array_Max_Restriction(console* Console, uint32_t Max)
+{
+    Assert(Console->SetArgument);
+    console_arg* TargetArgument = Console->SetArgument;
+    TargetArgument->MaxLength = Max;
+}
+
 void Console_Arg_Set_Array_Restriction(console* Console, uint32_t LengthRestriction)
 {
+    Console_Arg_Set_Array_Min_Restriction(Console, LengthRestriction);
+    Console_Arg_Set_Array_Max_Restriction(Console, LengthRestriction);
+    
     Assert(Console->SetArgument);
     console_arg* TargetArgument = Console->SetArgument;
     TargetArgument->MaxLength = LengthRestriction;
@@ -242,6 +347,13 @@ bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCoun
     for(int ArgIndex = 1; ArgIndex < ArgumentCount; ArgIndex++)
     {
         str8 ArgumentStr = Str8_Null_Term((uint8_t*)Arguments[ArgIndex]);
+        if(Str8_Equal_Insensitive(ArgumentStr, Str8_Lit("--help")) ||
+           Str8_Equal_Insensitive(ArgumentStr, Str8_Lit("-h")))
+        {
+            Console__Build_Help_Message(Console);
+            return false;
+        }
+        
         console_arg* Argument = Console__Find_Arg(Console, ArgumentStr);
         if(!Argument && !TargetArgument)
         {
@@ -252,7 +364,7 @@ bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCoun
         {
             //TODO(JJ): This is an arguments value
             str8 ArgumentValue = ArgumentStr;
-            if(!Console__Parse_Argument(Console, Argument, ArgumentValue))
+            if(!Console__Parse_Argument_Value(Console, Argument, ArgumentValue))
                 return false;
         }
         else
@@ -260,13 +372,16 @@ bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCoun
             TargetArgument = Argument;
         }
     }
+    
+    if(!Console__Validate_Argument_Arrays(Console)) return false;
+    
     return true;
 }
 
 void Console_Log_Error(console* Console)
 {
     str16 Error = UTF8_To_UTF16(Get_Base_Allocator(Console->Arena), 
-                                Str8_List_Join(Get_Base_Allocator(Console->Arena), &Console->ErrorList));
+                                Str8_List_Join_Newline(Get_Base_Allocator(Console->Arena), &Console->ErrorList));
     fwprintf(stderr, Error.Str);
 }
 
@@ -280,24 +395,30 @@ uint32_t Console_Get_Arg_Array_Length(console* Console, console_arg* Arg)
     return Arg->Values.Count;
 }
 
+console_value* Console__Get_Value(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
+{
+    Assert(ArgumentIndex < Arg->Values.Count);
+    return Arg->Values.Values + ArgumentIndex;
+}
+
 console_value_type Console_Get_Arg_Value_Type(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
 {
-    return Arg->Values.Values[ArgumentIndex].Type;
+    return Console__Get_Value(Console, Arg, ArgumentIndex)->Type;
 }
 
 str8 Console_Get_Arg_Value_Str(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
 {
-    return Arg->Values.Values[ArgumentIndex].ValueStr;
+    return Console__Get_Value(Console, Arg, ArgumentIndex)->ValueStr;
 }
 
 int64_t Console_Get_Arg_Value_Integer(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
 {
-    return Arg->Values.Values[ArgumentIndex].ValueInt;
+    return Console__Get_Value(Console, Arg, ArgumentIndex)->ValueInt;
 }
 
 double Console_Get_Arg_Value_Float(console* Console, console_arg* Arg, uint32_t ArgumentIndex)
 {
-    return Arg->Values.Values[ArgumentIndex].ValueFloat;
+    return Console__Get_Value(Console, Arg, ArgumentIndex)->ValueFloat;
 }
 
 void Console_Delete(console* Console)

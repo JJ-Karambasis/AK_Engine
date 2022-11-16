@@ -23,6 +23,7 @@ strc     StrC_FormatV(allocator* Allocator, strc Str, va_list Args);
 strc     StrC_Format(allocator* Allocator, strc Str, ...);
 strc     StrC_Copy(allocator* Allocator, strc Str);
 
+#define Str8_Expand(s) {(const uint8_t*)(s), sizeof((s))-1}
 #define Str8_Lit(s) Str8((const uint8_t*)(s), sizeof((s))-1)
 typedef struct str8
 {
@@ -34,6 +35,7 @@ uint64_t Str8_Length(const uint8_t* Str);
 str8     Str8(const uint8_t* Str, uint64_t Length);
 str8     Str8_Null_Term(const uint8_t* Str);
 bool8_t  Str8_Equal(str8 StrA, str8 StrB);
+bool8_t  Str8_Equal_Insensitive(str8 StrA, str8 StrB);
 int32_t  Str8_Compare(str8 StrA, str8 StrB);
 str8     Str8_Concat(allocator* Allocator, str8 StrA, str8 StrB);
 str8     Str8_FormatV(allocator* Allocator, str8 Str, va_list Args);
@@ -45,6 +47,8 @@ str8     Str8_Chop(str8 Str, uint64_t Size);
 str8     Str8_Copy(allocator* Allocator, str8 Str);
 uint64_t Str8_Find_First(str8 Str, uint8_t Char);
 uint64_t Str8_Find_Last(str8 Str,  uint8_t Char);
+str8     Str8_To_Lower(allocator* Allocator, str8 Str);
+str8     Str8_To_Upper(allocator* Allocator, str8 Str);
 
 typedef struct str16
 {
