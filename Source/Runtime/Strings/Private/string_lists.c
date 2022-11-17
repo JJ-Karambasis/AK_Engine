@@ -82,6 +82,63 @@ str8 Str8_List_Join(allocator* Allocator, str8_list* List)
     return Str8(Buffer, List->TotalLength);
 }
 
+str8 Str8_List_Join_Newline(allocator* Allocator, str8_list* List)
+{
+    uint64_t EntryCount = (List->Count-1)+List->TotalLength;
+    uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, EntryCount+1);
+    uint8_t* At = Buffer;
+    for(str8_node* Node = List->First; Node; Node = Node->Next)
+    {
+        size_t Size = Node->Str.Length*sizeof(uint8_t);
+        Memory_Copy(At, Node->Str.Str, Size);
+        if(Node != List->Last)
+        {
+            At[Size] = '\n';
+            At += Size+1;
+        }
+    }
+    Buffer[EntryCount] = 0;
+    return Str8(Buffer, EntryCount);
+}
+
+str8 Str8_List_Join_Comma_Separated(allocator* Allocator, str8_list* List)
+{
+    uint64_t EntryCount = (List->Count-1)+List->TotalLength;
+    uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, EntryCount+1);
+    uint8_t* At = Buffer;
+    for(str8_node* Node = List->First; Node; Node = Node->Next)
+    {
+        size_t Size = Node->Str.Length*sizeof(uint8_t);
+        Memory_Copy(At, Node->Str.Str, Size);
+        if(Node != List->Last)
+        {
+            At[Size] = ',';
+            At += Size+1;
+        }
+    }
+    Buffer[EntryCount] = 0;
+    return Str8(Buffer, EntryCount);
+}
+
+str8 Str8_List_Join_Space(allocator* Allocator, str8_list* List)
+{
+    uint64_t EntryCount = (List->Count-1)+List->TotalLength;
+    uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, EntryCount+1);
+    uint8_t* At = Buffer;
+    for(str8_node* Node = List->First; Node; Node = Node->Next)
+    {
+        size_t Size = Node->Str.Length*sizeof(uint8_t);
+        Memory_Copy(At, Node->Str.Str, Size);
+        if(Node != List->Last)
+        {
+            At[Size] = ' ';
+            At += Size+1;
+        }
+    }
+    Buffer[EntryCount] = 0;
+    return Str8(Buffer, EntryCount);
+}
+
 void Str16_List_Push_Node(str16_list* List, str16_node* Node)
 {
     SLL_Push_Back(List->First, List->Last, Node);

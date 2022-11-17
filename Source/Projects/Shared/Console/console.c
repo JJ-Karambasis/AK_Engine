@@ -19,6 +19,7 @@ typedef struct console_value_list
 typedef struct console_arg
 {
     str8                     Key;
+    bool32_t                 IsRequired;
     str8_list                RequiredValues;
     uint32_t                 MinLength;
     uint32_t                 MaxLength;
@@ -141,7 +142,35 @@ bool8_t Console__Perform_Value_Validation(console* Console, console_arg* Arg, co
         } break;
     }
     
-    return true;
+    bool8_t Result = Arg->RequiredValues.Count == 0;
+    for(str8_node* RequiredNode = Arg->RequiredValues.First; RequiredNode; RequiredNode = RequiredNode->Next)
+    {
+        if(Arg->ValidationType == CONSOLE_VALIDATION_TYPE_CASE_INSENSITIVE)
+        {
+            if(Str8_Equal_Insensitive(RequiredNode->Str, Value->ValueStr))
+            {
+                Result = true;
+                break;
+            }
+        }
+        else
+        {
+            if(Str8_Equal(RequiredNode->Str, Value->ValueStr))
+            {
+                Result = true;
+                break;
+            }
+        }
+    }
+    
+    if(!Result)
+    {
+        str8 RequiredValues = Str8_List_Join_Comma_Separated(Get_Base_Allocator(Console->Arena), &Arg->RequiredValues);
+        Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Validation failed on argument '%.*s'. Value(s) must be either '%.*s'. Specified '%.*s'"), 
+                              Arg->Key.Length, Arg->Key.Str, RequiredValues.Length, RequiredValues.Str, Value->ValueStr.Length, Value->ValueStr.Str);
+    }
+    
+    return Result;
 }
 
 bool8_t Console__Parse_Argument_Value(console* Console, console_arg* Arg, str8 ValueStr)
@@ -150,7 +179,11 @@ bool8_t Console__Parse_Argument_Value(console* Console, console_arg* Arg, str8 V
     Zero_Struct(&Value, console_value);
     
     Value.Type = CONSOLE_VALUE_TYPE_STRING;
-    Value.ValueStr = Str8_Copy(Get_Base_Allocator(Console->Arena), ValueStr);
+    
+    if(Arg->ValidationType == CONSOLE_VALIDATION_TYPE_CASE_INSENSITIVE)
+        Value.ValueStr = Str8_To_Lower(Get_Base_Allocator(Console->Arena), ValueStr);
+    else
+        Value.ValueStr = Str8_Copy(Get_Base_Allocator(Console->Arena), ValueStr);
     
     char* EndNumeric;
     int64_t IntValue = strtol((char*)ValueStr.Str, &EndNumeric, 10);
@@ -170,7 +203,7 @@ bool8_t Console__Parse_Argument_Value(console* Console, console_arg* Arg, str8 V
         }
     }
     
-    if(Console__Perform_Value_Validation(Console, Arg, &Value))
+    if(!Console__Perform_Value_Validation(Console, Arg, &Value))
         return false;
     
     Console__Add_Value(Console, Arg, Value);
@@ -185,6 +218,20 @@ console_arg* Console__Find_Arg(console* Console, str8 ArgStr)
         if(Str8_Equal(Arg->Key, ArgStr)) return Arg;
     }
     return NULL;
+}
+
+bool8_t Console__Validate_Argument_Requirement(console* Console)
+{
+    for(console_arg* Arg = Console->FirstArg; Arg; Arg = Arg->Next)
+    {
+        if(Arg->IsRequired && !Arg->Values.Count)
+        {
+            Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), 
+                                  Str8_Lit("Argument '%.*s' must have a value."), Arg->Key.Length, Arg->Key.Str);
+            return false;
+        }
+    }
+    return true;
 }
 
 bool8_t Console__Validate_Argument_Arrays(console* Console)
@@ -235,17 +282,18 @@ bool8_t Console__Validate_Argument_Arrays(console* Console)
 
 void Console__Build_Help_Message(console* Console)
 {
+    Str8_List_Push_Format(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Str8_Lit("Argument Information:"));
     for(console_arg* Arg = Console->FirstArg; Arg; Arg = Arg->Next)
     {
         str8_list LineList;
         Zero_Struct(&LineList, str8_list);
         
-        Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Argument: '%.*s'"), Arg->Key.Length, Arg->Key.Str);
+        Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Argument: '%.*s'."), Arg->Key.Length, Arg->Key.Str);
         
         if(Arg->RequiredValues.Count)
         {
             str8 RequiredValues = Str8_List_Join_Comma_Separated(Get_Base_Allocator(Console->Arena), &Arg->RequiredValues);
-            Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Required values: '%.*s'"), RequiredValues.Length, RequiredValues.Str);
+            Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Required values: '%.*s'."), RequiredValues.Length, RequiredValues.Str);
         }
         
         if(Arg->ValidationType != CONSOLE_VALIDATION_TYPE_NONE)
@@ -253,11 +301,11 @@ void Console__Build_Help_Message(console* Console)
             if(Arg->ValidationType != CONSOLE_VALIDATION_TYPE_CASE_INSENSITIVE)
             {
                 str8 ValidationTypeStr = Str8_To_Lower(Get_Base_Allocator(Console->Arena), G_ValidationTypes[Arg->ValidationType]);
-                Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Value type: %.*s"), ValidationTypeStr.Length, ValidationTypeStr.Str);
+                Str8_List_Push_Format(&LineList, Get_Base_Allocator(Console->Arena), Str8_Lit("Value type: '%.*s'."), ValidationTypeStr.Length, ValidationTypeStr.Str);
             }
         }
         
-        str8 Line = Str8_List_Join_Sentence(Get_Base_Allocator(Console->Arena), &LineList);
+        str8 Line = Str8_List_Join_Space(Get_Base_Allocator(Console->Arena), &LineList);
         Str8_List_Push(&Console->ErrorList, Get_Base_Allocator(Console->Arena), Line);
     }
 }
@@ -270,7 +318,7 @@ console* Console_Create(allocator* Allocator)
     return Console;
 }
 
-void Console_Begin_Arg(console* Console, str8 Key)
+void Console_Begin_Arg(console* Console, str8 Key, bool32_t IsRequired)
 {
     Assert(!Console->SetArgument);
     console_arg* TargetArgument = NULL;
@@ -288,6 +336,7 @@ void Console_Begin_Arg(console* Console, str8 Key)
         TargetArgument->Key = Str8_Copy(Get_Base_Allocator(Console->Arena), Key);
     }
     
+    TargetArgument->IsRequired = IsRequired;
     Console->SetArgument = TargetArgument;
 }
 
@@ -362,9 +411,8 @@ bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCoun
         }
         else if(!Argument && TargetArgument)
         {
-            //TODO(JJ): This is an arguments value
             str8 ArgumentValue = ArgumentStr;
-            if(!Console__Parse_Argument_Value(Console, Argument, ArgumentValue))
+            if(!Console__Parse_Argument_Value(Console, TargetArgument, ArgumentValue))
                 return false;
         }
         else
@@ -373,6 +421,7 @@ bool8_t Console_Parse(console* Console, const char** Arguments, int ArgumentCoun
         }
     }
     
+    if(!Console__Validate_Argument_Requirement(Console)) return false;
     if(!Console__Validate_Argument_Arrays(Console)) return false;
     
     return true;

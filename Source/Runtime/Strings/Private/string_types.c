@@ -229,6 +229,24 @@ uint64_t Str8_Find_Last(str8 Str,  uint8_t Char)
     return STR_INVALID_FIND;
 }
 
+str8 Str8_To_Lower(allocator* Allocator, str8 Str)
+{
+    uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, Str.Length+1);
+    for(uint64_t i = 0; i < Str.Length; i++)
+        Buffer[i] = To_Lower8(Str.Str[i]);
+    Buffer[Str.Length] = 0;
+    return Str8(Buffer, Str.Length);
+}
+
+str8 Str8_To_Upper(allocator* Allocator, str8 Str)
+{
+    uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, Str.Length+1);
+    for(uint64_t i = 0; i < Str.Length; i++)
+        Buffer[i] = To_Upper8(Str.Str[i]);
+    Buffer[Str.Length] = 0;
+    return Str8(Buffer, Str.Length);
+}
+
 uint64_t Str16_Length(const uint16_t* Str)
 {
     uint64_t Result = 0;

@@ -42,7 +42,7 @@ void Str8_List_Push_Format(str8_list* List, allocator* Allocator, str8 Format, .
 str8 Str8_List_Join(allocator* Allocator, str8_list* List);
 str8 Str8_List_Join_Newline(allocator* Allocator, str8_list* List);
 str8 Str8_List_Join_Comma_Separated(allocator* Allocator, str8_list* List);
-str8 Str8_List_Join_Sentence(allocator* Allocator, str8_list* List);
+str8 Str8_List_Join_Space(allocator* Allocator, str8_list* List);
 
 typedef struct str16_node
 {

@@ -24,7 +24,7 @@ typedef struct console console;
 typedef struct console_arg console_arg;
 
 console*           Console_Create(allocator* Allocator);
-void               Console_Begin_Arg(console* Console, str8 Argument);
+void               Console_Begin_Arg(console* Console, str8 Argument, bool32_t IsRequired);
 void               Console_Arg_Add_Required_Value(console* Console, str8 Value);
 void               Console_Arg_Set_Validation(console* Console, console_validation_type Validation);
 void               Console_Arg_Set_Array_Min_Restriction(console* Console, uint32_t Min);
