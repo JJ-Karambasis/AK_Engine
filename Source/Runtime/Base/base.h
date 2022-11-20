@@ -89,7 +89,7 @@ Last = Last->Prev; \
 if(Last) Last->Next = NULL; \
 } \
 if(Node->Prev) Node->Prev->Next = Node->Next; \
-if(Node->Next) Node->Next->Prev = TargetEntry->Prev; \
+if(Node->Next) Node->Next->Prev = Node->Prev; \
 Node->Prev = NULL; \
 Node->Next = NULL; \
 } while(0)

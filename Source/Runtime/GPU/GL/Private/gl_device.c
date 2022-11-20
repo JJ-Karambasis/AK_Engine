@@ -77,6 +77,8 @@ shared_export GPU_SET_DEVICE(GPU_Set_Device)
         UIShader->TextureUniformID           = glGetUniformLocation(UIShader->Program, "Texture");
     }
     
+    const uint8_t* Version = glGetString(GL_VERSION);
+    
     return &DeviceContext->DeviceContext;
 }
 
@@ -122,7 +124,7 @@ void GL_Set_Framebuffer(gl_framebuffer* Framebuffer, gpu_clear_attachments* Clea
         glDrawBuffers(ClearAttachments->ColorCount, DrawBuffers);
         
         for(uint32_t ColorIndex = 0; ColorIndex < ClearAttachments->ColorCount; ColorIndex++)
-            glClearBufferfv(GL_COLOR, ColorIndex, ClearAttachments->ColorClears[ColorIndex].Float);
+            glClearBufferfv(GL_COLOR, (GLint)ColorIndex, ClearAttachments->ColorClears[ColorIndex].Float);
     }
     
     if(ClearAttachments->DepthStencilClear)
@@ -233,6 +235,7 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
     
+    glBindVertexArray(DeviceContext->Device->Context->EmptyVAO);
     for(gl_ui_render_pass* RenderPass = UIRenderPasses.First; RenderPass; RenderPass = RenderPass->Next)
     {
         GL_Set_Framebuffer(RenderPass->Framebuffer, &RenderPass->ClearAttachments);
@@ -242,7 +245,6 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
             gl_device_ui_shader* Shader = &DeviceContext->UIShaders.Shaders[0];
             
             glUseProgram(Shader->Program);
-            glBindVertexArray(DeviceContext->Device->Context->EmptyVAO);
             
             v2 HalfResolution = V2_Mul_S(V2((float)RenderPass->Framebuffer->Width, 
                                             (float)RenderPass->Framebuffer->Height), 0.5f);
@@ -296,34 +298,37 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
     }
     glDisable(GL_BLEND);
     
-    for(gl_copy_texture_to_display* Copy = CopyTextureToDisplayList.First; Copy; Copy = Copy->Next)
+    if(CopyTextureToDisplayList.Count)
     {
-        gl_display* Display = Copy->DstDisplay;
-        gl_texture2D* Texture = Copy->SrcTexture;
-        GL_Context_Make_Current(Display->Context);
-        
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        gl_device_ui_shader* Shader = &DeviceContext->UIShaders.Shaders[1];
-        
-        glViewport(Copy->DstOffsetX, Copy->DstOffsetY, Copy->Width, Copy->Height);
-        
-        glUseProgram(Shader->Program);
-        glBindVertexArray(Display->Context->EmptyVAO);
-        
-        v2 HalfResolution = V2_Mul_S(V2((float)Display->Width, (float)Display->Height), 0.5f);
-        v2 InvHalfResolution = V2_Inv(HalfResolution);
-        
-        glUniform2f(Shader->InvHalfResolutionUniformID, InvHalfResolution.x, InvHalfResolution.y);
-        glUniform2f(Shader->MinUniformID, (float)Copy->SrcOffsetX, (float)Copy->SrcOffsetY);
-        glUniform2f(Shader->MaxUniformID, (float)(Copy->SrcOffsetX+Copy->Width), (float)(Copy->SrcOffsetY+Copy->Height));
-        glUniform1i(Shader->TextureUniformID, 0);
-        
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, Texture->Handle);
-        glBindSampler(0, DeviceContext->DefaultLinearSampler->Handle);
-        
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        
-        GL_Context_Make_Current(DeviceContext->Device->Context);
+        for(gl_copy_texture_to_display* Copy = CopyTextureToDisplayList.First; Copy; Copy = Copy->Next)
+        {
+            gl_display* Display = Copy->DstDisplay;
+            gl_texture2D* Texture = Copy->SrcTexture;
+            GL_Context_Make_Current(Display->Context);
+            
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            gl_device_ui_shader* Shader = &DeviceContext->UIShaders.Shaders[1];
+            
+            glViewport(Copy->DstOffsetX, Copy->DstOffsetY, Copy->Width, Copy->Height);
+            
+            glUseProgram(Shader->Program);
+            glBindVertexArray(Display->Context->EmptyVAO);
+            
+            v2 HalfResolution = V2_Mul_S(V2((float)Display->Width, (float)Display->Height), 0.5f);
+            v2 InvHalfResolution = V2_Inv(HalfResolution);
+            
+            glUniform2f(Shader->InvHalfResolutionUniformID, InvHalfResolution.x, InvHalfResolution.y);
+            glUniform2f(Shader->MinUniformID, (float)Copy->SrcOffsetX, (float)Copy->SrcOffsetY);
+            glUniform2f(Shader->MaxUniformID, (float)(Copy->SrcOffsetX+Copy->Width), (float)(Copy->SrcOffsetY+Copy->Height));
+            glUniform1i(Shader->TextureUniformID, 0);
+            
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, Texture->Handle);
+            glBindSampler(0, DeviceContext->DefaultLinearSampler->Handle);
+            
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            
+            GL_Context_Make_Current(DeviceContext->Device->Context);
+        }
     }
 }

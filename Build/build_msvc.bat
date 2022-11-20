@@ -35,7 +35,7 @@ IF %Optimized% == False (
 	set OptimizedFlags=%OptimizedFlags% -O2
 )
 
-set Warnings=-W4 -wd4100 -wd4189 -wd4201 -wd4996 -wd4706 -wd4101
+set Warnings=-W4 -wd4100 -wd4189 -wd4201 -wd4996 -wd4706 -wd4101 -wd4335
 set CFlags=-nologo -Z7 -FC -D -D_HAS_EXCEPTIONS=0 -DCOMPILER_MSVC -GR- %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
 set Libs=advapi32.lib user32.lib gdi32.lib opengl32.lib

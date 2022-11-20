@@ -39,7 +39,7 @@ editor* Editor_Init()
     
     arena* Scratch = Core_Get_Thread_Context()->Scratch;
     
-    Editor->MainWindow = Editor_Create_Window(1920, 1080, Str8_Lit("AK Engine"), 0);
+    Editor->MainWindow = Editor_Create_Window(1280, 720, Str8_Lit("AK Engine"), 0);
     str8 FontPath = Str8_Concat(Get_Base_Allocator(Scratch), Editor->DataPath, Str8_Lit("Cousine-Regular.ttf"));
     if(!OS_Read_Entire_File(&Editor->MainFontBuffer, Get_Base_Allocator(Scratch), FontPath))
         return NULL;
@@ -83,6 +83,9 @@ void Editor_Update()
     bool32_t IsLooping = true;
     
     uint64_t StartClock = OS_QPC();
+    
+    
+    static char* CharAt;
     while(IsLooping)
     {
         double dt = OS_High_Res_Elapsed_Time(StartClock, OS_QPC());
@@ -137,6 +140,7 @@ void Editor_Update()
         gpu_display* MainDisplay = Editor->MainWindow->Display;
         
         glyph* Glyph = Glyph_Cache_Get(Editor->GlyphCache, DEBUGFontFace, 'b');
+        
         Glyph_Cache_Generate(Editor->GlyphCache, CmdBuffer);
         
         gpu_color_clear_attachment ColorClears[1];

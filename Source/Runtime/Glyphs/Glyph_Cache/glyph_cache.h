@@ -3,7 +3,7 @@
 
 #define GLYPH_CACHE_SLOT_CAPACITY 1024
 #define GLYPH_CACHE_SLOT_MASK (GLYPH_CACHE_SLOT_CAPACITY-1)
-#define GLYPH_CACHE_GLYPHS_PER_BUCKET 64
+#define GLYPH_CACHE_GLYPHS_PER_BUCKET 8
 
 typedef struct glyph_cache_entry glyph_cache_entry;
 typedef struct gpu_resource_manager gpu_resource_manager;

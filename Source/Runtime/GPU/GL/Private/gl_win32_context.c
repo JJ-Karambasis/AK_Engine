@@ -73,7 +73,7 @@ bool8_t GL_Context_Manager__Win32_Create_Modern_Context(gl_win32_context* Contex
     wglChoosePixelFormatARB(Context->DeviceContext, AttribList, 0, 1, &TargetPixelFormatIndex, &NumFormats);
     WGL__Set_Pixel_Format(Context->DeviceContext, TargetPixelFormatIndex);
     
-    int ContextFlags = WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB;
+    int ContextFlags = 0;
 #ifdef DEBUG_BUILD
     ContextFlags |= WGL_CONTEXT_DEBUG_BIT_ARB;
 #endif

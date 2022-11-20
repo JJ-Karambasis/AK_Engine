@@ -194,11 +194,15 @@ GPU_DELETE_DISPLAY(GL_Display_Manager_Delete_Display)
 
 GPU_PRESENT_DISPLAYS(GL_Display_Manager_Present_Displays)
 {
+    gl_display_manager* DisplayManager = (gl_display_manager*)_DisplayManager;
+    gl_context_manager* ContextManager = DisplayManager->ContextManager;
     for(uint32_t DisplayIndex = 0; DisplayIndex < Count; DisplayIndex++)
     {
         const gl_display* Display = (const gl_display*)Displays[DisplayIndex];
+        GL_Context_Make_Current(Display->Context);
         GL_Context_Present(Display->Context);
     }
+    GL_Context_Make_Current(ContextManager->DeviceContext.Device->Context);
 }
 
 GPU_DISPLAY_RESIZE(GL_Display_Resize)
