@@ -40,7 +40,7 @@ void GPU_Cmd_Copy_Texture_To_Display(gpu_cmd_buffer* CmdBuffer,
     SLL_Push_Back(CmdBuffer->FirstCmd, CmdBuffer->LastCmd, &Cmd->Cmd);
 }
 
-void GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, v3 Color, float Opacity)
+void GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, v4 Color)
 {
     gpu_ui_pass_draw_rectangle* Cmd = Arena_Push_Struct(UIPass->CmdArena, gpu_ui_pass_draw_rectangle);
     Zero_Struct(Cmd, gpu_ui_pass_draw_rectangle);
@@ -49,7 +49,6 @@ void GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, v3 Color, f
     Cmd->Min      = Min;
     Cmd->Max      = Max;
     Cmd->Color    = Color;
-    Cmd->Opacity  = Opacity;
     
     SLL_Push_Back(UIPass->FirstCmd, UIPass->LastCmd, &Cmd->Cmd);
 }

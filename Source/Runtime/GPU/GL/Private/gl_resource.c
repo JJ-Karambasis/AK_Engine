@@ -22,6 +22,18 @@ static uint32_t G_BytesPerPixel[GPU_TEXTURE_FORMAT_COUNT] =
     4
 };
 
+static GLenum G_Filter[GPU_SAMPLER_FILTER_COUNT] = 
+{
+    GL_NEAREST,
+    GL_LINEAR
+};
+
+static GLenum G_TextureWrap[GPU_SAMPLER_ADDRESS_MODE_COUNT] = 
+{
+    GL_REPEAT,
+    GL_CLAMP_TO_EDGE
+};
+
 static gpu_resource_manager_vtable G_ResourceManagerVTable = 
 {
     GL_Resource_Manager_Create_Texture2D,
@@ -107,6 +119,9 @@ GPU_RESOURCE_MANAGER_CREATE_FRAMEBUFFER(GL_Resource_Manager_Create_Framebuffer)
     Zero_Struct(Framebuffer, gl_framebuffer);
     Framebuffer->Handle = Handle;
     
+    Framebuffer->Width  = Safe_S64_U32(CreateInfo->Dim.x);
+    Framebuffer->Height = Safe_S64_U32(CreateInfo->Dim.y);
+    
     return (gpu_framebuffer*)Framebuffer;
 }
 
@@ -116,4 +131,32 @@ GPU_RESOURCE_MANAGER_DELETE_FRAMEBUFFER(GL_Resource_Manager_Delete_Framebuffer)
     gl_framebuffer* Framebuffer = (gl_framebuffer*)_Framebuffer;
     glDeleteFramebuffers(1, &Framebuffer->Handle);
     SLL_Push_Front(ResourceManager->FreeFramebuffers, Framebuffer);
+}
+
+GPU_RESOURCE_MANAGER_CREATE_SAMPLER(GL_Resource_Manager_Create_Sampler)
+{
+    GLuint Handle;
+    glGenSamplers(1, &Handle);
+    glSamplerParameteri(Handle, GL_TEXTURE_WRAP_S, G_TextureWrap[CreateInfo->AddressModeU]);
+    glSamplerParameteri(Handle, GL_TEXTURE_WRAP_T, G_TextureWrap[CreateInfo->AddressModeV]);
+    glSamplerParameteri(Handle, GL_TEXTURE_MIN_FILTER, G_Filter[CreateInfo->MinFilter]);
+    glSamplerParameteri(Handle, GL_TEXTURE_MAG_FILTER, G_Filter[CreateInfo->MagFilter]);
+    
+    gl_resource_manager* ResourceManager = (gl_resource_manager*)_Manager;
+    gl_sampler* Sampler = ResourceManager->FreeSamplers;
+    if(!Sampler) Sampler = Arena_Push_Struct(ResourceManager->Arena, gl_sampler);
+    else SLL_Pop_Front(ResourceManager->FreeSamplers);
+    Zero_Struct(Sampler, gl_sampler);
+    
+    Sampler->Handle = Handle;
+    
+    return (gpu_sampler*)Sampler;
+}
+
+GPU_RESOURCE_MANAGER_DELETE_SAMPLER(GL_Resource_Manager_Delete_Sampler)
+{
+    gl_resource_manager* ResourceManager = (gl_resource_manager*)_Manager;
+    gl_sampler* Sampler = (gl_sampler*)_Sampler;
+    glDeleteSamplers(1, &Sampler->Handle);
+    SLL_Push_Front(ResourceManager->FreeSamplers, Sampler);
 }

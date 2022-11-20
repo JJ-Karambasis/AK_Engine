@@ -27,6 +27,8 @@ void StrC_List_Push_Format(strc_list* List, allocator* Allocator, strc Format, .
 
 strc StrC_List_Join(allocator* Allocator, strc_list* List)
 {
+    if(!List->Count) return StrC_Empty();
+    
     char* Buffer = Allocate_Array_No_Clear(Allocator, char, List->TotalLength+1);
     
     char* At = Buffer;
@@ -38,6 +40,69 @@ strc StrC_List_Join(allocator* Allocator, strc_list* List)
     }
     Buffer[List->TotalLength] = 0;
     return StrC(Buffer, List->TotalLength);
+}
+
+strc StrC_List_Join_Newline(allocator* Allocator, strc_list* List)
+{
+    if(!List->Count) return StrC_Empty();
+    
+    uint64_t EntryCount = (List->Count-1)+List->TotalLength;
+    char* Buffer = Allocate_Array_No_Clear(Allocator, char, EntryCount+1);
+    char* At = Buffer;
+    for(strc_node* Node = List->First; Node; Node = Node->Next)
+    {
+        size_t Size = Node->Str.Length*sizeof(char);
+        Memory_Copy(At, Node->Str.Str, Size);
+        if(Node != List->Last)
+        {
+            At[Size] = '\n';
+            At += Size+1;
+        }
+    }
+    Buffer[EntryCount] = 0;
+    return StrC(Buffer, EntryCount);
+}
+
+strc StrC_List_Join_Comma_Separated(allocator* Allocator, strc_list* List)
+{
+    if(!List->Count) return StrC_Empty();
+    
+    uint64_t EntryCount = (List->Count-1)+List->TotalLength;
+    char* Buffer = Allocate_Array_No_Clear(Allocator, char, EntryCount+1);
+    char* At = Buffer;
+    for(strc_node* Node = List->First; Node; Node = Node->Next)
+    {
+        size_t Size = Node->Str.Length*sizeof(char);
+        Memory_Copy(At, Node->Str.Str, Size);
+        if(Node != List->Last)
+        {
+            At[Size] = ',';
+            At += Size+1;
+        }
+    }
+    Buffer[EntryCount] = 0;
+    return StrC(Buffer, EntryCount);
+}
+
+strc StrC_List_Join_Space(allocator* Allocator, strc_list* List)
+{
+    if(!List->Count) return StrC_Empty();
+    
+    uint64_t EntryCount = (List->Count-1)+List->TotalLength;
+    char* Buffer = Allocate_Array_No_Clear(Allocator, char, EntryCount+1);
+    char* At = Buffer;
+    for(strc_node* Node = List->First; Node; Node = Node->Next)
+    {
+        size_t Size = Node->Str.Length*sizeof(char);
+        Memory_Copy(At, Node->Str.Str, Size);
+        if(Node != List->Last)
+        {
+            At[Size] = ' ';
+            At += Size+1;
+        }
+    }
+    Buffer[EntryCount] = 0;
+    return StrC(Buffer, EntryCount);
 }
 
 void Str8_List_Push_Node(str8_list* List, str8_node* Node)
@@ -67,8 +132,17 @@ void Str8_List_Push_Format(str8_list* List, allocator* Allocator, str8 Format, .
     va_end(Args);
 }
 
+void Str8_List_Update_Node(str8_list* List, str8_node* Node, str8 Str)
+{
+    List->TotalLength -= Node->Str.Length;
+    Node->Str = Str;
+    List->TotalLength += Str.Length;
+}
+
 str8 Str8_List_Join(allocator* Allocator, str8_list* List)
 {
+    if(!List->Count) return Str8_Empty();
+    
     uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, List->TotalLength+1);
     
     uint8_t* At = Buffer;
@@ -84,6 +158,8 @@ str8 Str8_List_Join(allocator* Allocator, str8_list* List)
 
 str8 Str8_List_Join_Newline(allocator* Allocator, str8_list* List)
 {
+    if(!List->Count) return Str8_Empty();
+    
     uint64_t EntryCount = (List->Count-1)+List->TotalLength;
     uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, EntryCount+1);
     uint8_t* At = Buffer;
@@ -103,6 +179,8 @@ str8 Str8_List_Join_Newline(allocator* Allocator, str8_list* List)
 
 str8 Str8_List_Join_Comma_Separated(allocator* Allocator, str8_list* List)
 {
+    if(!List->Count) return Str8_Empty();
+    
     uint64_t EntryCount = (List->Count-1)+List->TotalLength;
     uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, EntryCount+1);
     uint8_t* At = Buffer;
@@ -122,6 +200,8 @@ str8 Str8_List_Join_Comma_Separated(allocator* Allocator, str8_list* List)
 
 str8 Str8_List_Join_Space(allocator* Allocator, str8_list* List)
 {
+    if(!List->Count) return Str8_Empty();
+    
     uint64_t EntryCount = (List->Count-1)+List->TotalLength;
     uint8_t* Buffer = Allocate_Array_No_Clear(Allocator, uint8_t, EntryCount+1);
     uint8_t* At = Buffer;
@@ -137,6 +217,46 @@ str8 Str8_List_Join_Space(allocator* Allocator, str8_list* List)
     }
     Buffer[EntryCount] = 0;
     return Str8(Buffer, EntryCount);
+}
+
+str8_list Str8_Split_Chars(allocator* Allocator, str8 String, const uint8_t* SplitChars, uint32_t SplitCharCount)
+{
+    str8_list Result;
+    Zero_Struct(&Result, str8_list);
+    
+    uint64_t StartIndex = 0;
+    uint64_t EndIndex = 0;
+    
+    for(EndIndex; EndIndex < String.Length; EndIndex++)
+    {
+        for(uint32_t SplitIndex = 0; SplitIndex < SplitCharCount; SplitIndex++)
+        {
+            if(String.Str[EndIndex] == SplitChars[SplitIndex])
+            {
+                if(StartIndex < EndIndex)
+                {
+                    str8 Str = Str8_Substr(String, StartIndex, EndIndex);
+                    Str8_List_Push(&Result, Allocator, Str);
+                }
+                StartIndex = EndIndex+1;
+                break;
+            }
+        }
+    }
+    
+    if(StartIndex < EndIndex)
+    {
+        str8 Str = Str8_Substr(String, StartIndex, EndIndex);
+        Str8_List_Push(&Result, Allocator, Str);
+    }
+    
+    return Result;
+}
+
+str8_list Str8_Split(allocator* Allocator, str8 String, uint8_t Char)
+{
+    uint8_t Chars[] = {Char};
+    return Str8_Split_Chars(Allocator, String, Chars, Array_Count(Chars));
 }
 
 void Str16_List_Push_Node(str16_list* List, str16_node* Node)

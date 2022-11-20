@@ -78,6 +78,18 @@ bool8_t GL_Context_Manager_Set_Device_Context(gl_context_manager* ContextManager
     glUseProgram = (PFNGLUSEPROGRAMPROC)GL__Platform_Get_Proc("glUseProgram");
     glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)GL__Platform_Get_Proc("glGenVertexArrays");
     glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)GL__Platform_Get_Proc("glBindVertexArray");
+    glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)GL__Platform_Get_Proc("glGetUniformLocation");
+    glDrawBuffers = (PFNGLDRAWBUFFERSPROC)GL__Platform_Get_Proc("glDrawBuffers");
+    glClearBufferfv = (PFNGLCLEARBUFFERFVPROC)GL__Platform_Get_Proc("glClearBufferfv");
+    glUniform1i = (PFNGLUNIFORM1IPROC)GL__Platform_Get_Proc("glUniform1i");
+    glUniform1ui = (PFNGLUNIFORM1UIPROC)GL__Platform_Get_Proc("glUniform1ui");
+    glUniform2f = (PFNGLUNIFORM2FPROC)GL__Platform_Get_Proc("glUniform2f");
+    glUniform4f = (PFNGLUNIFORM4FPROC)GL__Platform_Get_Proc("glUniform4f");
+    glActiveTexture = (PFNGLACTIVETEXTUREPROC)GL__Platform_Get_Proc("glActiveTexture");
+    glGenSamplers = (PFNGLGENSAMPLERSPROC)GL__Platform_Get_Proc("glGenSamplers");
+    glSamplerParameteri = (PFNGLSAMPLERPARAMETERIPROC)GL__Platform_Get_Proc("glSamplerParameteri");
+    glDeleteSamplers = (PFNGLDELETESAMPLERSPROC)GL__Platform_Get_Proc("glDeleteSamplers");
+    glBindSampler = (PFNGLBINDSAMPLERPROC)GL__Platform_Get_Proc("glBindSampler");
     
 #ifdef DEBUG_BUILD
     glDebugMessageCallback = (PFNGLDEBUGMESSAGECALLBACKPROC)GL__Platform_Get_Proc("glDebugMessageCallback");
@@ -162,6 +174,8 @@ GPU_CREATE_DISPLAY(GL_Display_Manager_Create_Display)
     v2i Dim = GL_Context__Platform_Get_Dim(Context);
     
     Display->Context = Context;
+    Display->Width = Safe_S64_U32(Dim.x);
+    Display->Height = Safe_S64_U32(Dim.y);
     //Display->Texture = (gl_texture2D*)GL_Resource_Manager_Create_Texture2D((gpu_resource_manager*)DisplayManager->ResourceManager, Safe_S64_U32(Dim.x), Safe_S64_U32(Dim.y), GPU_TEXTURE_FORMAT_R8G8B8A8_UNORM, GPU_TEXTURE_USAGE_RENDER_TARGET|GPU_TEXTURE_USAGE_SAMPLED);
     Set_VTable(&Display->Display, &G_DisplayVTable);
     return &Display->Display;
@@ -186,5 +200,7 @@ GPU_PRESENT_DISPLAYS(GL_Display_Manager_Present_Displays)
 
 GPU_DISPLAY_RESIZE(GL_Display_Resize)
 {
-    //NOTE(EVERYONE): For opengl this does nothing. Context already handles the resize automatically
+    gl_display* Display =  (gl_display*)_Display;
+    Display->Width = Width;
+    Display->Height = Height;
 }

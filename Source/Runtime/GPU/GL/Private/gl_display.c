@@ -5,7 +5,9 @@ GPU_CREATE_DISPLAY(GL_Create_Display)
     gl_device* CurrentDevice = &DisplayManager->ContextManager->DeviceContext->Device;
     
     gl_context* Context = NULL;
+    v2i Dim;
 #ifdef OS_WIN32
+    Dim = Win32_Get_Window_Dim(Window);
     Context = GL_Init_Win32_Window_Context(DisplayManager->GL, Window, CurrentDevice->Context);
 #else
 #error Not Implemented
@@ -20,9 +22,12 @@ GPU_CREATE_DISPLAY(GL_Create_Display)
     else SLL_Pop_Front(Display->FreeDisplays);
     Set_VTable(&Display->Display, &G_GLDisplayVTable);
     Display->Context = Context;
+    Display->Width = Safe_S64_U32(Dim.x);
+    Display->Height = Safe_S64_U32(Dim.y);
+    
+    
     return &Display->Display;
 }
-
 
 GPU_DELETE_DISPLAY(GL_Delete_Display)
 {

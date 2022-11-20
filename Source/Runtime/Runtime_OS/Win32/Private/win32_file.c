@@ -6,7 +6,7 @@ os_file* OS_Create_File(str8 Path, uint32_t BitFlag)
     DWORD DesiredAttributes = 0;
     DWORD CreationDisposition = 0;
     
-    bool32_t ReadAndWrite = (BitFlag & OS_CREATE_FILE_BIT_FLAG_READ|OS_CREATE_FILE_BIT_FLAG_WRITE) == (OS_CREATE_FILE_BIT_FLAG_READ|OS_CREATE_FILE_BIT_FLAG_WRITE);
+    bool32_t ReadAndWrite = (BitFlag & (OS_CREATE_FILE_BIT_FLAG_READ|OS_CREATE_FILE_BIT_FLAG_WRITE)) == (OS_CREATE_FILE_BIT_FLAG_READ|OS_CREATE_FILE_BIT_FLAG_WRITE);
     
     if(ReadAndWrite)
     {
@@ -73,7 +73,7 @@ bool8_t OS_Read_File(os_file* File,  void* Data, uint32_t DataSize, uint64_t Off
     return true;
 }
 
-bool8_t OS_Write_File(os_file* File, void* Data, uint32_t DataSize, uint64_t Offset)
+bool8_t OS_Write_File(os_file* File, const void* Data, uint32_t DataSize, uint64_t Offset)
 {
     win32_file* OSFile = (win32_file*)File;
     if(!(OSFile->BitFlags & OS_CREATE_FILE_BIT_FLAG_WRITE))

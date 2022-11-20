@@ -25,7 +25,7 @@ typedef struct gl_shader_builder_list
 typedef struct gl_shader_builder
 {
     arena* Arena;
-    gl_shader_builder_list Shaders[GL_SHADER_COUNT];
+    strc_list Shaders[GL_SHADER_COUNT];
     strc_list ErrorList;
 } gl_shader_builder;
 

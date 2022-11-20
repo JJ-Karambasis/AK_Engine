@@ -54,7 +54,7 @@ str8 OS_Get_Application_Path(arena* Arena)
     }
     
     str8 FullExePath = UTF16_To_UTF8(Get_Base_Allocator(Scratch), Str16(Buffer, Length));
-    str8 FullPath    = Str8_Prefix(FullExePath, Str8_Find_Last(FullExePath, '\\'));
+    str8 FullPath    = Str8_Prefix(FullExePath, Str8_Find_Last_Char(FullExePath, '\\'));
     str8 Result      = Str8_Concat(Get_Base_Allocator(Arena), Str8_Copy(Get_Base_Allocator(Scratch), FullPath), Str8_Lit("\\"));
     return Result;
 }

@@ -432,6 +432,7 @@ void Console_Log_Error(console* Console)
     str16 Error = UTF8_To_UTF16(Get_Base_Allocator(Console->Arena), 
                                 Str8_List_Join_Newline(Get_Base_Allocator(Console->Arena), &Console->ErrorList));
     fwprintf(stderr, Error.Str);
+    fwprintf(stderr, L"\n");
 }
 
 console_arg* Console_Get_Arg(console* Console, str8 ArgStr)

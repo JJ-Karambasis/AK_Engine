@@ -19,8 +19,9 @@ typedef struct gl_context_manager
 typedef struct gl_display
 {
     gpu_display        Display;
+    uint32_t           Width;
+    uint32_t           Height;
     gl_context*        Context;
-    gl_texture2D*      Texture;
     struct gl_display* Next;
 } gl_display;
 
@@ -72,5 +73,17 @@ static PFNGLDELETEPROGRAMPROC glDeleteProgram;
 static PFNGLUSEPROGRAMPROC glUseProgram;
 static PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
 static PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
+static PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
+static PFNGLDRAWBUFFERSPROC  glDrawBuffers;
+static PFNGLCLEARBUFFERFVPROC glClearBufferfv;
+static PFNGLUNIFORM1IPROC glUniform1i;
+static PFNGLUNIFORM1UIPROC glUniform1ui;
+static PFNGLUNIFORM2FPROC glUniform2f;
+static PFNGLUNIFORM4FPROC glUniform4f;
+static PFNGLACTIVETEXTUREPROC glActiveTexture;
+static PFNGLGENSAMPLERSPROC glGenSamplers;
+static PFNGLSAMPLERPARAMETERIPROC glSamplerParameteri;
+static PFNGLDELETESAMPLERSPROC glDeleteSamplers;
+static PFNGLBINDSAMPLERPROC glBindSampler;
 
 #endif

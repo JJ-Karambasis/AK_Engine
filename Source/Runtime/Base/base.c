@@ -498,6 +498,26 @@ double Lerp_F64(double a, double t, double b)
     return a + t*(b-a);
 }
 
+bool8_t Is_WhitespaceC(char C)
+{
+    return (C == ' ' || C == '\n' || C == '\r' || C == '\t' || C == '\f' || C == '\v');
+}
+
+bool8_t Is_Whitespace8(uint8_t C)
+{
+    return (C == ' ' || C == '\n' || C == '\r' || C == '\t' || C == '\f' || C == '\v');
+}
+
+bool8_t Is_Whitespace16(uint16_t C)
+{
+    return (C == ' ' || C == '\n' || C == '\r' || C == '\t' || C == '\f' || C == '\v');
+}
+
+bool8_t Is_Whitespace32(uint32_t C)
+{
+    return (C == ' ' || C == '\n' || C == '\r' || C == '\t' || C == '\f' || C == '\v');
+}
+
 inline char To_UpperC(char C)
 {
     if (('a' <= C) && (C <= 'z'))

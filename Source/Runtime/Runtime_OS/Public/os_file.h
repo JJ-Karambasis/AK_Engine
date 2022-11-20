@@ -15,9 +15,11 @@ enum
 os_file* OS_Create_File(str8 Path, uint32_t BitFlag);
 uint64_t OS_Get_File_Size(os_file* File);
 bool8_t  OS_Read_File(os_file* File,  void* Data, uint32_t DataSize, uint64_t Offset);
-bool8_t  OS_Write_File(os_file* File, void* Data, uint32_t DataSize, uint64_t Offset);
+bool8_t  OS_Write_File(os_file* File, const void* Data, uint32_t DataSize, uint64_t Offset);
 void     OS_Delete_File(os_file* File);
 
 bool8_t OS_Read_Entire_File(buffer* Buffer, allocator* Allocator, str8 Path);
+bool8_t OS_Read_Entire_File_Null_Term(buffer* Buffer, allocator* Allocator, str8 Path);
+bool8_t OS_Write_Entire_File(str8 Path, const void* Data, uint32_t DataSize);
 
 #endif

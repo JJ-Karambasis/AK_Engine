@@ -142,9 +142,11 @@ void Editor_Update()
         
         GPU_Cmd_Buffer_Reset(CmdBuffer);
         gpu_ui_pass* UIPass = GPU_Cmd_Buffer_Begin_UI_Pass(CmdBuffer, &BeginInfo);
-        GPU_UI_Pass_Draw_Rectangle(UIPass, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V3(0.0f, 1.0f, 0.0f), 1.0f);
+        GPU_UI_Pass_Draw_Rectangle(UIPass, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V4(0.0f, 0.0f, 1.0f, 1.0f));
         
-        GPU_Cmd_Copy_Texture_To_Display(CmdBuffer, MainDisplay, 0, 0, RenderTarget, 0, 0, Safe_S64_U32(WindowDim.x), Safe_S64_U32(WindowDim.y));
+        GPU_UI_Pass_Draw_Rectangle(UIPass, V2(200.0f, 200.0f), V2(400.0f, 400.0f), V4(0.0f, 1.0f, 1.0f, 1.0f));
+        
+        GPU_Cmd_Copy_Texture_To_Display(CmdBuffer, MainDisplay, 100, 100, RenderTarget, 0, 0, Safe_S64_U32(WindowDim.x), Safe_S64_U32(WindowDim.y));
         
         GPU_Dispatch_Cmds(DeviceGPU, &CmdBuffer, 1);
         

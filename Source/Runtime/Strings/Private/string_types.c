@@ -8,6 +8,14 @@ uint64_t StrC_Length(const char* Str)
     return Result;
 }
 
+strc StrC_Empty()
+{
+    strc Result;
+    Result.Str = NULL;
+    Result.Length = 0;
+    return Result;
+}
+
 strc StrC(const char* Str, uint64_t Length)
 {
     strc Result;
@@ -93,6 +101,14 @@ uint64_t Str8_Length(const uint8_t* Str)
 {
     uint64_t Result = 0;
     while(*Str++) Result++;
+    return Result;
+}
+
+str8 Str8_Empty()
+{
+    str8 Result;
+    Result.Str = NULL;
+    Result.Length = 0;
     return Result;
 }
 
@@ -215,17 +231,46 @@ str8 Str8_Copy(allocator* Allocator, str8 Str)
     return Str8(Buffer, Str.Length);
 }
 
-uint64_t Str8_Find_First(str8 Str, uint8_t Char)
+uint64_t Str8_Find_First_Char(str8 Str, uint8_t Char)
 {
     for(uint64_t i = 0; i < Str.Length; i++)
         if(Str.Str[i] == Char) return i;
     return STR_INVALID_FIND;
 }
 
-uint64_t Str8_Find_Last(str8 Str,  uint8_t Char)
+uint64_t Str8_Find_Last_Char(str8 Str,  uint8_t Char)
 {
     for(uint64_t i = Str.Length-1; i != STR_INVALID_FIND; i--)
         if(Str.Str[i] == Char) return i;
+    return STR_INVALID_FIND;
+}
+
+bool8_t Str8_Ends_With_Char(str8 Str, uint8_t Char)
+{
+    if(!Str.Length) return false;
+    return Str.Str[Str.Length-1] == Char;
+}
+
+uint64_t Str8_Find_First(str8 Str, str8 Pattern)
+{
+    if(Pattern.Length > 0)
+    {
+        if(Str.Length >= Pattern.Length)
+        {
+            uint64_t i = 0;
+            uint8_t C = Pattern.Str[0];
+            uint64_t OnePastLast = Str.Length-Pattern.Length+1;
+            for(; i < OnePastLast; i++)
+            {
+                if(Str.Str[i] == C)
+                {
+                    str8 Source = Str8_Prefix(Str8_Skip(Str, i), Pattern.Length);
+                    if(Str8_Equal(Source, Pattern))
+                        return i;
+                }
+            }
+        }
+    }
     return STR_INVALID_FIND;
 }
 
@@ -245,6 +290,40 @@ str8 Str8_To_Upper(allocator* Allocator, str8 Str)
         Buffer[i] = To_Upper8(Str.Str[i]);
     Buffer[Str.Length] = 0;
     return Str8(Buffer, Str.Length);
+}
+
+str8 Str8_Substr(str8 Str, uint64_t FirstIndex, uint64_t LastIndex)
+{
+    Assert(FirstIndex < Str.Length);
+    Assert(LastIndex <= Str.Length);
+    Assert(FirstIndex < LastIndex);
+    return Str8(Str.Str+FirstIndex, LastIndex-FirstIndex);
+}
+
+str8 Str8_Replace(allocator* Allocator, str8 Str, str8 Pattern, str8 Replacement)
+{
+    str8_list List;
+    Zero_Struct(&List, str8_list);
+    
+    str8 Source = Str;
+    for(;;)
+    {
+        uint64_t i = Str8_Find_First(Source, Pattern);
+        if(i != STR_INVALID_FIND)
+        {
+            Str8_List_Push(&List, Allocator, Str8_Prefix(Source, i));
+            if(i < Source.Length)
+            {
+                Str8_List_Push(&List, Allocator, Replacement);
+                Source = Str8_Skip(Source, i + Pattern.Length);
+            }
+            else break;
+        }
+        else break;
+    }
+    
+    if(!List.Count) return Str;
+    return Str8_List_Join(Allocator, &List);
 }
 
 uint64_t Str16_Length(const uint16_t* Str)

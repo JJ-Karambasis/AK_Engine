@@ -272,8 +272,10 @@ Node->Next = NULL; \
 #define BITMASK_63 0x7fffffffffffffff
 
 #ifdef OS_WIN32
+#define OS_FILE_DELIMTER_CHAR '\\'
 #define OS_FILE_DELIMTER "\\"
 #else
+#define OS_FILE_DELIMTER_CHAR '/'
 #define OS_FILE_DELIMTER "/"
 #endif
 
@@ -363,6 +365,10 @@ float  Round_F32(float V);
 double Round_F64(double V);
 float  Lerp_F32(float a, float t, float b);
 double Lerp_F64(double a, double t, double b);
+bool8_t Is_WhitespaceC(char C);
+bool8_t Is_Whitespace8(uint8_t C);
+bool8_t Is_Whitespace16(uint16_t C);
+bool8_t Is_Whitespace32(uint32_t C);
 char     To_UpperC(char C);
 uint8_t  To_Upper8(uint8_t C);
 uint16_t To_Upper16(uint16_t C);

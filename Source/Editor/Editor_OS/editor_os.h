@@ -6,6 +6,7 @@
 #include "Public/os_window.h"
 #include "Public/os_event.h"
 #include "Public/os_library.h"
+#include "Public/os_file_enumerator.h"
 
 typedef struct editor_os editor_os;
 

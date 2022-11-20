@@ -14,6 +14,7 @@ typedef struct strc
 } strc;
 
 uint64_t StrC_Length(const char* Str);
+strc     StrC_Empty();
 strc     StrC(const char* Str, uint64_t Length);
 strc     StrC_Null_Term(const char* Str);
 bool8_t  StrC_Equal(strc StrA, strc StrB);
@@ -32,6 +33,7 @@ typedef struct str8
 } str8;
 
 uint64_t Str8_Length(const uint8_t* Str);
+str8     Str8_Empty();
 str8     Str8(const uint8_t* Str, uint64_t Length);
 str8     Str8_Null_Term(const uint8_t* Str);
 bool8_t  Str8_Equal(str8 StrA, str8 StrB);
@@ -45,10 +47,14 @@ str8     Str8_Postifx(str8 Str, uint64_t Size);
 str8     Str8_Skip(str8 Str, uint64_t Size);
 str8     Str8_Chop(str8 Str, uint64_t Size);
 str8     Str8_Copy(allocator* Allocator, str8 Str);
-uint64_t Str8_Find_First(str8 Str, uint8_t Char);
-uint64_t Str8_Find_Last(str8 Str,  uint8_t Char);
+uint64_t Str8_Find_First_Char(str8 Str, uint8_t Char);
+uint64_t Str8_Find_Last_Char(str8 Str,  uint8_t Char);
+bool8_t  Str8_Ends_With_Char(str8 Str, uint8_t Char);
+uint64_t Str8_Find_First(str8 Str, str8 Pattern);
 str8     Str8_To_Lower(allocator* Allocator, str8 Str);
 str8     Str8_To_Upper(allocator* Allocator, str8 Str);
+str8     Str8_Substr(str8 Str, uint64_t FirstIndex, uint64_t LastIndex);
+str8     Str8_Replace(allocator* Allocator, str8 Str, str8 Pattern, str8 Replacement);
 
 typedef struct str16
 {

@@ -40,8 +40,8 @@ shared_export GPU_RELOAD(GPU_Reload)
 }
 
 #include "Private/gl_context.c"
-#include "Private/gl_device.c"
 #include "Private/gl_resource.c"
+#include "Private/gl_device.c"
 #include "Private/gl_cmd_buffer.c"
 #include "Private/gl_shader.c"
 #include <Core/core.c>

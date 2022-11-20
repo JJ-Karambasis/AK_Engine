@@ -60,6 +60,7 @@ IF %CompileFreetype% == True (
 set ProjectSharedIncludes=-I%CurrentPath%../Source/Projects/Shared
 
 cl %CFlags% %ProjectSharedIncludes% %CurrentPath%../Source/Projects/Shader_Builder/shader_builder.c -link %Libs% -out:Shader_Builder.exe
+Shader_Builder.exe --api GL --shaderPath "%CurrentPath%../Source/Shaders" --outputFilePath "%CurrentPath%../Source/Shaders"
 
 cl %CFlags% %GPUFlags% -LD %GPUPath% -link %Libs% -out:GPU.dll
 cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link %Libs% -out:AK_Engine_Tests.exe

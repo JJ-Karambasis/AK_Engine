@@ -41,8 +41,7 @@ typedef struct gpu_ui_pass_draw_rectangle
     gpu_ui_pass_cmd Cmd;
     v2              Min;
     v2              Max;
-    v3              Color;
-    float           Opacity;
+    v4              Color;
 } gpu_ui_pass_draw_rectangle;
 
 typedef struct gpu_ui_pass
@@ -120,6 +119,6 @@ gpu_ui_pass*    GPU_Cmd_Buffer_Begin_UI_Pass(gpu_cmd_buffer* CmdBuffer, gpu_ui_p
 void            GPU_Cmd_Copy_Texture_To_Display(gpu_cmd_buffer* CmdBuffer, 
                                                 gpu_display* Display, uint32_t DisplayOffsetX, uint32_t DisplayOffsetY, gpu_texture2D* Texture, uint32_t TextureOffsetX, uint32_t TextureOffsetY, 
                                                 uint32_t Width, uint32_t Height);
-void            GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, v3 Color, float Opacity);
+void            GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, v4 Color);
 
 #endif

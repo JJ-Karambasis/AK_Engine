@@ -4,6 +4,8 @@
 typedef struct gl_display
 {
     gpu_display  Display;
+    uint32_t     Width;
+    uint32_t     Height;
     gl_context*  Context;
     gl_display*  Next;
 } gl_display;

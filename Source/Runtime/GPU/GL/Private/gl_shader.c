@@ -22,11 +22,7 @@ gl_shader_builder* GL_Shader_Builder_Create(arena* Arena)
 
 void GL_Shader_Builder_Add_Shader(gl_shader_builder* Builder, strc ShaderCode, gl_shader_type Type)
 {
-    gl_shader_builder_list*  List = Builder->Shaders + Type;
-    gl_shader_builder_entry* Entry = Arena_Push_Struct(Builder->Arena, gl_shader_builder_entry);
-    Entry->ShaderCode = StrC_Copy(Get_Base_Allocator(Builder->Arena), ShaderCode);
-    SLL_Push_Back(List->First, List->Last, Entry);
-    List->Count++;
+    StrC_List_Push(&Builder->Shaders[Type], Get_Base_Allocator(Builder->Arena), ShaderCode);
 }
 
 GLuint GL_Shader_Builder_Compile_Program(gl_shader_builder* Builder)
@@ -38,20 +34,12 @@ GLuint GL_Shader_Builder_Compile_Program(gl_shader_builder* Builder)
     
     for(uint32_t ShaderIndex = 0; ShaderIndex < GL_SHADER_COUNT; ShaderIndex++)
     {
-        gl_shader_builder_list* List = Builder->Shaders + ShaderIndex;
+        strc_list* List = Builder->Shaders + ShaderIndex;
         if(List->Count > 0)
         {
-            const char** ShaderCode = Arena_Push_Array(Builder->Arena, const char*, List->Count);
-            
-            const char** At = ShaderCode;
-            for(gl_shader_builder_entry* Entry = List->First; Entry; Entry = Entry->Next)
-            {
-                *At = (const char*)Entry->ShaderCode.Str;
-                At++;
-            }
-            
+            strc ShaderCode = StrC_List_Join_Newline(Get_Base_Allocator(Builder->Arena), List);
             GLuint Shader = glCreateShader(G_ShaderTypes[ShaderIndex]);
-            glShaderSource(Shader, List->Count, ShaderCode, NULL);
+            glShaderSource(Shader, 1, &ShaderCode.Str, NULL);
             glCompileShader(Shader);
             
             GLint HasCompiled;

@@ -32,3 +32,4 @@ bool8_t    OS_Directory_Exists(str8 Directory)
 #include "Private/win32_window.c"
 #include "Private/win32_event.c"
 #include "Private/win32_library.c"
+#include "Private/win32_file_enumerator.c"

@@ -20,6 +20,9 @@ void StrC_List_Push(strc_list* List, allocator* Allocator, strc Str);
 void StrC_List_Push_FormatV(strc_list* List, allocator* Allocator, strc Format, va_list Args);
 void StrC_List_Push_Format(strc_list* List, allocator* Allocator, strc Format, ...);
 strc StrC_List_Join(allocator* Allocator, strc_list* List);
+strc StrC_List_Join_Newline(allocator* Allocator, strc_list* List);
+strc StrC_List_Join_Comma_Separated(allocator* Allocator, strc_list* List);
+strc StrC_List_Join_Space(allocator* Allocator, strc_list* List);
 
 typedef struct str8_node
 {
@@ -39,10 +42,13 @@ void Str8_List_Push_Node(str8_list* List, str8_node* Node);
 void Str8_List_Push(str8_list* List, allocator* Allocator, str8 Str);
 void Str8_List_Push_FormatV(str8_list* List, allocator* Allocator, str8 Format, va_list Args);
 void Str8_List_Push_Format(str8_list* List, allocator* Allocator, str8 Format, ...);
+void Str8_List_Update_Node(str8_list* List, str8_node* Node, str8 Str);
 str8 Str8_List_Join(allocator* Allocator, str8_list* List);
 str8 Str8_List_Join_Newline(allocator* Allocator, str8_list* List);
 str8 Str8_List_Join_Comma_Separated(allocator* Allocator, str8_list* List);
 str8 Str8_List_Join_Space(allocator* Allocator, str8_list* List);
+str8_list Str8_Split_Chars(allocator* Allocator, str8 String, const uint8_t* SplitChars, uint32_t SplitCharCount);
+str8_list Str8_Split(allocator* Allocator, str8 String, uint8_t Char);
 
 typedef struct str16_node
 {
