@@ -39,7 +39,9 @@ static gpu_resource_manager_vtable G_ResourceManagerVTable =
     GL_Resource_Manager_Create_Texture2D,
     GL_Resource_Manager_Delete_Texture2D,
     GL_Resource_Manager_Create_Framebuffer,
-    GL_Resource_Manager_Delete_Framebuffer
+    GL_Resource_Manager_Delete_Framebuffer,
+    GL_Resource_Manager_Create_Sampler,
+    GL_Resource_Manager_Delete_Sampler
 };
 
 gl_resource_manager* GL_Resource_Manager_Create(allocator* Allocator, gl_device_context* DeviceContext)

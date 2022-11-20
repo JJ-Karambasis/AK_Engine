@@ -52,6 +52,14 @@ v4i V4i(int64_t x, int64_t y, int64_t z, int64_t w)
     return Result;
 }
 
+v2 V2_Add_V2(v2 Left, v2 Right)
+{
+    v2 Result;
+    Result.x = Left.x+Right.x;
+    Result.y = Left.y+Right.y;
+    return Result;
+}
+
 v2 V2_Mul_S(v2 V, float S)
 {
     V.x *= S;

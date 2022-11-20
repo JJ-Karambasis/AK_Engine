@@ -38,6 +38,7 @@ typedef struct gl_ui_rectangle_draw
     v2                           Min;
     v2                           Max;
     v4                           Color;
+    gpu_texture_unit             TextureUnit;
     struct gl_ui_rectangle_draw* Next;
 } gl_ui_rectangle_draw;
 
@@ -53,6 +54,7 @@ typedef struct gl_ui_render_pass
     gpu_clear_attachments     ClearAttachments;
     gl_framebuffer*           Framebuffer;
     gl_ui_rectangle_draw_list ColorDraws;
+    gl_ui_rectangle_draw_list TextureDraws;
     struct gl_ui_render_pass* Next;
 } gl_ui_render_pass;
 

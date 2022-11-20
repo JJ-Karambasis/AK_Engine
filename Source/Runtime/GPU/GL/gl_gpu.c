@@ -3,7 +3,7 @@
 void GL_Debug_Message_Callback(GLenum Source, GLenum Type, GLuint ID, GLenum Severity, GLsizei Length, const GLchar* Message,
                                const void* UserData)
 {
-    //Assert(Severity != GL_DEBUG_SEVERITY_MEDIUM || Severity != GL_DEBUG_SEVERITY_HIGH);
+    Assert(Severity != GL_DEBUG_SEVERITY_MEDIUM || Severity != GL_DEBUG_SEVERITY_HIGH);
 }
 
 shared_export GPU_INIT(GPU_Init)

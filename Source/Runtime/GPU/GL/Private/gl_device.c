@@ -181,6 +181,18 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
                                 SLL_Push_Back(RenderPass->ColorDraws.First, RenderPass->ColorDraws.Last, Draw);
                                 RenderPass->ColorDraws.Count++;
                             } break;
+                            
+                            case GPU_UI_PASS_CMD_TYPE_DRAW_TEXTURE_RECTANGLE:
+                            {
+                                gpu_ui_pass_draw_texture_rectangle* UICmd = (gpu_ui_pass_draw_texture_rectangle*)BaseUICmd;
+                                
+                                gl_ui_rectangle_draw* Draw = Arena_Push_Struct(RenderPassStorage, gl_ui_rectangle_draw);
+                                Draw->Min         = UICmd->Min;
+                                Draw->Max         = UICmd->Max;
+                                Draw->TextureUnit = UICmd->TextureUnit;
+                                SLL_Push_Back(RenderPass->TextureDraws.First, RenderPass->TextureDraws.Last, Draw);
+                                RenderPass->TextureDraws.Count++;
+                            } break;
                         }
                     }
                 } break;
@@ -218,6 +230,9 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
         }  
     }
     
+    glEnable(GL_BLEND);
+    glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE);
+    
     for(gl_ui_render_pass* RenderPass = UIRenderPasses.First; RenderPass; RenderPass = RenderPass->Next)
     {
         GL_Set_Framebuffer(RenderPass->Framebuffer, &RenderPass->ClearAttachments);
@@ -247,8 +262,39 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
             }
         }
         
+        if(RenderPass->TextureDraws.Count)
+        {
+            gl_device_ui_shader* Shader = &DeviceContext->UIShaders.Shaders[1];
+            
+            glUseProgram(Shader->Program);
+            glBindVertexArray(DeviceContext->Device->Context->EmptyVAO);
+            
+            v2 HalfResolution = V2_Mul_S(V2((float)RenderPass->Framebuffer->Width, 
+                                            (float)RenderPass->Framebuffer->Height), 0.5f);
+            v2 InvHalfResolution = V2_Inv(HalfResolution);
+            
+            glUniform2f(Shader->InvHalfResolutionUniformID, InvHalfResolution.x, InvHalfResolution.y);
+            
+            for(gl_ui_rectangle_draw* Draw = RenderPass->TextureDraws.First; Draw; Draw = Draw->Next)
+            {
+                gl_texture2D* Texture = (gl_texture2D*)Draw->TextureUnit.Texture;
+                gl_sampler*   Sampler = (gl_sampler*)Draw->TextureUnit.Sampler;
+                
+                glUniform2f(Shader->MinUniformID, Draw->Min.x, Draw->Min.y);
+                glUniform2f(Shader->MaxUniformID, Draw->Max.x, Draw->Max.y);
+                glUniform1i(Shader->TextureUniformID, 0);
+                
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, Texture->Handle);
+                glBindSampler(0, Sampler->Handle);
+                
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
+        }
+        
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
+    glDisable(GL_BLEND);
     
     for(gl_copy_texture_to_display* Copy = CopyTextureToDisplayList.First; Copy; Copy = Copy->Next)
     {

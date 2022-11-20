@@ -45,7 +45,8 @@ editor* Editor_Init()
         return NULL;
     
     Editor->GlyphGenerator = FT_Glyph_Generator_Create(Get_Base_Allocator(Editor->Arena));
-    Editor->GlyphCache = Glyph_Cache_Create(Get_Base_Allocator(Editor->Arena), Editor->GlyphGenerator);
+    Editor->GlyphCache = Glyph_Cache_Create(Get_Base_Allocator(Editor->Arena), Editor->GlyphGenerator, 
+                                            GPU_Get_Resource_Manager(Editor->DeviceGPU));
     
     return Editor;
 }
@@ -69,6 +70,15 @@ void Editor_Update()
     FramebufferCreateInfo.ColorAttachments = &RenderTarget;
     
     gpu_framebuffer* ColorFramebuffer = GPU_Resource_Manager_Create_Framebuffer(ResourceManager, &FramebufferCreateInfo);
+    
+    gpu_sampler_create_info SamplerCreateInfo;
+    Zero_Struct(&SamplerCreateInfo, gpu_sampler_create_info);
+    SamplerCreateInfo.MinFilter = GPU_SAMPLER_FILTER_LINEAR;
+    SamplerCreateInfo.MagFilter = GPU_SAMPLER_FILTER_LINEAR;
+    SamplerCreateInfo.AddressModeU = GPU_SAMPLER_ADDRESS_MODE_CLAMP;
+    SamplerCreateInfo.AddressModeV = GPU_SAMPLER_ADDRESS_MODE_CLAMP;
+    
+    gpu_sampler* LinearSampler = GPU_Resource_Manager_Create_Sampler(ResourceManager, &SamplerCreateInfo);
     
     bool32_t IsLooping = true;
     
@@ -116,17 +126,18 @@ void Editor_Update()
             Event = OS_Get_Next_Event();
         }
         
+        GPU_Cmd_Buffer_Reset(CmdBuffer);
         
         static font_face* DEBUGFontFace;
         if(!DEBUGFontFace)
         {
-            DEBUGFontFace = Glyph_Generator_Create_Font_Face(Editor->GlyphGenerator, Editor->MainFontBuffer.Ptr, Editor->MainFontBuffer.Size, 16);
+            DEBUGFontFace = Glyph_Generator_Create_Font_Face(Editor->GlyphGenerator, Editor->MainFontBuffer.Ptr, Editor->MainFontBuffer.Size, 64);
         }
         
         gpu_display* MainDisplay = Editor->MainWindow->Display;
         
         glyph* Glyph = Glyph_Cache_Get(Editor->GlyphCache, DEBUGFontFace, 'b');
-        Glyph_Cache_Generate(Editor->GlyphCache);
+        Glyph_Cache_Generate(Editor->GlyphCache, CmdBuffer);
         
         gpu_color_clear_attachment ColorClears[1];
         Memory_Clear(ColorClears, sizeof(ColorClears));
@@ -140,13 +151,18 @@ void Editor_Update()
         BeginInfo.FramebufferInfo.Clear.ColorClears = ColorClears;
         BeginInfo.FramebufferInfo.Framebuffer = ColorFramebuffer;
         
-        GPU_Cmd_Buffer_Reset(CmdBuffer);
         gpu_ui_pass* UIPass = GPU_Cmd_Buffer_Begin_UI_Pass(CmdBuffer, &BeginInfo);
         GPU_UI_Pass_Draw_Rectangle(UIPass, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V4(0.0f, 0.0f, 1.0f, 1.0f));
-        
         GPU_UI_Pass_Draw_Rectangle(UIPass, V2(200.0f, 200.0f), V2(400.0f, 400.0f), V4(0.0f, 1.0f, 1.0f, 1.0f));
         
-        GPU_Cmd_Copy_Texture_To_Display(CmdBuffer, MainDisplay, 100, 100, RenderTarget, 0, 0, Safe_S64_U32(WindowDim.x), Safe_S64_U32(WindowDim.y));
+        gpu_texture_unit TextureUnit;
+        TextureUnit.Texture = Glyph->Texture;
+        TextureUnit.Sampler = LinearSampler;
+        
+        v2 Min = V2(300.0f, 300.0f);
+        GPU_UI_Pass_Draw_Texture_Rectangle(UIPass, Min, V2_Add_V2(Min, V2((float)Glyph->Width, (float)Glyph->Height)), TextureUnit);
+        
+        GPU_Cmd_Copy_Texture_To_Display(CmdBuffer, MainDisplay, 0, 0, RenderTarget, 0, 0, Safe_S64_U32(WindowDim.x), Safe_S64_U32(WindowDim.y));
         
         GPU_Dispatch_Cmds(DeviceGPU, &CmdBuffer, 1);
         

@@ -74,6 +74,7 @@ v3i V3i(int64_t x, int64_t y, int64_t z);
 v4 V4(float x, float y, float z, float w);
 v4i V4i(int64_t x, int64_t y, int64_t z, int64_t w);
 
+v2 V2_Add_V2(v2 Left, v2 Right);
 v2 V2_Mul_S(v2 V, float S);
 v2 S_Div_V2(float S, v2 V);
 v2 V2_Inv(v2 V);

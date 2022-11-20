@@ -53,6 +53,7 @@ GPU_DISPLAY_RESIZE(GL_Display_Resize);
 static PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC glGetFramebufferAttachmentParameteriv;
 static PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer;
 static PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback;
+static PFNGLDEBUGMESSAGECONTROLPROC glDebugMessageControl;
 static PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers;
 static PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D;
 static PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus;
@@ -85,5 +86,6 @@ static PFNGLGENSAMPLERSPROC glGenSamplers;
 static PFNGLSAMPLERPARAMETERIPROC glSamplerParameteri;
 static PFNGLDELETESAMPLERSPROC glDeleteSamplers;
 static PFNGLBINDSAMPLERPROC glBindSampler;
+static PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate;
 
 #endif

@@ -45,6 +45,7 @@ void main()
     v4 Color = Sample_Texture(Texture, UV);
 #else
     v4 Color = Color_U32_To_V4(Color);
+    Color.rgb *= Color.a;
 #endif
     OutColor = Color;
 }

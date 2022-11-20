@@ -90,12 +90,15 @@ bool8_t GL_Context_Manager_Set_Device_Context(gl_context_manager* ContextManager
     glSamplerParameteri = (PFNGLSAMPLERPARAMETERIPROC)GL__Platform_Get_Proc("glSamplerParameteri");
     glDeleteSamplers = (PFNGLDELETESAMPLERSPROC)GL__Platform_Get_Proc("glDeleteSamplers");
     glBindSampler = (PFNGLBINDSAMPLERPROC)GL__Platform_Get_Proc("glBindSampler");
+    glBlendFuncSeparate = (PFNGLBLENDFUNCSEPARATEPROC)GL__Platform_Get_Proc("glBlendFuncSeparate");
     
 #ifdef DEBUG_BUILD
     glDebugMessageCallback = (PFNGLDEBUGMESSAGECALLBACKPROC)GL__Platform_Get_Proc("glDebugMessageCallback");
+    glDebugMessageControl = (PFNGLDEBUGMESSAGECONTROLPROC)GL__Platform_Get_Proc("glDebugMessageControl");
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(GL_Debug_Message_Callback, NULL);
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
 #endif
     
     GL__Initial_Context_Data(Device->Context);

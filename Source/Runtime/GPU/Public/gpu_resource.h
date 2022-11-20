@@ -55,6 +55,12 @@ typedef struct gpu_resource_manager
     gpu_resource_manager_vtable* _VTable;
 } gpu_resource_manager;
 
+typedef struct gpu_texture_unit
+{
+    gpu_texture2D* Texture;
+    gpu_sampler*   Sampler;
+} gpu_texture_unit;
+
 typedef struct gpu_framebuffer_create_info
 {
     v2i Dim;

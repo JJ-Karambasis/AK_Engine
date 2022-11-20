@@ -6,6 +6,8 @@
 #define GLYPH_CACHE_GLYPHS_PER_BUCKET 64
 
 typedef struct glyph_cache_entry glyph_cache_entry;
+typedef struct gpu_resource_manager gpu_resource_manager;
+typedef struct gpu_cmd_buffer gpu_cmd_buffer;
 
 typedef struct glyph_cache_entry
 {
@@ -54,6 +56,7 @@ typedef struct glyph_generate_queue
 typedef struct glyph_cache
 {
     glyph_generator*      Generator;
+    gpu_resource_manager* ResourceManager;
     arena*                Arena;
     glyph_slot*           Slots;
     uint64_t              BucketCount;
@@ -65,9 +68,9 @@ typedef struct glyph_cache
     uint64_t              Version;
 } glyph_cache;
 
-glyph_cache* Glyph_Cache_Create(allocator* Allocator, glyph_generator* Generator);
+glyph_cache* Glyph_Cache_Create(allocator* Allocator, glyph_generator* Generator, gpu_resource_manager* ResourceManager);
 glyph*       Glyph_Cache_Get(glyph_cache* Cache, font_face* Face, uint32_t Codepoint);
-void         Glyph_Cache_Generate(glyph_cache* Cache);
+void         Glyph_Cache_Generate(glyph_cache* Cache, gpu_cmd_buffer* CmdBuffer);
 void         Glyph_Cache_Delete(glyph_cache* Cache);
 
 #endif

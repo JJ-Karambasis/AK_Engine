@@ -52,3 +52,16 @@ void GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, v4 Color)
     
     SLL_Push_Back(UIPass->FirstCmd, UIPass->LastCmd, &Cmd->Cmd);
 }
+
+void GPU_UI_Pass_Draw_Texture_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, gpu_texture_unit TextureUnit)
+{
+    gpu_ui_pass_draw_texture_rectangle* Cmd = Arena_Push_Struct(UIPass->CmdArena, gpu_ui_pass_draw_texture_rectangle);
+    Zero_Struct(Cmd, gpu_ui_pass_draw_texture_rectangle);
+    
+    Cmd->Cmd.Type    = GPU_UI_PASS_CMD_TYPE_DRAW_TEXTURE_RECTANGLE;
+    Cmd->Min         = Min;
+    Cmd->Max         = Max;
+    Cmd->TextureUnit = TextureUnit;
+    
+    SLL_Push_Back(UIPass->FirstCmd, UIPass->LastCmd, &Cmd->Cmd);
+}
