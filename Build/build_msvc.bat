@@ -36,7 +36,8 @@ IF %Optimized% == False (
 )
 
 set Warnings=-W4 -wd4100 -wd4189 -wd4201 -wd4996 -wd4706 -wd4101 -wd4335
-set CFlags=-nologo -Z7 -FC -D -D_HAS_EXCEPTIONS=0 -DCOMPILER_MSVC -GR- %Warnings% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
+set LibCommon=-nologo -D_HAS_EXCEPTIONS=0 -DCOMPILER_MSVC %Warnings%
+set CFlags=-Z7 -FC -GR- %LibCommon% %BitnessFlag% %AssertFlags% %OptimizedFlags% %IncludePaths% %CommonFlags%
 
 set Libs=advapi32.lib user32.lib gdi32.lib opengl32.lib
 
@@ -50,11 +51,24 @@ IF %CompileFreetype% == True (
 	)		
 	pushd "%InstallPath%\freetype"
 
-	cl %CFlags% -DFT_DEBUG_LEVEL_ERROR -DFT2_BUILD_LIBRARY %FreeTypeIncludePath% -wd4244 -wd4267 -wd4701 -LD -c %FreetypeCFiles%
+	cl %LibCommon% -O2 -DFT_DEBUG_LEVEL_ERROR -DFT2_BUILD_LIBRARY %FreeTypeIncludePath% -wd4244 -wd4267 -wd4701 -Gy -LD -c %FreetypeCFiles%
 	lib -nologo -out:..\ftsystem.lib *obj
 
 	popd
 	RMDIR /S /Q "%InstallPath%\freetype"
+)
+
+IF %CompileHarfbuzz% == True (
+	IF NOT EXIST "%InstallPath%\harfbuzz" (
+		mkdir "%InstallPath%\harfbuzz"
+	)		
+	pushd "%InstallPath%\harfbuzz"
+
+	cl %LibCommon% -wd4244 -wd4267 -wd4458 -wd4456 -wd4127 -wd4245 -wd4459 -wd4457 -wd4702 -wd4701 -wd4065 -wd4146 -O2 -Dhb_malloc_impl=HB_Heap_Alloc -Dhb_calloc_impl=HB_Heap_Calloc -Dhb_free_impl=HB_Heap_Free -Dhb_realloc_impl=HB_Heap_Realloc -DHB_TINY %FreeTypeIncludePath% -Gy -LD -c %CurrentPath%../Source/ThirdParty/Harfbuzz/src/harfbuzz.cc
+	lib -nologo -out:..\hb.lib *obj
+
+	popd
+	RMDIR /S /Q "%InstallPath%\harfbuzz"
 )
 
 set ProjectSharedIncludes=-I%CurrentPath%../Source/Projects/Shared
@@ -64,7 +78,7 @@ Shader_Builder.exe --api GL --shaderPath "%CurrentPath%../Source/Shaders" --outp
 
 cl %CFlags% %GPUFlags% -LD %GPUPath% -link %Libs% -out:GPU.dll
 cl %CFlags% %CurrentPath%../Source/Editor/editor_tests.c -link %Libs% -out:AK_Engine_Tests.exe
-cl %CFlags% %FreeTypeIncludePath% %CurrentPath%../Source/Editor/editor.c -link %Libs% ftsystem.lib -out:AK_Engine.exe
+cl %CFlags% %FreeTypeIncludePath% %CurrentPath%../Source/Editor/editor.c -link %Libs% ftsystem.lib hb.lib -opt:ref -out:AK_Engine.exe
 popd
 
 EXIT /b %ERRORLEVEL%

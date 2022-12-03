@@ -5,4 +5,4 @@
 #define gpu_texture2D sampler2D
 
 #define Floor_F32(v) floor(v)
-#define Sample_Texture(sampler, uv) texture(sampler, uv)
+#define Sample_Texture(sampler, uv) texture(sampler, v2(uv.x, 1.0f-uv.y))

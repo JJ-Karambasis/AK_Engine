@@ -61,6 +61,7 @@ typedef struct heap
 heap*   Heap_Create(allocator* Allocator, size_t InitialBlockSize);
 void    Heap_Delete(heap* Heap);
 void*   Heap_Allocate(heap* Heap, size_t Size, memory_clear_flag ClearFlag);
+size_t  Heap_Get_Block_Size(heap* Heap, void* Block);
 void    Heap_Free(heap* Heap, void* Memory);
 void    Heap_Clear(heap* Heap, memory_clear_flag ClearFlag);
 

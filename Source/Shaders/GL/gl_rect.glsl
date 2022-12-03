@@ -33,19 +33,18 @@ void main()
 #ifdef TEXTURED
 layout(location = 0) in v2 UV;
 uniform gpu_texture2D Texture;
-#else
-uniform uint32_t Color;
 #endif
+
+uniform uint32_t Color;
 
 layout(location = 0) out v4 OutColor;
 
 void main()
 {
-#ifdef TEXTURED
-    v4 Color = Sample_Texture(Texture, UV);
-#else
     v4 Color = Color_U32_To_V4(Color);
     Color.rgb *= Color.a;
+#ifdef TEXTURED
+    Color *= Sample_Texture(Texture, UV);
 #endif
     OutColor = Color;
 }

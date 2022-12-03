@@ -12,6 +12,18 @@ IF NOT %CompileFreetype% == False (
 	)
 )
 
+SET CompileHarfbuzz=False
+FOR /F ="delims=" %%A IN ('call build/ini.bat /s CompilerSettings /i CompileHarfbuzz %CurrentPath%..\Configs\build.ini') DO (
+	SET CompileHarfbuzz=%%A
+)
+
+IF NOT %CompileHarfbuzz% == False (
+	IF NOT %CompileHarfbuzz% == True (
+		echo Unknown CompileHarfbuzz value %CompileHarfbuzz%. Must be True or False
+		EXIT /b 1
+	)
+)
+
 SET Optimized=False
 FOR /F ="delims=" %%A IN ('call build/ini.bat /s CompilerSettings /i Optimized %CurrentPath%..\Configs\build.ini') DO (
 	SET Optimized=%%A

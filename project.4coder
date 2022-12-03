@@ -2,7 +2,7 @@ version(1);
 
 project_name = "AK Engine";
 
-patterns = {"*.cpp", "*.c", "*.h", "*.bat", "*.hlsl", "*.shader", "*.glsl", "*.vert", "*.frag", "*.sh", "*.4coder", "*.hlsl", "*.hpp" };
+patterns = {"*.cpp", "*.c", "*.h", "*.hh", "*.cc", "*.bat", "*.hlsl", "*.shader", "*.glsl", "*.vert", "*.frag", "*.sh", "*.4coder", "*.hlsl", "*.hpp" };
 
 blacklist_patterns = { ".*" };
 

@@ -60,8 +60,8 @@ typedef struct str16_list
 {
     str16_node* First;
     str16_node* Last;
-    uint64_t   Count;
-    uint64_t   TotalLength;
+    uint64_t    Count;
+    uint64_t    TotalLength;
 } str16_list;
 
 void  Str16_List_Push_Node(str16_list* List, str16_node* Node);

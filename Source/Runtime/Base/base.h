@@ -281,6 +281,8 @@ Node->Next = NULL; \
 
 uint64_t Align_U64(uint64_t Value, uint64_t Alignment);
 int64_t  Align_S64(int64_t Value,  int64_t Alignment);
+uint32_t Ceil_Pow2_U32(uint32_t V);
+int32_t  Ceil_Pow2_S32(int32_t V);
 uint64_t Ceil_Pow2_U64(uint64_t V);
 int64_t  Ceil_Pow2_S64(int64_t V);
 bool8_t Equal_Zero_Approx_F32(float V,  float Eps);

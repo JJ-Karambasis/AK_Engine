@@ -644,3 +644,13 @@ str16 UTF32_To_UTF16(allocator* Allocator, str32 Str)
     str16 Result = UTF16_Stream_Writer_To_String(&Writer, true);
     return Result;
 }
+
+uint32_t UTF16_Read(const uint16_t* At)
+{
+    uint32_t Result = *At;
+    
+    if (0xD800 <= At[0] && At[0] < 0xDC00 && 0xDC00 <= At[1] && At[1] < 0xE000){
+        Result = ((At[0] - 0xD800) << 10) | (At[1] - 0xDC00);
+    }
+    return Result;
+}

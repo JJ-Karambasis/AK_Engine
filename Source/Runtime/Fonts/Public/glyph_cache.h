@@ -1,25 +1,19 @@
 #ifndef GLYPH_CACHE_H
 #define GLYPH_CACHE_H
 
-#define GLYPH_CACHE_SLOT_CAPACITY 1024
-#define GLYPH_CACHE_SLOT_MASK (GLYPH_CACHE_SLOT_CAPACITY-1)
-#define GLYPH_CACHE_GLYPHS_PER_BUCKET 8
+#define GLYPH_CACHE_GLYPHS_PER_BUCKET 64
 
 typedef struct glyph_cache_entry glyph_cache_entry;
-typedef struct gpu_resource_manager gpu_resource_manager;
-typedef struct gpu_cmd_buffer gpu_cmd_buffer;
 
 typedef struct glyph_cache_entry
 {
     glyph              Glyph;
-    uint64_t           Version;
-    font_face*         Face;
+    glyph_font*        Font;
+    uint32_t           PixelHeight;
     uint32_t           SlotIndex;
     uint32_t           Hash;
     glyph_cache_entry* NextSlotEntry;
     glyph_cache_entry* PrevSlotEntry;
-    glyph_cache_entry* NextLRUEntry;
-    glyph_cache_entry* PrevLRUEntry;
 } glyph_cache_entry;
 
 typedef struct glyph_cache_bucket
@@ -33,12 +27,6 @@ typedef struct glyph_slot
     glyph_cache_entry* First;
     glyph_cache_entry* Last;
 } glyph_slot;
-
-typedef struct glyph_cache_lru
-{
-    glyph_cache_entry* First;
-    glyph_cache_entry* Last;
-} glyph_cache_lru;
 
 typedef struct glyph_generate_entry
 {
@@ -55,22 +43,21 @@ typedef struct glyph_generate_queue
 
 typedef struct glyph_cache
 {
-    glyph_generator*      Generator;
-    gpu_resource_manager* ResourceManager;
     arena*                Arena;
+    gpu_resource_manager* ResourceManager;
+    uint32_t              SlotCapacity;
     glyph_slot*           Slots;
     uint64_t              BucketCount;
     glyph_cache_bucket*   CurrentBucket;
-    glyph_cache_lru       LRU;
     glyph_generate_entry* FreeGenerateEntries;
-    glyph_generate_queue  GlyphGenerateQueue;
-    uint64_t              GlyphCount;
-    uint64_t              Version;
+    glyph_generate_queue  GenerateQueue;
+    uint32_t              GlyphCount;
 } glyph_cache;
 
-glyph_cache* Glyph_Cache_Create(allocator* Allocator, glyph_generator* Generator, gpu_resource_manager* ResourceManager);
-glyph*       Glyph_Cache_Get(glyph_cache* Cache, font_face* Face, uint32_t Codepoint);
-void         Glyph_Cache_Generate(glyph_cache* Cache, gpu_cmd_buffer* CmdBuffer);
-void         Glyph_Cache_Delete(glyph_cache* Cache);
+glyph_cache*    Glyph_Cache_Create(allocator* Allocator, gpu_resource_manager* ResourceManager, 
+                                   uint32_t SlotCapacity);
+glyph_info_list Glyph_Cache_Get_Glyphs(glyph_cache* Cache, allocator* Allocator, glyph_font* Font, str8 Text, uint32_t PixelHeight);
+void            Glyph_Cache_Generate(glyph_cache* Cache, gpu_cmd_buffer* CmdBuffer);
+void            Glyph_Cache_Delete(glyph_cache* Cache);
 
 #endif

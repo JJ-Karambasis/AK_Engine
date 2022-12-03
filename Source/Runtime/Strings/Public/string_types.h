@@ -98,4 +98,6 @@ strc  UTF32_To_Ascii(allocator* Allocator, str32  Str);
 str8  UTF32_To_UTF8( allocator* Allocator, str32 Str);
 str16 UTF32_To_UTF16(allocator* Allocator, str32 Str);
 
+uint32_t UTF16_Read(const uint16_t* At);
+
 #endif

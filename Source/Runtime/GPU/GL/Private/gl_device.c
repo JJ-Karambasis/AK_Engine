@@ -180,20 +180,19 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
                                 Draw->Min   = UICmd->Min;
                                 Draw->Max   = UICmd->Max;
                                 Draw->Color = UICmd->Color;
-                                SLL_Push_Back(RenderPass->ColorDraws.First, RenderPass->ColorDraws.Last, Draw);
-                                RenderPass->ColorDraws.Count++;
-                            } break;
-                            
-                            case GPU_UI_PASS_CMD_TYPE_DRAW_TEXTURE_RECTANGLE:
-                            {
-                                gpu_ui_pass_draw_texture_rectangle* UICmd = (gpu_ui_pass_draw_texture_rectangle*)BaseUICmd;
                                 
-                                gl_ui_rectangle_draw* Draw = Arena_Push_Struct(RenderPassStorage, gl_ui_rectangle_draw);
-                                Draw->Min         = UICmd->Min;
-                                Draw->Max         = UICmd->Max;
-                                Draw->TextureUnit = UICmd->TextureUnit;
-                                SLL_Push_Back(RenderPass->TextureDraws.First, RenderPass->TextureDraws.Last, Draw);
-                                RenderPass->TextureDraws.Count++;
+                                gpu_texture_unit* TextureUnit = &UICmd->TextureUnit;
+                                if(TextureUnit->Texture && TextureUnit->Sampler)
+                                {
+                                    Draw->TextureUnit = *TextureUnit;
+                                    SLL_Push_Back(RenderPass->TextureDraws.First, RenderPass->TextureDraws.Last, Draw);
+                                    RenderPass->TextureDraws.Count++;
+                                }
+                                else
+                                {
+                                    SLL_Push_Back(RenderPass->ColorDraws.First, RenderPass->ColorDraws.Last, Draw);
+                                    RenderPass->ColorDraws.Count++;
+                                }
                             } break;
                         }
                     }
@@ -281,9 +280,11 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
             {
                 gl_texture2D* Texture = (gl_texture2D*)Draw->TextureUnit.Texture;
                 gl_sampler*   Sampler = (gl_sampler*)Draw->TextureUnit.Sampler;
+                uint32_t Color = Color_V4_To_U32(Draw->Color);
                 
                 glUniform2f(Shader->MinUniformID, Draw->Min.x, Draw->Min.y);
                 glUniform2f(Shader->MaxUniformID, Draw->Max.x, Draw->Max.y);
+                glUniform1ui(Shader->ColorUniformID, Color);
                 glUniform1i(Shader->TextureUniformID, 0);
                 
                 glActiveTexture(GL_TEXTURE0);
@@ -309,7 +310,7 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             gl_device_ui_shader* Shader = &DeviceContext->UIShaders.Shaders[1];
             
-            glViewport(Copy->DstOffsetX, Copy->DstOffsetY, Copy->Width, Copy->Height);
+            glViewport(0, 0, Display->Width, Display->Height);
             
             glUseProgram(Shader->Program);
             glBindVertexArray(Display->Context->EmptyVAO);
@@ -317,9 +318,13 @@ GPU_DISPATCH_CMDS(GL_Device_Context_Dispatch_Cmds)
             v2 HalfResolution = V2_Mul_S(V2((float)Display->Width, (float)Display->Height), 0.5f);
             v2 InvHalfResolution = V2_Inv(HalfResolution);
             
+            v2 StartOffset = V2_Add_V2(V2((float)Copy->DstOffsetX, (float)Copy->DstOffsetY), 
+                                       V2((float)Copy->SrcOffsetX, (float)Copy->SrcOffsetY));
+            
             glUniform2f(Shader->InvHalfResolutionUniformID, InvHalfResolution.x, InvHalfResolution.y);
-            glUniform2f(Shader->MinUniformID, (float)Copy->SrcOffsetX, (float)Copy->SrcOffsetY);
-            glUniform2f(Shader->MaxUniformID, (float)(Copy->SrcOffsetX+Copy->Width), (float)(Copy->SrcOffsetY+Copy->Height));
+            glUniform2f(Shader->MinUniformID, StartOffset.x, StartOffset.y);
+            glUniform2f(Shader->MaxUniformID, (StartOffset.x+Copy->Width), StartOffset.y+Copy->Height);
+            glUniform1ui(Shader->ColorUniformID, 0xFFFFFFFF);
             glUniform1i(Shader->TextureUniformID, 0);
             
             glActiveTexture(GL_TEXTURE0);

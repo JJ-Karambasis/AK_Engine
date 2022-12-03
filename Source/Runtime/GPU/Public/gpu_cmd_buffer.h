@@ -1,7 +1,7 @@
 #ifndef GPU_CMD_BUFFER_H
 #define GPU_CMD_BUFFER_H
 
-#define GPU_CMD_UPLOAD_TEXTURE_PROC(name) void name(gpu_cmd_buffer* _CmdBuffer, gpu_texture2D* _DstTexture, uint32_t DstOffsetX, uint32_t DstOffsetY, void* SrcTexels, uint32_t SrcWidth, uint32_t SrcHeight)
+#define GPU_CMD_UPLOAD_TEXTURE_PROC(name) void name(gpu_cmd_buffer* _CmdBuffer, gpu_texture2D* _DstTexture, uint32_t DstOffsetX, uint32_t DstOffsetY, const void* SrcTexels, uint32_t SrcWidth, uint32_t SrcHeight)
 typedef GPU_CMD_UPLOAD_TEXTURE_PROC(gpu_cmd_upload_texture_proc);
 
 typedef union gpu_color_clear_attachment
@@ -39,19 +39,12 @@ typedef struct gpu_ui_pass_cmd
 
 typedef struct gpu_ui_pass_draw_rectangle
 {
-    gpu_ui_pass_cmd Cmd;
-    v2              Min;
-    v2              Max;
-    v4              Color;
-} gpu_ui_pass_draw_rectangle;
-
-typedef struct gpu_ui_pass_draw_texture_rectangle
-{
     gpu_ui_pass_cmd  Cmd;
     v2               Min;
     v2               Max;
+    v4               Color;
     gpu_texture_unit TextureUnit;
-} gpu_ui_pass_draw_texture_rectangle;
+} gpu_ui_pass_draw_rectangle;
 
 typedef struct gpu_ui_pass
 {
@@ -128,7 +121,6 @@ gpu_ui_pass*    GPU_Cmd_Buffer_Begin_UI_Pass(gpu_cmd_buffer* CmdBuffer, gpu_ui_p
 void            GPU_Cmd_Copy_Texture_To_Display(gpu_cmd_buffer* CmdBuffer, 
                                                 gpu_display* Display, uint32_t DisplayOffsetX, uint32_t DisplayOffsetY, gpu_texture2D* Texture, uint32_t TextureOffsetX, uint32_t TextureOffsetY, 
                                                 uint32_t Width, uint32_t Height);
-void            GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, v4 Color);
-void            GPU_UI_Pass_Draw_Texture_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, gpu_texture_unit TextureUnit);
+void            GPU_UI_Pass_Draw_Rectangle(gpu_ui_pass* UIPass, v2 Min, v2 Max, gpu_texture_unit TextureUnit, v4 Color);
 
 #endif

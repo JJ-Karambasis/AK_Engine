@@ -3,7 +3,9 @@
 
 #include <Core/core.h>
 #include <GPU/gpu.h>
-#include <Glyphs/glyphs.h>
+//#include <Glyphs/glyphs.h>
+#include <Fonts/fonts.h>
+#include <Resource_Manager/resource_manager.h>
 
 //typedef struct editor editor;
 //#include <Editor_UI/editor_ui.h>
@@ -24,9 +26,9 @@ typedef struct editor
     gpu_device_context* DeviceGPU;
     editor_window*      FreeWindows;
     editor_window*      MainWindow;
-    buffer              MainFontBuffer;
     glyph_generator*    GlyphGenerator;
     glyph_cache*        GlyphCache;
+    resource_manager*   ResourceManager;
 } editor;
 
 editor*        Editor_Init();

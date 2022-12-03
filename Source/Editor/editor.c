@@ -1,9 +1,36 @@
 #include "editor.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
 
 static gpu_init*       GPU_Init;
 static gpu_shutdown*   GPU_Shutdown;
 static gpu_reload*     GPU_Reload;
 static gpu_set_device* GPU_Set_Device;
+
+void Draw_Text(gpu_ui_pass* UIPass, gpu_sampler* Sampler, glyph_cache* GlyphCache, glyph_font* Font, str8 Text, v2 PixelP, uint32_t PixelHeight, v4 Color)
+{
+    arena* Scratch = Core_Get_Thread_Context()->Scratch;
+    glyph_info_list GlyphInfoList = Glyph_Cache_Get_Glyphs(GlyphCache, Get_Base_Allocator(Scratch), Font, Text, PixelHeight);
+    for(uint64_t GlyphIndex = 0; GlyphIndex < GlyphInfoList.Count; GlyphIndex++)
+    {
+        glyph_info* GlyphInfo = GlyphInfoList.Ptr + GlyphIndex;
+        glyph* Glyph = GlyphInfo->Glyph;
+        if(Glyph->Texture.Texture)
+        {
+            glyph_texture* Texture = &Glyph->Texture;
+            
+            gpu_texture_unit TextureUnit;
+            TextureUnit.Texture = Texture->Texture;
+            TextureUnit.Sampler = Sampler;
+            
+            v2 P = V2_Add_V2(PixelP, V2((float)GlyphInfo->XOffset+Glyph->XBearing, -(float)(GlyphInfo->YOffset+Glyph->YBearing)));
+            GPU_UI_Pass_Draw_Rectangle(UIPass, P, V2_Add_V2(P, V2((float)Texture->Width, (float)Texture->Height)), TextureUnit, Color);
+        }
+        
+        PixelP.x += GlyphInfo->XAdvance;
+        PixelP.y += GlyphInfo->YAdvance;
+    }
+}
 
 int main(int ArgumentCount, char** Arguments)
 {
@@ -37,16 +64,45 @@ editor* Editor_Init()
     
     Editor_Set(Editor);
     
+    Editor->ResourceManager = Resource_Manager_Create(Get_Base_Allocator(Editor->Arena), Editor->DataPath);
+    if(!Editor->ResourceManager)
+    {
+        //TODO(JJ): Diagnostic and error logging
+        return NULL;
+    }
+    
     arena* Scratch = Core_Get_Thread_Context()->Scratch;
+#if 0 
+    Language_Manager_Add_Global_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "MaterialIcons-Regular.ttf"));
+    
+    Language_Manager_Begin_Language_Pack(&Editor->Langauges, "en");
+    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "en.lang")->Path);
+    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "LiberationMono-Regular.ttf")->Path);
+    Language_Manager_End_Language_Pack(&Editor->Languages);
+    
+    Language_Manager_Begin_Language_Pack(&Editor->Langauges, "es");
+    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "es.lang")->Path);
+    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "LiberationMono-Regular.ttf")->Path);
+    Language_Manager_End_Language_Pack(&Editor->Languages);
+    
+    Language_Manager_Begin_Language_Pack(&Edtior->Languages, "ar");
+    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "ar.lang")->Path);
+    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "(A) Arslan Wessam A (A) Arslan Wessam A.ttf")->Path);
+    Language_Manager_End_Language_Pack(&Editor->Languages);
+    
+    Language_Manager_Begin_Language_Pack(&Editor->Langauges, "ja");
+    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "ja.lang")->Path);
+    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "Gen Jyuu Gothic L Monospace Regular.ttf")->Path);
+    Language_Manager_End_Language_Pack(&Editor->Languages);
+    
+    Language_Manager_Set_Language_Pack(&Editor->Languages, "en");
+    
+    str16 Value = Language_Manager_Get_Key(&Editor->Languages, Str8_Lit("ExampleKey"));
+#endif
     
     Editor->MainWindow = Editor_Create_Window(1280, 720, Str8_Lit("AK Engine"), 0);
-    str8 FontPath = Str8_Concat(Get_Base_Allocator(Scratch), Editor->DataPath, Str8_Lit("Cousine-Regular.ttf"));
-    if(!OS_Read_Entire_File(&Editor->MainFontBuffer, Get_Base_Allocator(Scratch), FontPath))
-        return NULL;
-    
     Editor->GlyphGenerator = FT_Glyph_Generator_Create(Get_Base_Allocator(Editor->Arena));
-    Editor->GlyphCache = Glyph_Cache_Create(Get_Base_Allocator(Editor->Arena), Editor->GlyphGenerator, 
-                                            GPU_Get_Resource_Manager(Editor->DeviceGPU));
+    Editor->GlyphCache = Glyph_Cache_Create(Get_Base_Allocator(Editor->Arena), GPU_Get_Resource_Manager(Editor->DeviceGPU), 1024);
     
     return Editor;
 }
@@ -54,6 +110,8 @@ editor* Editor_Init()
 void Editor_Update()
 {
     editor* Editor = Editor_Get();
+    
+    arena* Scratch = Core_Get_Thread_Context()->Scratch;
     
     gpu_device_context* DeviceGPU = Editor->DeviceGPU;
     gpu_display_manager* DisplayManager = GPU_Get_Display_Manager(DeviceGPU);
@@ -82,8 +140,10 @@ void Editor_Update()
     
     bool32_t IsLooping = true;
     
-    uint64_t StartClock = OS_QPC();
+    u32_list CodepointListU32;
+    Zero_Struct(&CodepointListU32, u32_list);
     
+    uint64_t StartClock = OS_QPC();
     
     static char* CharAt;
     while(IsLooping)
@@ -124,6 +184,12 @@ void Editor_Update()
                     
                     ColorFramebuffer = GPU_Resource_Manager_Create_Framebuffer(ResourceManager, &FramebufferCreateInfo);
                 } break;
+                
+                case OS_EVENT_TYPE_TEXT_INPUT:
+                {
+                    uint32_t Codepoint = Event->TextInputUTF32;
+                    U32_List_Push(&CodepointListU32, Get_Base_Allocator(Editor->Arena), Codepoint);
+                } break;
             }
             
             Event = OS_Get_Next_Event();
@@ -131,17 +197,15 @@ void Editor_Update()
         
         GPU_Cmd_Buffer_Reset(CmdBuffer);
         
-        static font_face* DEBUGFontFace;
-        if(!DEBUGFontFace)
+        static glyph_font* DEBUGFont;
+        if(!DEBUGFont)
         {
-            DEBUGFontFace = Glyph_Generator_Create_Font_Face(Editor->GlyphGenerator, Editor->MainFontBuffer.Ptr, Editor->MainFontBuffer.Size, 64);
+            DEBUGFont = Glyph_Font_Create(Get_Base_Allocator(Editor->Arena), 
+                                          Editor->GlyphGenerator, Resource_Manager_Get(Editor->ResourceManager, RESOURCE_FONT, 
+                                                                                       Str8_Lit("arial"))->Data);
         }
         
         gpu_display* MainDisplay = Editor->MainWindow->Display;
-        
-        glyph* Glyph = Glyph_Cache_Get(Editor->GlyphCache, DEBUGFontFace, 'b');
-        
-        Glyph_Cache_Generate(Editor->GlyphCache, CmdBuffer);
         
         gpu_color_clear_attachment ColorClears[1];
         Memory_Clear(ColorClears, sizeof(ColorClears));
@@ -156,23 +220,20 @@ void Editor_Update()
         BeginInfo.FramebufferInfo.Framebuffer = ColorFramebuffer;
         
         gpu_ui_pass* UIPass = GPU_Cmd_Buffer_Begin_UI_Pass(CmdBuffer, &BeginInfo);
-        GPU_UI_Pass_Draw_Rectangle(UIPass, V2(0.0f, 0.0f), V2(100.0f, 100.0f), V4(0.0f, 0.0f, 1.0f, 1.0f));
-        GPU_UI_Pass_Draw_Rectangle(UIPass, V2(200.0f, 200.0f), V2(400.0f, 400.0f), V4(0.0f, 1.0f, 1.0f, 1.0f));
         
-        gpu_texture_unit TextureUnit;
-        TextureUnit.Texture = Glyph->Texture;
-        TextureUnit.Sampler = LinearSampler;
-        
-        v2 Min = V2(300.0f, 300.0f);
-        GPU_UI_Pass_Draw_Texture_Rectangle(UIPass, Min, V2_Add_V2(Min, V2((float)Glyph->Width, (float)Glyph->Height)), TextureUnit);
+        //str8 Str = Str8_Lit("Hello, World. My fi is fucking sik. Æ bro");
+        str8 Str = Str8_Lit("The quick brown fox, jumped over the lazy brown dog! Æ bro");
+        Draw_Text(UIPass, LinearSampler, Editor->GlyphCache, DEBUGFont, Str, V2(0.0f, 24.0f), 24, V4(1.0f, 1.0f, 1.0f, 1.0f));
         
         GPU_Cmd_Copy_Texture_To_Display(CmdBuffer, MainDisplay, 0, 0, RenderTarget, 0, 0, Safe_S64_U32(WindowDim.x), Safe_S64_U32(WindowDim.y));
+        
+        Glyph_Cache_Generate(Editor->GlyphCache, CmdBuffer);
         
         GPU_Dispatch_Cmds(DeviceGPU, &CmdBuffer, 1);
         
         GPU_Present_Displays(DisplayManager, &MainDisplay, 1);
         
-        Arena_Clear(Core_Get_Thread_Context()->Scratch, MEMORY_NO_CLEAR);
+        Arena_Clear(Scratch, MEMORY_NO_CLEAR);
     }
 }
 
@@ -233,5 +294,6 @@ editor* Editor_Get()
 }
 
 #include <Core/core.c>
-#include <Glyphs/glyphs.c>
+#include <Fonts/fonts.c>
 #include <GPU/gpu.c>
+#include <Resource_Manager/resource_manager.c>

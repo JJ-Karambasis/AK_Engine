@@ -4,13 +4,14 @@
 #include <freetype/freetype.h>
 #include <freetype/ftsystem.h>
 #include <freetype/ftmodapi.h>
+#include <freetype/ftadvanc.h>
 
-typedef struct ft_font_face
+typedef struct ft_glyph_face
 {
-    font_face            Face;
-    FT_Face              FTFace;
-    struct ft_font_face* Next;
-} ft_font_face;
+    glyph_face            Base;
+    FT_Face               Face;
+    struct ft_glyph_face* Next;
+} ft_glyph_face;
 
 typedef struct ft_glyph_generator
 {
@@ -18,7 +19,7 @@ typedef struct ft_glyph_generator
     arena*          Arena;
     heap*           FreeTypeHeap;
     FT_Library      Library;
-    ft_font_face*   FreeFaces;
+    ft_glyph_face*  FreeFaces;
 } ft_glyph_generator;
 
 glyph_generator* FT_Glyph_Generator_Create(allocator* Allocator);

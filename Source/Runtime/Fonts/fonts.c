@@ -1,0 +1,4 @@
+#include "Glyph_Generator/glyph_generator.c"
+#include "Text_Shaper/text_shaper.c"
+#include "Private/glyph_font.c"
+#include "Private/glyph_cache.c"

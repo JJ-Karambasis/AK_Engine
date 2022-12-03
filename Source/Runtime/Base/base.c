@@ -12,6 +12,32 @@ inline int64_t Align_S64(int64_t Value, int64_t Alignment)
     return Mod ? Value + (Alignment-Mod) : Value;
 }
 
+uint32_t Ceil_Pow2_U32(uint32_t V)
+{
+    --V;
+    V |= V >> 1;
+    V |= V >> 2;
+    V |= V >> 4;
+    V |= V >> 8;
+    V |= V >> 16;
+    ++V;
+    V += ( V == 0 );    
+    return V;
+}
+
+int32_t Ceil_Pow2_S32(int32_t V)
+{
+    --V;
+    V |= V >> 1;
+    V |= V >> 2;
+    V |= V >> 4;
+    V |= V >> 8;
+    V |= V >> 16;
+    ++V;
+    V += ( V == 0 );    
+    return V;
+}
+
 uint64_t Ceil_Pow2_U64(uint64_t V)
 {
     --V;

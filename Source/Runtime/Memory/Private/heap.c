@@ -20,9 +20,9 @@ Heap->AllocatedList = Block
 
 #define Heap__Check_If_Block_Is_Allocated(Heap, block) \
 Assert(Heap__Has_Allocated_Block(Heap, Block)); \
-if(Block == Heap->AllocatedList) Heap->AllocatedList = Heap->AllocatedList->Next; \
 if(Block->PreviousAllocated) Block->PreviousAllocated->NextAllocated = Block->NextAllocated; \
 if(Block->NextAllocated) Block->NextAllocated->PreviousAllocated = Block->PreviousAllocated; \
+if(Block == Heap->AllocatedList) Heap->AllocatedList = Heap->AllocatedList->NextAllocated; \
 Block->PreviousAllocated = Block->NextAllocated = NULL
 #define Heap__Verify_Check(Condition) \
 do \
@@ -501,6 +501,14 @@ void* Heap_Allocate(heap* Heap, size_t Size, memory_clear_flag ClearFlag)
     
     if(ClearFlag == MEMORY_CLEAR) Memory_Clear(Result, Size);
     return Result;
+}
+
+size_t Heap_Get_Block_Size(heap* Heap, void* Memory)
+{
+    heap_block** BlockPtr = (heap_block**)((heap_block**)Memory - 1);
+    heap_block* Block = *BlockPtr;
+    Assert((Block->Block->Memory + Block->Offset + sizeof(heap_block*)) == Memory);
+    return Block->Size;
 }
 
 void Heap_Free(heap* Heap, void* Memory)

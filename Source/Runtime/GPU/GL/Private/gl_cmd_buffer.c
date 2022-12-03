@@ -57,10 +57,28 @@ GPU_CMD_UPLOAD_TEXTURE_PROC(GL_Cmd_Buffer_Upload_Texture)
     Cmd->DstOffsetY = DstOffsetY;
     
     uint32_t BytesPerTexel = G_BytesPerPixel[Cmd->DstTexture->Format];
-    size_t DataSize = BytesPerTexel*SrcWidth*SrcHeight;
+    size_t Pitch = BytesPerTexel*SrcWidth;
+    size_t DataSize = Pitch*SrcHeight;
     
     Cmd->SrcTexels = Arena_Push(CmdBuffer->CmdBuffer.CmdArena, DataSize, MEMORY_NO_CLEAR);
-    Memory_Copy(Cmd->SrcTexels, SrcTexels, DataSize);
+    
+    //NOTE(EVERYONE): Since opengl texture coordinate system starts at the bottom left we need to flip textures
+    //when we copy them over
+    uint8_t* DstRow = (uint8_t*)Cmd->SrcTexels + Pitch*(SrcHeight-1);
+    const uint8_t* SrcRow = (const uint8_t*)SrcTexels;
+    for(uint32_t YIndex = 0; YIndex < SrcHeight; YIndex++)
+    {
+        uint8_t* DstAt = DstRow;
+        const uint8_t* SrcAt = SrcRow;
+        for(size_t XIndex = 0; XIndex < Pitch; XIndex++)
+        {
+            *DstAt++ = *SrcAt++;
+        }
+        
+        DstRow -= Pitch;
+        SrcRow += Pitch;
+    }
+    
     Cmd->SrcWidth = SrcWidth;
     Cmd->SrcHeight = SrcHeight;
     

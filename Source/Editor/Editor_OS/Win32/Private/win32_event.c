@@ -56,6 +56,14 @@ LRESULT Win32_Window_Proc(HWND Window, UINT Message, WPARAM WParam, LPARAM LPara
             }
         } break;
         
+        case WM_CHAR:
+        {
+            win32_window* OSWindow = (win32_window*)GetWindowLongPtr(Window, GWLP_USERDATA);
+            os_event* Event = Win32__Enqueue_Event(OS_EVENT_TYPE_TEXT_INPUT);
+            Event->Window = (os_window*)OSWindow;
+            Event->TextInputUTF32 = UTF16_Read((const uint16_t*)&WParam);
+        } break;
+        
         default:
         {
             Result = DefWindowProcW(Window, Message, WParam, LParam);
