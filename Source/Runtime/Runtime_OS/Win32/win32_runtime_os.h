@@ -11,7 +11,6 @@ typedef struct win32_runtime_os
 {
     runtime_os      OS;
     win32_allocator Allocator;
-    arena*          Arena;
     win32_thread*   FreeThreads;
     win32_file*     FreeFiles;
     uint64_t        ClockFrequency;

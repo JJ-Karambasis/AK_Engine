@@ -4,6 +4,7 @@
 #include "Public/win32_window.h"
 #include "Public/win32_event.h"
 #include "Public/win32_file_enumerator.h"
+#include "Public/win32_font_loader.h"
 
 typedef struct win32_editor_os
 {

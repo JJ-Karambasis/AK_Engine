@@ -2,7 +2,6 @@ UTEST(Strings, String_Encoding)
 {
     custom_allocator* Allocator = Allocate_Custom_Allocator();
     arena* StringArena = Arena_Create(Get_Base_Allocator(Allocator), Mega(1));
-    
 #if 0
     buffer Buffer = Read_Entire_File_Null_Term(StringArena, "test_data/quickbrown.txt");
     

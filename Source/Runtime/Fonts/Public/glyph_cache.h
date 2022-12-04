@@ -8,7 +8,7 @@ typedef struct glyph_cache_entry glyph_cache_entry;
 typedef struct glyph_cache_entry
 {
     glyph              Glyph;
-    glyph_font*        Font;
+    glyph_face*        Face;
     uint32_t           PixelHeight;
     uint32_t           SlotIndex;
     uint32_t           Hash;
@@ -54,10 +54,10 @@ typedef struct glyph_cache
     uint32_t              GlyphCount;
 } glyph_cache;
 
-glyph_cache*    Glyph_Cache_Create(allocator* Allocator, gpu_resource_manager* ResourceManager, 
-                                   uint32_t SlotCapacity);
-glyph_info_list Glyph_Cache_Get_Glyphs(glyph_cache* Cache, allocator* Allocator, glyph_font* Font, str8 Text, uint32_t PixelHeight);
-void            Glyph_Cache_Generate(glyph_cache* Cache, gpu_cmd_buffer* CmdBuffer);
-void            Glyph_Cache_Delete(glyph_cache* Cache);
+glyph_cache* Glyph_Cache_Create(allocator* Allocator, gpu_resource_manager* ResourceManager, 
+                                uint32_t SlotCapacity);
+const glyph* Glyph_Cache_Get_Glyph(glyph_cache* Cache, glyph_face* Face, uint32_t Codepoint, uint32_t PixelHeight);
+void         Glyph_Cache_Generate(glyph_cache* Cache, gpu_cmd_buffer* CmdBuffer);
+void         Glyph_Cache_Delete(glyph_cache* Cache);
 
 #endif

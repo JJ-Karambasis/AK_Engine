@@ -20,17 +20,17 @@ typedef struct glyph
 
 typedef struct glyph_info
 {
-    glyph*   Glyph;
-    int32_t  XAdvance;
-    int32_t  YAdvance;
-    int32_t  XOffset;
-    int32_t  YOffset;
+    const glyph* Glyph;
+    int32_t      XAdvance;
+    int32_t      YAdvance;
+    int32_t      XOffset;
+    int32_t      YOffset;
 } glyph_info;
 
-typedef struct glyph_info_list
+typedef struct glyph_list
 {
-    glyph_info* Ptr;
-    uint64_t    Count;
+    glyph**  Glyphs;
+    uint64_t Count;
 } glyph_info_list;
 
 #endif

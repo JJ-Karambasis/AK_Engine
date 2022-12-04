@@ -7,6 +7,7 @@
 #include "Public/os_event.h"
 #include "Public/os_library.h"
 #include "Public/os_file_enumerator.h"
+#include "Public/os_font_loader.h"
 
 typedef struct editor_os editor_os;
 

@@ -15,7 +15,7 @@ os_window* OS_Create_Window(uint32_t Width, uint32_t Height, str8 WindowName, ui
     HWND Handle = Win32_Create_Window(Width, Height, WindowName, WIN32_WINDOW_CLASS, Style, ExStyle);
     
     win32_window* Window = EditorOS->FreeWindows;
-    if(!Window) Window = Arena_Push_Struct(OS->Arena, win32_window);
+    if(!Window) Window = Arena_Push_Struct(OS->OS.Arena, win32_window);
     else SLL_Pop_Front(EditorOS->FreeWindows);
     Zero_Struct(Window, win32_window);
     

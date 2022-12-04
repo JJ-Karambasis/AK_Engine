@@ -176,22 +176,42 @@ static hb_bool_t HB_Get_Glyph_From_Name_Func(hb_font_t* Font, void* FontData, co
     return false;
 }
 
+static hb_direction_t G__HB_Directions[BIDI_DIRECTION_COUNT] = 
+{
+    HB_DIRECTION_INVALID, 
+    HB_DIRECTION_LTR,
+    HB_DIRECTION_RTL
+};
+
+static hb_script_t G__HB_Script[BIDI_SCRIPT_COUNT] = 
+{
+    HB_SCRIPT_UNKNOWN,
+    HB_SCRIPT_LATIN,
+    HB_SCRIPT_ARABIC,
+    HB_SCRIPT_COMMON
+};
+
 TEXT_SHAPER_SHAPE(HB_Text_Shaper_Shape)
 {
     shape_list Result;
     Zero_Struct(&Result, shape_list);
     
     hb_text_shaper* Shaper = (hb_text_shaper*)_Shaper;
+    Glyph_Face_Set_Pixel_Size(Shaper->Face, PixelSize);
     
-    hb_buffer_t* Buffer = hb_buffer_create();
-    hb_buffer_set_flags(Buffer, HB_BUFFER_FLAG_BOT|HB_BUFFER_FLAG_EOT);
+    hb_buffer_t* Buffer = Shaper->Buffer;
+    hb_buffer_clear_contents(Buffer);
     
-    int32_t TextLength = Safe_U64_S32(Text.Length);
-    hb_buffer_add_utf8(Buffer, (const char*)Text.Str, TextLength, 0, TextLength);
+    int32_t FullTextLength = Safe_U64_S32(Text.Length);
+    hb_buffer_add_utf8(Buffer, (const char*)Text.Str, FullTextLength, Safe_U64_S32(TextOffset), Safe_U64_S32(TextLength));
     
-    hb_buffer_set_direction(Buffer, HB_DIRECTION_LTR);
-    hb_buffer_set_script(Buffer, HB_SCRIPT_LATIN);
-    hb_buffer_set_language(Buffer, hb_language_from_string("en", -1));
+    hb_buffer_set_direction(Buffer, G__HB_Directions[Direction]);
+    hb_buffer_set_script(Buffer, G__HB_Script[Script]);
+    
+    if(StrC_Is_Empty(LanguageTag))
+        hb_buffer_set_language(Buffer, hb_language_get_default());
+    else
+        hb_buffer_set_language(Buffer, hb_language_from_string(LanguageTag.Str, Safe_U64_S32(LanguageTag.Length)));
     
     hb_shape(Shaper->Font, Buffer, NULL, 0);
     
@@ -219,8 +239,6 @@ TEXT_SHAPER_SHAPE(HB_Text_Shaper_Shape)
             Result.Ptr[GlyphIndex] = Shape;
         }
     }
-    
-    hb_buffer_destroy(Buffer);
     
     return Result;
 }
@@ -277,6 +295,11 @@ text_shaper* HB_Text_Shaper_Create(allocator* Allocator, glyph_face* Face)
     hb_face_destroy(HBFace);
     
     hb_font_set_funcs(Font, G__HB->FontFuncs, Face, NULL);
+    
+    Shaper->Buffer = hb_buffer_create();
+    hb_buffer_pre_allocate(Shaper->Buffer, 2048);
+    
+    Shaper->Face = Face;
     
     Shaper->Font = Font;
     Set_VTable(&Shaper->Base, &G_HBShaperVTable);

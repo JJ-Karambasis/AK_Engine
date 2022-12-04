@@ -1,6 +1,6 @@
-uint32_t Glyph_Cache__Hash(uint32_t Codepoint, uint32_t PixelHeight, glyph_font* Font)
+uint32_t Glyph_Cache__Hash(uint32_t Codepoint, uint32_t PixelHeight, glyph_face* Face)
 {
-    uint32_t Result = Hash_Combine(Hash_Combine(Hash_U32(Codepoint), Hash_U32(PixelHeight)), Hash_Ptr((size_t)Font));
+    uint32_t Result = Hash_Combine(Hash_Combine(Hash_U32(Codepoint), Hash_U32(PixelHeight)), Hash_Ptr((size_t)Face));
     return Result;
 }
 
@@ -16,90 +16,66 @@ glyph_cache* Glyph_Cache_Create(allocator* Allocator, gpu_resource_manager* Reso
     return Result;
 }
 
-glyph_info_list Glyph_Cache_Get_Glyphs(glyph_cache* Cache, allocator* Allocator, glyph_font* Font, str8 Text, uint32_t PixelHeight)
+const glyph* Glyph_Cache_Get_Glyph(glyph_cache* Cache, glyph_face* Face, uint32_t Codepoint, uint32_t PixelHeight)
 {
-    arena* Scratch = Core_Get_Thread_Context()->Scratch;
+    uint32_t SlotMask = Cache->SlotCapacity-1;
     
-    Glyph_Face_Set_Pixel_Size(Font->Face, PixelHeight);
-    shape_list Shapes = Text_Shaper_Shape(Font->Shaper, Get_Base_Allocator(Scratch), Text);
+    Glyph_Face_Set_Pixel_Size(Face, PixelHeight);
     
-    glyph_info_list Result;
-    Zero_Struct(&Result, glyph_info_list);
+    uint32_t Hash = Glyph_Cache__Hash(Codepoint, PixelHeight, Face);
+    uint32_t SlotIndex = SlotMask & Hash; 
     
-    if(Shapes.Count)
+    glyph_slot* Slot = Cache->Slots + SlotIndex;
+    
+    glyph_cache_entry* TargetEntry = NULL;
+    for(glyph_cache_entry* Entry = Slot->First; Entry; Entry = Entry->NextSlotEntry)
     {
-        Result.Count = Shapes.Count;
-        Result.Ptr = Allocate_Array(Allocator, glyph_info, Result.Count);
-        
-        uint32_t SlotMask = Cache->SlotCapacity-1;
-        
-        for(uint64_t ShapeIndex = 0; ShapeIndex < Shapes.Count; ShapeIndex++)
+        if(Entry->Face == Face && Entry->PixelHeight == PixelHeight && Entry->Glyph.Codepoint == Codepoint && Entry->Hash == Hash)
         {
-            shape* Shape = Shapes.Ptr + ShapeIndex;
-            
-            uint32_t Codepoint = Shape->Codepoint;
-            uint32_t Hash = Glyph_Cache__Hash(Codepoint, PixelHeight, Font);
-            uint32_t SlotIndex = SlotMask & Hash; 
-            
-            glyph_slot* Slot = Cache->Slots + SlotIndex;
-            
-            glyph_cache_entry* TargetEntry = NULL;
-            for(glyph_cache_entry* Entry = Slot->First; Entry; Entry = Entry->NextSlotEntry)
-            {
-                if(Entry->Font == Font && Entry->PixelHeight == PixelHeight && Entry->Glyph.Codepoint == Codepoint && Entry->Hash == Hash)
-                {
-                    TargetEntry = Entry;
-                }
-            }
-            
-            if(!TargetEntry)
-            {
-                if(Cache->GlyphCount == Cache->BucketCount*GLYPH_CACHE_GLYPHS_PER_BUCKET)
-                {
-                    glyph_cache_bucket* Bucket = Arena_Push_Struct(Cache->Arena, glyph_cache_bucket);
-                    Cache->CurrentBucket = Bucket;
-                    Cache->BucketCount++;
-                }
-                
-                Assert(Cache->CurrentBucket->Count < GLYPH_CACHE_GLYPHS_PER_BUCKET);
-                TargetEntry = &Cache->CurrentBucket->Glyphs[Cache->CurrentBucket->Count++];
-                Cache->GlyphCount++;
-                
-                Zero_Struct(TargetEntry, glyph_cache_entry);
-                
-                glyph_metrics Metrics;
-                if(Glyph_Face_Get_Glyph_Metrics(Font->Face, Codepoint, &Metrics))
-                {
-                    TargetEntry->Glyph.Codepoint = Codepoint;
-                    TargetEntry->Glyph.XBearing  = Metrics.XBearing;
-                    TargetEntry->Glyph.YBearing  = Metrics.YBearing;
-                    TargetEntry->Font            = Font;
-                    TargetEntry->PixelHeight     = PixelHeight;
-                    TargetEntry->SlotIndex       = SlotIndex;
-                    TargetEntry->Hash            = Hash;
-                    DLL_Push_Back_NP(Slot->First, Slot->Last, TargetEntry, NextSlotEntry, PrevSlotEntry);
-                    
-                    glyph_generate_entry* GenerateEntry = Cache->FreeGenerateEntries;
-                    if(!GenerateEntry) GenerateEntry = Arena_Push_Struct(Cache->Arena, glyph_generate_entry);
-                    else SLL_Pop_Front(Cache->FreeGenerateEntries);
-                    GenerateEntry->CacheEntry = TargetEntry;
-                    SLL_Push_Back(Cache->GenerateQueue.First, Cache->GenerateQueue.Last, GenerateEntry);
-                    Cache->GenerateQueue.Count++;
-                }
-            }
-            
-            glyph_info GlyphInfo;
-            GlyphInfo.Glyph    = &TargetEntry->Glyph;
-            GlyphInfo.XAdvance = Shape->XAdvance;
-            GlyphInfo.YAdvance = Shape->YAdvance;
-            GlyphInfo.XOffset  = Shape->XOffset;
-            GlyphInfo.YOffset  = Shape->YOffset;
-            
-            Result.Ptr[ShapeIndex] = GlyphInfo;
+            TargetEntry = Entry;
         }
     }
     
-    return Result;
+    if(!TargetEntry)
+    {
+        glyph_metrics Metrics;
+        if(Glyph_Face_Get_Glyph_Metrics(Face, Codepoint, &Metrics))
+        {
+            if(Cache->GlyphCount == Cache->BucketCount*GLYPH_CACHE_GLYPHS_PER_BUCKET)
+            {
+                glyph_cache_bucket* Bucket = Arena_Push_Struct(Cache->Arena, glyph_cache_bucket);
+                Cache->CurrentBucket = Bucket;
+                Cache->BucketCount++;
+            }
+            
+            Assert(Cache->CurrentBucket->Count < GLYPH_CACHE_GLYPHS_PER_BUCKET);
+            TargetEntry = &Cache->CurrentBucket->Glyphs[Cache->CurrentBucket->Count++];
+            Cache->GlyphCount++;
+            
+            Zero_Struct(TargetEntry, glyph_cache_entry);
+            
+            TargetEntry->Glyph.Codepoint = Codepoint;
+            TargetEntry->Glyph.XBearing  = Metrics.XBearing;
+            TargetEntry->Glyph.YBearing  = Metrics.YBearing;
+            TargetEntry->Face            = Face;
+            TargetEntry->PixelHeight     = PixelHeight;
+            TargetEntry->SlotIndex       = SlotIndex;
+            TargetEntry->Hash            = Hash;
+            DLL_Push_Back_NP(Slot->First, Slot->Last, TargetEntry, NextSlotEntry, PrevSlotEntry);
+            
+            glyph_generate_entry* GenerateEntry = Cache->FreeGenerateEntries;
+            if(!GenerateEntry) GenerateEntry = Arena_Push_Struct(Cache->Arena, glyph_generate_entry);
+            else SLL_Pop_Front(Cache->FreeGenerateEntries);
+            GenerateEntry->CacheEntry = TargetEntry;
+            SLL_Push_Back(Cache->GenerateQueue.First, Cache->GenerateQueue.Last, GenerateEntry);
+            Cache->GenerateQueue.Count++;
+        }
+    }
+    
+    if(TargetEntry) 
+        return &TargetEntry->Glyph;
+    
+    return NULL;
 }
 
 void Glyph_Cache_Generate(glyph_cache* Cache, gpu_cmd_buffer* CmdBuffer)
@@ -117,8 +93,8 @@ void Glyph_Cache_Generate(glyph_cache* Cache, gpu_cmd_buffer* CmdBuffer)
     {
         glyph_cache_entry* CacheEntry = GlyphGenerateEntry->CacheEntry;
         
-        Glyph_Face_Set_Pixel_Size(CacheEntry->Font->Face, CacheEntry->PixelHeight);
-        Bitmaps[GlyphCount] = Glyph_Face_Generate_Glyph_Bitmap(CacheEntry->Font->Face, Get_Base_Allocator(Scratch), CacheEntry->Glyph.Codepoint);
+        Glyph_Face_Set_Pixel_Size(CacheEntry->Face, CacheEntry->PixelHeight);
+        Bitmaps[GlyphCount] = Glyph_Face_Generate_Glyph_Bitmap(CacheEntry->Face, Get_Base_Allocator(Scratch), CacheEntry->Glyph.Codepoint);
         if(Bitmaps[GlyphCount].Texels)
         {
             Glyphs[GlyphCount++] = &CacheEntry->Glyph;

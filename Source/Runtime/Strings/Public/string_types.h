@@ -14,6 +14,7 @@ typedef struct strc
 } strc;
 
 uint64_t StrC_Length(const char* Str);
+bool8_t  StrC_Is_Empty(strc Str);
 strc     StrC_Empty();
 strc     StrC(const char* Str, uint64_t Length);
 strc     StrC_Null_Term(const char* Str);
@@ -98,6 +99,9 @@ strc  UTF32_To_Ascii(allocator* Allocator, str32  Str);
 str8  UTF32_To_UTF8( allocator* Allocator, str32 Str);
 str16 UTF32_To_UTF16(allocator* Allocator, str32 Str);
 
+uint32_t UTF8_Read(const uint8_t* At, uint32_t* Length);
+uint32_t UTF8_Get_Byte_Count(uint32_t Codepoint);
+void UTF8_From_Codepoint(uint32_t Codepoint, uint8_t* Buffer, uint32_t* Length);
 uint32_t UTF16_Read(const uint16_t* At);
 
 #endif

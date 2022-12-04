@@ -10,7 +10,7 @@ os_thread* OS_Create_Thread(os_thread_callback* Callback, void* UserData)
     if(!OS) return NULL;
     
     win32_thread* Thread = OS->FreeThreads;
-    if(!Thread) Thread = Arena_Push_Struct(OS->Arena, win32_thread);
+    if(!Thread) Thread = Arena_Push_Struct(OS->OS.Arena, win32_thread);
     else SLL_Pop_Front(OS->FreeThreads);
     Zero_Struct(Thread, win32_thread);
     

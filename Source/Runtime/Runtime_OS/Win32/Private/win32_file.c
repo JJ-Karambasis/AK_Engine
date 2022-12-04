@@ -33,7 +33,7 @@ os_file* OS_Create_File(str8 Path, uint32_t BitFlag)
     if(Handle == INVALID_HANDLE_VALUE) return NULL;
     
     win32_file* File = OS->FreeFiles;
-    if(!File) File = Arena_Push_Struct(OS->Arena, win32_file);
+    if(!File) File = Arena_Push_Struct(OS->OS.Arena, win32_file);
     else SLL_Pop_Front(OS->FreeFiles);
     Zero_Struct(File, win32_file);
     

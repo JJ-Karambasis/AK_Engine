@@ -84,6 +84,6 @@ IF NOT EXIST "%InstallPath%" (
 
 xcopy "%CurrentPath%..\Data\" "%InstallPath%\Data\" /E /Y /D
 
-SET IncludePaths=-I%CurrentPath%../Source/Runtime -I%CurrentPath%../Source/Editor -I%CurrentPath%../Source/ThirdParty -I%CurrentPath%../Source/Shaders
+SET IncludePaths=-I%CurrentPath%../Source/Runtime -I%CurrentPath%../Source/Editor -I%CurrentPath%../Source/ThirdParty -I%CurrentPath%../Source/Shaders -I%CurrentPath%../Source/ThirdParty/SheenBidi/Headers
 set CommonFlags=-DOS_WIN32 -DEDITOR_BUILD
 set Libs=advapi32.lib

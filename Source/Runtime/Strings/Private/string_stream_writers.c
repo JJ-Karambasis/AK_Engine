@@ -11,41 +11,10 @@ void UTF8_Stream_Write(utf8_stream_writer* Stream, uint32_t Codepoint)
 {
     uint8_t* At = Stream->Str + Stream->Size;
     
-    uint32_t Offset = 0;
-    if (Codepoint <= 0x7F)
-    {
-        At[0] = (uint8_t)Codepoint;
-        Offset = 1;
-    }
-    else if (Codepoint <= 0x7FF)
-    {
-        At[0] = (BITMASK_2 << 6) | ((Codepoint >> 6) & BITMASK_5);
-        At[1] = BIT_8 | (Codepoint & BITMASK_6);
-        Offset = 2;
-    }
-    else if (Codepoint <= 0xFFFF)
-    {
-        At[0] = (BITMASK_3 << 5) | ((Codepoint >> 12) & BITMASK_4);
-        At[1] = BIT_8 | ((Codepoint >> 6) & BITMASK_6);
-        At[2] = BIT_8 | ( Codepoint       & BITMASK_6);
-        Offset = 3;
-    }
-    else if (Codepoint <= 0x10FFFF)
-    {
-        At[0] = (BITMASK_4 << 3) | ((Codepoint >> 18) & BITMASK_3);
-        At[1] = BIT_8 | ((Codepoint >> 12) & BITMASK_6);
-        At[2] = BIT_8 | ((Codepoint >>  6) & BITMASK_6);
-        At[3] = BIT_8 | ( Codepoint        & BITMASK_6);
-        Offset = 4;
-    }
-    else
-    {
-        Assert(false);
-        At[0] = '?';
-        Offset = 1;
-    }
-    
+    uint32_t Offset;
+    UTF8_From_Codepoint(Codepoint, At, &Offset);
     Stream->Size += Offset;
+    
     Assert(Stream->Size <= Stream->Capacity);
 }
 

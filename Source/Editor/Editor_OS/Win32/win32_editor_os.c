@@ -3,9 +3,10 @@ editor_os* Editor_OS_Init()
 {
     win32_runtime_os* OS = (win32_runtime_os*)OS_Get();
     
-    win32_editor_os* EditorOS = Arena_Push_Struct(OS->Arena, win32_editor_os);
+    win32_editor_os* EditorOS = Arena_Push_Struct(OS->OS.Arena, win32_editor_os);
     Zero_Struct(EditorOS, win32_editor_os);
-    EditorOS->EventManager.Arena = Arena_Create(Get_Base_Allocator(OS->Arena), Kilo(128));
+    EditorOS->EventManager.Arena = Arena_Create(Get_Base_Allocator(OS->OS.Arena), Kilo(128));
+    
     return (editor_os*)EditorOS;
 }
 
@@ -33,3 +34,4 @@ bool8_t    OS_Directory_Exists(str8 Directory)
 #include "Private/win32_event.c"
 #include "Private/win32_library.c"
 #include "Private/win32_file_enumerator.c"
+#include "Private/win32_font_loader.c"

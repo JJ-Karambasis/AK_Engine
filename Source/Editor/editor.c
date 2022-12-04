@@ -7,29 +7,58 @@ static gpu_shutdown*   GPU_Shutdown;
 static gpu_reload*     GPU_Reload;
 static gpu_set_device* GPU_Set_Device;
 
-void Draw_Text(gpu_ui_pass* UIPass, gpu_sampler* Sampler, glyph_cache* GlyphCache, glyph_font* Font, str8 Text, v2 PixelP, uint32_t PixelHeight, v4 Color)
+void Draw_Text(gpu_ui_pass* UIPass, gpu_sampler* Sampler, glyph_font* Font, glyph_cache* GlyphCache, str8 Text, v2 PixelP, uint32_t PixelHeight, v4 Color)
 {
     arena* Scratch = Core_Get_Thread_Context()->Scratch;
-    glyph_info_list GlyphInfoList = Glyph_Cache_Get_Glyphs(GlyphCache, Get_Base_Allocator(Scratch), Font, Text, PixelHeight);
-    for(uint64_t GlyphIndex = 0; GlyphIndex < GlyphInfoList.Count; GlyphIndex++)
+    bidi BIDI = BIDI_Get_Parts(Scratch, Text);
+    
+    Text = BIDI_Replace_Text(&BIDI, Text, Scratch);
+    
+    v2 InitialP = PixelP;
+    
+    bidi_part_list* Parts = &BIDI.Parts;
+    for(bidi_part* Part = Parts->First; Part; Part = Part->Next)
     {
-        glyph_info* GlyphInfo = GlyphInfoList.Ptr + GlyphIndex;
-        glyph* Glyph = GlyphInfo->Glyph;
-        if(Glyph->Texture.Texture)
+        if(Part->Type == BIDI_PART_TYPE_TEXT)
         {
-            glyph_texture* Texture = &Glyph->Texture;
+            uint32_t FirstCodepoint = UTF8_Read(Text.Str + Part->Offset, NULL);
+            bidi_part_text* PartText = (bidi_part_text*)Part;
             
-            gpu_texture_unit TextureUnit;
-            TextureUnit.Texture = Texture->Texture;
-            TextureUnit.Sampler = Sampler;
+            shape_list Shapes = Text_Shaper_Shape(Font->Shaper, Get_Base_Allocator(Scratch), Text, Part->Offset, 
+                                                  Part->Length, PartText->Direction, PartText->Script, StrC_Empty(), PixelHeight);
             
-            v2 P = V2_Add_V2(PixelP, V2((float)GlyphInfo->XOffset+Glyph->XBearing, -(float)(GlyphInfo->YOffset+Glyph->YBearing)));
-            GPU_UI_Pass_Draw_Rectangle(UIPass, P, V2_Add_V2(P, V2((float)Texture->Width, (float)Texture->Height)), TextureUnit, Color);
+            for(uint64_t ShapeIndex = 0; ShapeIndex < Shapes.Count; ShapeIndex++)
+            {
+                shape* Shape = Shapes.Ptr + ShapeIndex;
+                if(Shape->Codepoint)
+                {
+                    const glyph* Glyph = Glyph_Cache_Get_Glyph(GlyphCache, Font->Face, Shape->Codepoint, PixelHeight);
+                    if(Glyph && Glyph->Texture.Texture)
+                    {
+                        const glyph_texture* Texture = &Glyph->Texture;
+                        
+                        gpu_texture_unit TextureUnit;  
+                        TextureUnit.Texture = Texture->Texture;
+                        TextureUnit.Sampler = Sampler;
+                        
+                        v2 P = V2_Add_V2(PixelP, V2((float)Shape->XOffset+Glyph->XBearing, -(float)(Shape->YOffset+Glyph->YBearing)));
+                        GPU_UI_Pass_Draw_Rectangle(UIPass, P, V2_Add_V2(P, V2((float)Texture->Width, (float)Texture->Height)), TextureUnit, Color);
+                    }
+                    
+                    PixelP.x += Shape->XAdvance;
+                    PixelP.y += Shape->YAdvance;
+                }
+            }
         }
-        
-        PixelP.x += GlyphInfo->XAdvance;
-        PixelP.y += GlyphInfo->YAdvance;
+        else if(Part->Type == BIDI_PART_TYPE_NEWLINE)
+        {
+            //TODO(JJ): Yeah obviously this isn't how this should work at all
+            PixelP.y += PixelHeight;
+            PixelP.x = InitialP.x; 
+        }
     }
+    
+    int x = 0;
 }
 
 int main(int ArgumentCount, char** Arguments)
@@ -107,11 +136,55 @@ editor* Editor_Init()
     return Editor;
 }
 
+static int FontCount = 0;
+int Enum_Font_Proc(const LOGFONTW* LogFont, const TEXTMETRICW* TextMetric, DWORD FontType, LPARAM LParam)
+{
+    if(FontType == TRUETYPE_FONTTYPE)
+    {
+        if(!LParam)
+        {
+            HDC DeviceContext = GetDC(NULL);
+            LOGFONTW PLogFont = *LogFont;
+            EnumFontFamiliesExW(DeviceContext, &PLogFont, (FONTENUMPROCW)Enum_Font_Proc, 1, 0);
+            ReleaseDC(NULL, DeviceContext);
+        }
+        else
+        {
+            if(LogFont->lfCharSet == ANSI_CHARSET)
+            {
+                int x = 0;
+            }
+            else if(LogFont->lfCharSet == SHIFTJIS_CHARSET)
+            {
+                int x = 0;
+            }
+            else if(LogFont->lfCharSet == ARABIC_CHARSET)
+            {
+                int x = 0;
+            }
+        }
+        FontCount++;
+    }
+    return 1;
+}
+
 void Editor_Update()
 {
     editor* Editor = Editor_Get();
     
     arena* Scratch = Core_Get_Thread_Context()->Scratch;
+    
+    HDC DeviceContext = GetDC(NULL);
+    
+    LOGFONTW LogFont;
+    Zero_Struct(&LogFont, LOGFONTW);
+    
+    LogFont.lfCharSet = DEFAULT_CHARSET;
+    LogFont.lfFaceName[0] = '\0';
+    
+    EnumFontFamiliesExW(DeviceContext, &LogFont, (FONTENUMPROCW)Enum_Font_Proc, 0, 0);
+    
+    ReleaseDC(NULL, DeviceContext);
     
     gpu_device_context* DeviceGPU = Editor->DeviceGPU;
     gpu_display_manager* DisplayManager = GPU_Get_Display_Manager(DeviceGPU);
@@ -144,6 +217,10 @@ void Editor_Update()
     Zero_Struct(&CodepointListU32, u32_list);
     
     uint64_t StartClock = OS_QPC();
+    
+    buffer FileBuffer;
+    OS_Read_Entire_File_Null_Term(&FileBuffer, Get_Base_Allocator(Editor->Arena), Str8_Lit("Data/test2.txt"));
+    str8 Str = Str8(FileBuffer.Ptr, FileBuffer.Size);
     
     static char* CharAt;
     while(IsLooping)
@@ -202,7 +279,7 @@ void Editor_Update()
         {
             DEBUGFont = Glyph_Font_Create(Get_Base_Allocator(Editor->Arena), 
                                           Editor->GlyphGenerator, Resource_Manager_Get(Editor->ResourceManager, RESOURCE_FONT, 
-                                                                                       Str8_Lit("arial"))->Data);
+                                                                                       Str8_Lit("LiberationMono-Regular"))->Data);
         }
         
         gpu_display* MainDisplay = Editor->MainWindow->Display;
@@ -222,8 +299,9 @@ void Editor_Update()
         gpu_ui_pass* UIPass = GPU_Cmd_Buffer_Begin_UI_Pass(CmdBuffer, &BeginInfo);
         
         //str8 Str = Str8_Lit("Hello, World. My fi is fucking sik. Æ bro");
-        str8 Str = Str8_Lit("The quick brown fox, jumped over the lazy brown dog! Æ bro");
-        Draw_Text(UIPass, LinearSampler, Editor->GlyphCache, DEBUGFont, Str, V2(0.0f, 24.0f), 24, V4(1.0f, 1.0f, 1.0f, 1.0f));
+        
+        str8 TempStr = Str8_Lit("یہ ایک )car( ہے۔");
+        Draw_Text(UIPass, LinearSampler, DEBUGFont, Editor->GlyphCache, Str, V2(12.0f, 24.0f), 24, V4(1.0f, 1.0f, 1.0f, 1.0f));
         
         GPU_Cmd_Copy_Texture_To_Display(CmdBuffer, MainDisplay, 0, 0, RenderTarget, 0, 0, Safe_S64_U32(WindowDim.x), Safe_S64_U32(WindowDim.y));
         

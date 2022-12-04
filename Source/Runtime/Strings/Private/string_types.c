@@ -8,6 +8,11 @@ uint64_t StrC_Length(const char* Str)
     return Result;
 }
 
+bool8_t StrC_Is_Empty(strc Str)
+{
+    return !Str.Str || !Str.Length;
+}
+
 strc StrC_Empty()
 {
     strc Result;
@@ -643,6 +648,131 @@ str16 UTF32_To_UTF16(allocator* Allocator, str32 Str)
     
     str16 Result = UTF16_Stream_Writer_To_String(&Writer, true);
     return Result;
+}
+
+static const uint8_t G_ClassUTF8[32] = 
+{
+    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,2,2,2,2,3,3,4,5,
+};
+
+uint32_t UTF8_Read(const uint8_t* At, uint32_t* Length)
+{
+    uint32_t Result = 0xFFFFFFFF;
+    
+    uint8_t Byte = At[0];
+    uint8_t ByteClass = G_ClassUTF8[Byte >> 3];
+    
+    switch(ByteClass)
+    {
+        case 1:
+        {
+            Result = Byte;
+        } break;
+        
+        case 2:
+        {
+            uint8_t NextByte = At[1];
+            if(G_ClassUTF8[NextByte >> 3] == 0)
+            {
+                Result = (Byte & BITMASK_5) << 6;
+                Result |= (NextByte & BITMASK_6);
+            }
+        } break;
+        
+        case 3:
+        {
+            uint8_t NextBytes[2] = {At[1], At[2]};
+            if(G_ClassUTF8[NextBytes[0] >> 3] == 0 &&
+               G_ClassUTF8[NextBytes[1] >> 3] == 0)
+            {
+                Result = (Byte & BITMASK_4) << 12;
+                Result |= ((NextBytes[0] & BITMASK_6) << 6);
+                Result |= (NextBytes[1] & BITMASK_6);
+            }
+        } break;
+        
+        case 4:
+        {
+            uint32_t NextBytes[3] = {At[1], At[2], At[3]};
+            if(G_ClassUTF8[NextBytes[0] >> 3] == 0 &&
+               G_ClassUTF8[NextBytes[1] >> 3] == 0 &&
+               G_ClassUTF8[NextBytes[2] >> 3] == 0)
+            {
+                Result = (Byte & BITMASK_3) << 18;
+                Result |= ((NextBytes[0] & BITMASK_6) << 12);
+                Result |= ((NextBytes[1] & BITMASK_6) << 6);
+                Result |= (NextBytes[2] & BITMASK_6);
+            }
+        } break;
+    }
+    
+    if(Length) *Length = ByteClass;
+    return Result;
+}
+
+uint32_t UTF8_Get_Byte_Count(uint32_t Codepoint)
+{
+    uint32_t Result = 0;
+    if (Codepoint <= 0x7F)
+    {
+        Result = 1;
+    }
+    else if (Codepoint <= 0x7FF)
+    {
+        Result = 2;
+    }
+    else if (Codepoint <= 0xFFFF)
+    {
+        Result = 3;
+    }
+    else if (Codepoint <= 0x10FFFF)
+    {
+        Result = 4;
+    }
+    else
+    {
+        Assert(false);
+    }
+    return Result;
+}
+
+void UTF8_From_Codepoint(uint32_t Codepoint, uint8_t* Buffer, uint32_t* Length)
+{
+    uint32_t Offset = 0;
+    if (Codepoint <= 0x7F)
+    {
+        Buffer[0] = (uint8_t)Codepoint;
+        Offset = 1;
+    }
+    else if (Codepoint <= 0x7FF)
+    {
+        Buffer[0] = (BITMASK_2 << 6) | ((Codepoint >> 6) & BITMASK_5);
+        Buffer[1] = BIT_8 | (Codepoint & BITMASK_6);
+        Offset = 2;
+    }
+    else if (Codepoint <= 0xFFFF)
+    {
+        Buffer[0] = (BITMASK_3 << 5) | ((Codepoint >> 12) & BITMASK_4);
+        Buffer[1] = BIT_8 | ((Codepoint >> 6) & BITMASK_6);
+        Buffer[2] = BIT_8 | ( Codepoint       & BITMASK_6);
+        Offset = 3;
+    }
+    else if (Codepoint <= 0x10FFFF)
+    {
+        Buffer[0] = (BITMASK_4 << 3) | ((Codepoint >> 18) & BITMASK_3);
+        Buffer[1] = BIT_8 | ((Codepoint >> 12) & BITMASK_6);
+        Buffer[2] = BIT_8 | ((Codepoint >>  6) & BITMASK_6);
+        Buffer[3] = BIT_8 | ( Codepoint        & BITMASK_6);
+        Offset = 4;
+    }
+    else
+    {
+        Assert(false);
+        Buffer[0] = '?';
+        Offset = 1;
+    }
+    
+    if(Length) *Length = Offset;
 }
 
 uint32_t UTF16_Read(const uint16_t* At)

@@ -13,3 +13,6 @@
 [submodule "Source/ThirdParty/harfbuzz"]
 	path = Source/ThirdParty/harfbuzz
 	url = https://github.com/JJ-Karambasis/harfbuzz.git
+[submodule "Source/ThirdParty/SheenBidi"]
+	path = Source/ThirdParty/SheenBidi
+	url = https://github.com/JJ-Karambasis/SheenBidi.git

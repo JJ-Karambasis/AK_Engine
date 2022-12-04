@@ -8,7 +8,7 @@ runtime_os* OS_Init()
     Zero_Struct(&Result, win32_runtime_os);
     
     Win32_Get_Main_Allocator(&Result.Allocator);
-    Result.Arena = Arena_Create(Get_Base_Allocator(&Result.Allocator), Kilo(32));
+    Result.OS.Arena = Arena_Create(Get_Base_Allocator(&Result.Allocator), Kilo(32));
     QueryPerformanceFrequency((LARGE_INTEGER*)&Result.ClockFrequency);
     
     OS_Set(&Result.OS);

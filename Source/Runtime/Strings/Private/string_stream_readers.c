@@ -17,64 +17,12 @@ bool8_t UTF8_Stream_Reader_Is_Valid(utf8_stream_reader* Reader)
     return Reader->Used < Reader->Size;
 }
 
-static const uint8_t G_ClassUTF8[32] = 
-{
-    1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,2,2,2,2,3,3,4,5,
-};
-
 uint32_t UTF8_Stream_Reader_Consume(utf8_stream_reader* Reader)
 {
-    uint32_t Result = 0xFFFFFFFF;
-    
-    uint8_t Byte = Reader->Str[Reader->Used];
-    uint8_t ByteClass = G_ClassUTF8[Byte >> 3];
-    Assert((Reader->Used+ByteClass) <= Reader->Size);
-    
-    switch(ByteClass)
-    {
-        case 1:
-        {
-            Result = Byte;
-        } break;
-        
-        case 2:
-        {
-            uint8_t NextByte = Reader->Str[Reader->Used+1];
-            if(G_ClassUTF8[NextByte >> 3] == 0)
-            {
-                Result = (Byte & BITMASK_5) << 6;
-                Result |= (NextByte & BITMASK_6);
-            }
-        } break;
-        
-        case 3:
-        {
-            uint8_t NextBytes[2] = {Reader->Str[Reader->Used+1], Reader->Str[Reader->Used+2]};
-            if(G_ClassUTF8[NextBytes[0] >> 3] == 0 &&
-               G_ClassUTF8[NextBytes[1] >> 3] == 0)
-            {
-                Result = (Byte & BITMASK_4) << 12;
-                Result |= ((NextBytes[0] & BITMASK_6) << 6);
-                Result |= (NextBytes[1] & BITMASK_6);
-            }
-        } break;
-        
-        case 4:
-        {
-            uint32_t NextBytes[3] = {Reader->Str[Reader->Used+1], Reader->Str[Reader->Used+2], Reader->Str[Reader->Used+3]};
-            if(G_ClassUTF8[NextBytes[0] >> 3] == 0 &&
-               G_ClassUTF8[NextBytes[1] >> 3] == 0 &&
-               G_ClassUTF8[NextBytes[2] >> 3] == 0)
-            {
-                Result = (Byte & BITMASK_3) << 18;
-                Result |= ((NextBytes[0] & BITMASK_6) << 12);
-                Result |= ((NextBytes[1] & BITMASK_6) << 6);
-                Result |= (NextBytes[2] & BITMASK_6);
-            }
-        } break;
-    }
-    
-    Reader->Used += ByteClass;
+    Assert(Reader->Used <= Reader->Size);
+    uint32_t Length = 0;
+    uint32_t Result = UTF8_Read(Reader->Str + Reader->Used, &Length);
+    Reader->Used += Length;
     return Result;
 }
 

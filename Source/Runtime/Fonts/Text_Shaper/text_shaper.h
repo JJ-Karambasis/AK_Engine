@@ -16,13 +16,13 @@ typedef struct shape_list
     uint64_t Count;
 } shape_list;
 
-#define TEXT_SHAPER_SHAPE(name) shape_list name(text_shaper* _Shaper, allocator* Allocator, str8 Text)
+#define TEXT_SHAPER_SHAPE(name) shape_list name(text_shaper* _Shaper, allocator* Allocator, str8 Text, uint64_t TextOffset, uint64_t TextLength, bidi_direction Direction, bidi_script Script, strc LanguageTag, uint32_t PixelSize)
 #define TEXT_SHAPER_DELETE(name) void name(text_shaper* _Shaper)
 
 typedef TEXT_SHAPER_SHAPE(text_shaper_shape);
 typedef TEXT_SHAPER_DELETE(text_shaper_delete);
 
-#define Text_Shaper_Shape(Shaper, Allocator, Text) (Shaper)->_VTable->Shape(Shaper, Allocator, Text)
+#define Text_Shaper_Shape(Shaper, Allocator, Text, TextOffset, TextLength, Direction, Script, LanguageTag, PixelSize) (Shaper)->_VTable->Shape(Shaper, Allocator, Text, TextOffset, TextLength, Direction, Script, LanguageTag, PixelSize)
 #define Text_Shaper_Delete(Shaper) (Shaper)->_VTable->Delete(Shaper)
 
 typedef struct text_shaper_vtable

@@ -54,6 +54,7 @@ typedef int32_t bool32_t;
 #endif
 
 #define Invalid_Default_Case default: { Assert(false); } break
+#define Invalid_Code() Assert(false)
 #define Set_VTable(Struct, Table) (Struct)->_VTable = Table
 
 #if defined(COMPILER_MSVC)
@@ -395,5 +396,11 @@ uint32_t Hash_U32(uint32_t Key);
 uint32_t Hash_U64(uint64_t Key);
 uint32_t Hash_Ptr(size_t Key);
 uint32_t Hash_Combine(uint32_t HashA, uint32_t HashB);
+
+typedef struct range_u32
+{
+    uint32_t Min;
+    uint32_t Max;
+} range_u32;
 
 #endif

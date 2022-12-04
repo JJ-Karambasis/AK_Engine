@@ -3,7 +3,8 @@
 
 typedef struct runtime_os
 {
-    void* EditorOS;
+    arena* Arena;
+    void*  EditorOS;
 } runtime_os;
 
 typedef struct allocator allocator;

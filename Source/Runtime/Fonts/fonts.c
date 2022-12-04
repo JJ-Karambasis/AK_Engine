@@ -2,3 +2,4 @@
 #include "Text_Shaper/text_shaper.c"
 #include "Private/glyph_font.c"
 #include "Private/glyph_cache.c"
+#include "Private/bidi.c"
