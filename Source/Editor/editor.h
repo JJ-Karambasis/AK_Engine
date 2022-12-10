@@ -2,13 +2,10 @@
 #define EDITOR_H
 
 #include <Core/core.h>
+#include <Engine_Console/engine_console.h>
 #include <GPU/gpu.h>
-//#include <Glyphs/glyphs.h>
 #include <Fonts/fonts.h>
-#include <Resource_Manager/resource_manager.h>
 
-//typedef struct editor editor;
-//#include <Editor_UI/editor_ui.h>
 typedef struct editor_window
 {
     os_window*            Window;
@@ -28,7 +25,8 @@ typedef struct editor
     editor_window*      MainWindow;
     glyph_generator*    GlyphGenerator;
     glyph_cache*        GlyphCache;
-    resource_manager*   ResourceManager;
+    os_font_loader*     FontLoader;
+    engine_console*     EngineConsole;
 } editor;
 
 editor*        Editor_Init();

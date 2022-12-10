@@ -6,6 +6,13 @@ editor_os* Editor_OS_Init()
     win32_editor_os* EditorOS = Arena_Push_Struct(OS->OS.Arena, win32_editor_os);
     Zero_Struct(EditorOS, win32_editor_os);
     EditorOS->EventManager.Arena = Arena_Create(Get_Base_Allocator(OS->OS.Arena), Kilo(128));
+    EditorOS->DWriteLibrary = LoadLibraryA("DWrite.dll");
+    if(!EditorOS->DWriteLibrary)
+    {
+        //TODO(JJ): Fallback to something else?
+        //TODO(JJ): Diagnostic and error logging
+        return NULL;
+    }
     
     return (editor_os*)EditorOS;
 }

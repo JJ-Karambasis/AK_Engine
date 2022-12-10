@@ -57,8 +57,6 @@ void Draw_Text(gpu_ui_pass* UIPass, gpu_sampler* Sampler, glyph_font* Font, glyp
             PixelP.x = InitialP.x; 
         }
     }
-    
-    int x = 0;
 }
 
 int main(int ArgumentCount, char** Arguments)
@@ -92,80 +90,15 @@ editor* Editor_Init()
     Editor->DeviceGPU = GPU_Set_Device(Editor->ContextGPU, Editor->ContextGPU->DeviceList.Devices[0]);
     
     Editor_Set(Editor);
-    
-    Editor->ResourceManager = Resource_Manager_Create(Get_Base_Allocator(Editor->Arena), Editor->DataPath);
-    if(!Editor->ResourceManager)
-    {
-        //TODO(JJ): Diagnostic and error logging
-        return NULL;
-    }
-    
     arena* Scratch = Core_Get_Thread_Context()->Scratch;
-#if 0 
-    Language_Manager_Add_Global_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "MaterialIcons-Regular.ttf"));
-    
-    Language_Manager_Begin_Language_Pack(&Editor->Langauges, "en");
-    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "en.lang")->Path);
-    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "LiberationMono-Regular.ttf")->Path);
-    Language_Manager_End_Language_Pack(&Editor->Languages);
-    
-    Language_Manager_Begin_Language_Pack(&Editor->Langauges, "es");
-    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "es.lang")->Path);
-    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "LiberationMono-Regular.ttf")->Path);
-    Language_Manager_End_Language_Pack(&Editor->Languages);
-    
-    Language_Manager_Begin_Language_Pack(&Edtior->Languages, "ar");
-    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "ar.lang")->Path);
-    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "(A) Arslan Wessam A (A) Arslan Wessam A.ttf")->Path);
-    Language_Manager_End_Language_Pack(&Editor->Languages);
-    
-    Language_Manager_Begin_Language_Pack(&Editor->Langauges, "ja");
-    Language_Manager_Add_Dictionary(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_LANGUAGE, "ja.lang")->Path);
-    Language_Manager_Add_Font(&Editor->Languages, Resource_Manager_Get(&Editor->ResourceManager, RESOURCE_FONT, "Gen Jyuu Gothic L Monospace Regular.ttf")->Path);
-    Language_Manager_End_Language_Pack(&Editor->Languages);
-    
-    Language_Manager_Set_Language_Pack(&Editor->Languages, "en");
-    
-    str16 Value = Language_Manager_Get_Key(&Editor->Languages, Str8_Lit("ExampleKey"));
-#endif
     
     Editor->MainWindow = Editor_Create_Window(1280, 720, Str8_Lit("AK Engine"), 0);
+    Editor->EngineConsole = Engine_Console_Create(Get_Base_Allocator(Editor->Arena));
+    Editor->FontLoader = OS_Font_Loader_Create(Get_Base_Allocator(Editor->Arena));
     Editor->GlyphGenerator = FT_Glyph_Generator_Create(Get_Base_Allocator(Editor->Arena));
     Editor->GlyphCache = Glyph_Cache_Create(Get_Base_Allocator(Editor->Arena), GPU_Get_Resource_Manager(Editor->DeviceGPU), 1024);
     
     return Editor;
-}
-
-static int FontCount = 0;
-int Enum_Font_Proc(const LOGFONTW* LogFont, const TEXTMETRICW* TextMetric, DWORD FontType, LPARAM LParam)
-{
-    if(FontType == TRUETYPE_FONTTYPE)
-    {
-        if(!LParam)
-        {
-            HDC DeviceContext = GetDC(NULL);
-            LOGFONTW PLogFont = *LogFont;
-            EnumFontFamiliesExW(DeviceContext, &PLogFont, (FONTENUMPROCW)Enum_Font_Proc, 1, 0);
-            ReleaseDC(NULL, DeviceContext);
-        }
-        else
-        {
-            if(LogFont->lfCharSet == ANSI_CHARSET)
-            {
-                int x = 0;
-            }
-            else if(LogFont->lfCharSet == SHIFTJIS_CHARSET)
-            {
-                int x = 0;
-            }
-            else if(LogFont->lfCharSet == ARABIC_CHARSET)
-            {
-                int x = 0;
-            }
-        }
-        FontCount++;
-    }
-    return 1;
 }
 
 void Editor_Update()
@@ -173,18 +106,6 @@ void Editor_Update()
     editor* Editor = Editor_Get();
     
     arena* Scratch = Core_Get_Thread_Context()->Scratch;
-    
-    HDC DeviceContext = GetDC(NULL);
-    
-    LOGFONTW LogFont;
-    Zero_Struct(&LogFont, LOGFONTW);
-    
-    LogFont.lfCharSet = DEFAULT_CHARSET;
-    LogFont.lfFaceName[0] = '\0';
-    
-    EnumFontFamiliesExW(DeviceContext, &LogFont, (FONTENUMPROCW)Enum_Font_Proc, 0, 0);
-    
-    ReleaseDC(NULL, DeviceContext);
     
     gpu_device_context* DeviceGPU = Editor->DeviceGPU;
     gpu_display_manager* DisplayManager = GPU_Get_Display_Manager(DeviceGPU);
@@ -208,19 +129,11 @@ void Editor_Update()
     SamplerCreateInfo.MagFilter = GPU_SAMPLER_FILTER_LINEAR;
     SamplerCreateInfo.AddressModeU = GPU_SAMPLER_ADDRESS_MODE_CLAMP;
     SamplerCreateInfo.AddressModeV = GPU_SAMPLER_ADDRESS_MODE_CLAMP;
-    
     gpu_sampler* LinearSampler = GPU_Resource_Manager_Create_Sampler(ResourceManager, &SamplerCreateInfo);
     
     bool32_t IsLooping = true;
     
-    u32_list CodepointListU32;
-    Zero_Struct(&CodepointListU32, u32_list);
-    
     uint64_t StartClock = OS_QPC();
-    
-    buffer FileBuffer;
-    OS_Read_Entire_File_Null_Term(&FileBuffer, Get_Base_Allocator(Editor->Arena), Str8_Lit("Data/test2.txt"));
-    str8 Str = Str8(FileBuffer.Ptr, FileBuffer.Size);
     
     static char* CharAt;
     while(IsLooping)
@@ -262,10 +175,20 @@ void Editor_Update()
                     ColorFramebuffer = GPU_Resource_Manager_Create_Framebuffer(ResourceManager, &FramebufferCreateInfo);
                 } break;
                 
+                case OS_EVENT_TYPE_KEY_PRESSED:
+                {
+                    OS_Debug_Log(Str8_Lit("Pressed %d\n"), Event->KeyPressed.Keycode);
+                } break;
+                
+                case OS_EVENT_TYPE_KEY_RELEASED:
+                {
+                    OS_Debug_Log(Str8_Lit("Released %d\n"), Event->KeyPressed.Keycode);
+                } break;
+                
                 case OS_EVENT_TYPE_TEXT_INPUT:
                 {
                     uint32_t Codepoint = Event->TextInputUTF32;
-                    U32_List_Push(&CodepointListU32, Get_Base_Allocator(Editor->Arena), Codepoint);
+                    OS_Debug_Log(Str8_Lit("Char %d\n"), Codepoint);
                 } break;
             }
             
@@ -273,14 +196,6 @@ void Editor_Update()
         }
         
         GPU_Cmd_Buffer_Reset(CmdBuffer);
-        
-        static glyph_font* DEBUGFont;
-        if(!DEBUGFont)
-        {
-            DEBUGFont = Glyph_Font_Create(Get_Base_Allocator(Editor->Arena), 
-                                          Editor->GlyphGenerator, Resource_Manager_Get(Editor->ResourceManager, RESOURCE_FONT, 
-                                                                                       Str8_Lit("LiberationMono-Regular"))->Data);
-        }
         
         gpu_display* MainDisplay = Editor->MainWindow->Display;
         
@@ -297,11 +212,6 @@ void Editor_Update()
         BeginInfo.FramebufferInfo.Framebuffer = ColorFramebuffer;
         
         gpu_ui_pass* UIPass = GPU_Cmd_Buffer_Begin_UI_Pass(CmdBuffer, &BeginInfo);
-        
-        //str8 Str = Str8_Lit("Hello, World. My fi is fucking sik. Æ bro");
-        
-        str8 TempStr = Str8_Lit("یہ ایک )car( ہے۔");
-        Draw_Text(UIPass, LinearSampler, DEBUGFont, Editor->GlyphCache, Str, V2(12.0f, 24.0f), 24, V4(1.0f, 1.0f, 1.0f, 1.0f));
         
         GPU_Cmd_Copy_Texture_To_Display(CmdBuffer, MainDisplay, 0, 0, RenderTarget, 0, 0, Safe_S64_U32(WindowDim.x), Safe_S64_U32(WindowDim.y));
         
@@ -372,6 +282,6 @@ editor* Editor_Get()
 }
 
 #include <Core/core.c>
+#include <Engine_Console/engine_console.c>
 #include <Fonts/fonts.c>
 #include <GPU/gpu.c>
-#include <Resource_Manager/resource_manager.c>
