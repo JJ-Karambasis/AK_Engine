@@ -1,0 +1,6 @@
+[submodule "code/dependencies/ak_lib"]
+	path = code/dependencies/ak_lib
+	url = https://github.com/JJ-Karambasis/ak_lib.git
+[submodule "code/dependencies/stb"]
+	path = code/dependencies/stb
+	url = https://github.com/nothings/stb.git

@@ -1,0 +1,8 @@
+## Common includes
+*.exe 
+*.pdb 
+*.raddbg
+*.obj 
+*.o
+
+.vscode/settings.json
