@@ -8,6 +8,11 @@ u32 UTF8_Write(char* Str, u32 Codepoint);
 u32 UTF16_Read(const wchar_t* Str, u32* OutLength);
 u32 UTF16_Write(wchar_t* Str, u32 Codepoint);
 
+enum class str_case {
+    Sensitive,
+    Insensitive
+};
+
 #define String_Lit(str) string(str, sizeof(str)-1)
 
 struct wstring;
@@ -24,6 +29,9 @@ struct string {
     string(allocator* Allocator, const char* Format, ...);
     const char& operator[](uptr Index) const;
 };
+
+bool operator==(string A, string B);
+bool String_Equals(string A, string B, str_case Case = str_case::Sensitive);
 
 string String_To_Date_Format(allocator* Allocator, u32 Value);
 string String_To_Millisecond_Format(allocator* Allocator, u32 Value);

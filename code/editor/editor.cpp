@@ -1,13 +1,72 @@
-#include <core.h>
+#include <engine.h>
+#include "editor_modules.h"
+#include <os/os_event.h>
 #include "os/os.h"
+
+void Fatal_Error_Message() {
+    OS_Message_Box("A fatal error occurred during initialization!\nPlease view the error logs for more info.", "Error");
+}
 
 int main() {
     if(!Core_Create()) {
         OS_Message_Box("A fatal error occurred during initialization!", "Error");
+        return 1;
     }
 
-    Core_Delete();
+    if(!OS_Create()) {
+        Fatal_Error_Message();
+        return 1;
+    }
 
+    os_window_id MainWindowID = OS_Create_Window({
+        .Width = 1920,
+        .Height = 1080,
+        .Title = String_Lit("AK_Engine")
+    });
+
+    gdi* GDI = GDI_Create({});
+    if(!GDI) {
+        Fatal_Error_Message();
+        return 1;
+    }
+
+    u32 DeviceCount = GDI_Get_Device_Count(GDI);
+    if(!DeviceCount) {
+        Fatal_Error_Message();
+        return 1;
+    }
+
+    //Right now we are just grabbing the first gpu. 
+    //We probably want to choose dedicated gpus over integrated 
+    //ones in the future
+    gdi_device Device;
+    GDI_Get_Device(GDI, &Device, 0);
+
+    Log_Info(modules::Editor, "Started creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
+
+    gdi_context* GDIContext = GDI_Create_Context(GDI, { });
+    if(!GDIContext) {
+        Fatal_Error_Message();
+        return 1;
+    }
+
+    Log_Info(modules::Editor, "Finished creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
+
+    while(MainWindowID) {
+        while(const os_event* Event = OS_Next_Event()) {
+            switch(Event->Type) {
+                case OS_EVENT_TYPE_WINDOW_CLOSED: {
+                    OS_Delete_Window(Event->WindowID);
+                    if(Event->WindowID == MainWindowID) {
+                        MainWindowID = 0;
+                    }
+                } break;
+            }
+        }      
+    }
+
+    OS_Delete();
+    Core_Delete();
     return 0;
 }
 

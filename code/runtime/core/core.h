@@ -229,14 +229,15 @@ typedef intptr_t  sptr;
 #include "threads.h"
 #include "datetime.h"
 #include "log.h"
+#include "array.h"
 
-typedef struct {
+struct allocator_tracker_manager {
 	ak_mutex 		   TrackAllocLock;
 	ak_mutex           TrackTreeLock;
 	arena*             TrackerArena;
 	allocator_tracker* FirstFreeTracker;
 	allocator_tracker* RootTracker;
-} allocator_tracker_manager;
+};
 
 struct core {
     virtual_allocator*        VirtualAllocator;

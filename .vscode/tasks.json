@@ -7,12 +7,12 @@
             "label": "build win32",
             "type": "shell",
             "windows": {
-                "command": "${workspaceFolder}/build/win32/build.bat clang debug x64"
+                "command": "${workspaceFolder}/build/win32/build.bat debug x64"
             },
             "options": {
                 "cwd": "${workspaceFolder}/build/win32"
             },
-            "problemMatcher": ["$msCompile"],
+            "problemMatcher": ["$msCompile", "$gcc"],
             "group": {
                 "kind": "build",
                 "isDefault": true

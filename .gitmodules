@@ -4,3 +4,6 @@
 [submodule "code/dependencies/stb"]
 	path = code/dependencies/stb
 	url = https://github.com/nothings/stb.git
+[submodule "code/dependencies/Vulkan-Headers"]
+	path = code/dependencies/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git

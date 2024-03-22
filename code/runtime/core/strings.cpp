@@ -204,6 +204,34 @@ const char& string::operator[](uptr Index) const {
     return Str[Index];
 }
 
+bool operator==(string A, string B) {
+    return String_Equals(A, B);
+}
+
+bool String_Equals(string A, string B, str_case Case) {
+    if(A.Size != B.Size) return false;
+
+    if(Case == str_case::Sensitive) {
+        for(uptr i = 0; i < A.Size; i++) {
+            char CharA = A[i];
+            char CharB = B[i];
+            if(CharA != CharB) {
+                return false;
+            }
+        }
+    } else {
+        for(uptr i = 0; i < A.Size; i++) {
+            char CharA = To_Lower(A[i]);
+            char CharB = To_Lower(B[i]);
+            if(CharA != CharB) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 inline string String_To_Date_Format(allocator* Allocator, u32 Value) {
     return Value < 10 ? string(Allocator, "0%d", Value) : string(Allocator, "%d", Value);
 }

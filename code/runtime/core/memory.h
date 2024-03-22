@@ -40,7 +40,7 @@ inline type* Zero_Array(type* Ptr, uptr Count) {
 }
 
 template <typename type>
-inline type* Copy_Array(type* Dst, const type* Src, uptr Count) {
+inline type* Array_Copy(type* Dst, const type* Src, uptr Count) {
     return (type*)Memory_Copy(Dst, Src, sizeof(type)*Count);
 }
 
@@ -140,9 +140,9 @@ struct arena : public allocator {
 	arena_block* CurrentBlock;
 };
 
-arena* 		 Arena_Create(allocator* ParentAllocator, uptr MinimumBlockSize);
+arena* 		 Arena_Create(allocator* ParentAllocator, uptr MinimumBlockSize = (uptr)-1);
 void 		 Arena_Delete(arena* Arena);
-void*  		 Arena_Push(arena* Arena, uptr Size, uptr Alignment, allocator_clear_flag ClearFlag = DEFAULT_CLEAR_FLAG);
+void*  		 Arena_Push(arena* Arena, uptr Size, uptr Alignment = DEFAULT_ALIGNMENT, allocator_clear_flag ClearFlag = DEFAULT_CLEAR_FLAG);
 arena_marker Arena_Get_Marker(arena* Arena);
 void 		 Arena_Set_Marker(arena* Arena, arena_marker* Marker);
 void 		 Arena_Clear(arena* Arena);
@@ -204,7 +204,7 @@ struct heap : public allocator {
 
 };
 
-heap* Heap_Create(allocator* ParentAllocator, uptr MinimumBlockSize);
+heap* Heap_Create(allocator* ParentAllocator, uptr MinimumBlockSize = (uptr)-1);
 void  Heap_Delete(heap* Heap);
 void* Heap_Allocate(heap* Heap, uptr Size, allocator_clear_flag ClearFlag = DEFAULT_CLEAR_FLAG);
 void  Heap_Free(heap* Heap, void* Memory);

@@ -1,8 +1,9 @@
-## Common includes
+## Common build extensions
 *.exe 
 *.pdb 
 *.raddbg
 *.obj 
 *.o
 
+## vscode 
 .vscode/settings.json
