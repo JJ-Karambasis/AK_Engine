@@ -1,6 +1,15 @@
 #ifndef VK_SWAPCHAIN_H
 #define VK_SWAPCHAIN_H
 
+struct vk_swapchain {
+    VkSurfaceKHR   Surface;
+    VkSwapchainKHR Swapchain;
+};
+
+struct vk_swapchain_manager {
+    vk_resource_manager ResourceManager;
+};
+
 internal string VK_Get_Surface_Extension_Name();
 internal bool VK_Is_Surface_Extension(string ExtensionName);
 internal void VK_Set_Surface_Extension(vk_instance_extension_support* InstanceExtensions);

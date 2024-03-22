@@ -54,6 +54,8 @@ struct gdi_window_data {
 };
 
 struct gdi_context_create_info {
+    u32 DeviceIndex = 0;
+    ak_job_system* JobSystem = nullptr;
 };
 
 gdi*         GDI_Create(const gdi_create_info& CreateInfo);
@@ -61,5 +63,7 @@ void         GDI_Delete(gdi* GDI);
 u32          GDI_Get_Device_Count(gdi* GDI);
 void         GDI_Get_Device(gdi* GDI, gdi_device* Device, u32 DeviceIndex);
 gdi_context* GDI_Create_Context(gdi* GDI, const gdi_context_create_info& CreateInfo);
+
+void GDI_Context_Delete(gdi_context* Context);
 
 #endif

@@ -310,8 +310,78 @@ internal bool VK_Create__Internal(gdi* GDI, const gdi_create_info& CreateInfo) {
         return false;
     }
 
-
     return true;
+}
+
+
+bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_context_create_info& CreateInfo) {
+    Assert(CreateInfo.JobSystem);
+    
+    vk_device* Device = &GDI->Devices[CreateInfo.DeviceIndex];
+
+    f32 Priority = 1.0f;
+    u32 DeviceQueueCreateCount = 1;
+    VkDeviceQueueCreateInfo DeviceQueueCreateInfos[2] = { {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .queueFamilyIndex = Device->GraphicsQueueFamilyIndex,
+        .queueCount = 1,
+        .pQueuePriorities = &Priority
+    }};
+
+    if(Device->PresentQueueFamilyIndex != Device->GraphicsQueueFamilyIndex) {
+        DeviceQueueCreateCount = 2; 
+        DeviceQueueCreateInfos[1] = {
+            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            .queueFamilyIndex = Device->GraphicsQueueFamilyIndex,
+            .queueCount = 1,
+            .pQueuePriorities = &Priority
+        };
+    }
+
+    u32 MaxExtensionCount;
+    vkEnumerateDeviceExtensionProperties(Device->PhysicalDevice, VK_NULL_HANDLE, &MaxExtensionCount, VK_NULL_HANDLE);
+
+    scratch Scratch = Scratch_Get();
+    array<const char*> Extensions(&Scratch, MaxExtensionCount);
+
+    vk_device_extension_support* DeviceInfo = &Device->DeviceInfo;
+
+    Assert(DeviceInfo->SwapchainKHR);
+    Array_Push(&Extensions, (const char*)VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+#ifdef VK_ENABLE_BETA_EXTENSIONS
+    Array_Push(&Extensions, (const char*)VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+#endif
+
+    VkDeviceCreateInfo DeviceCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .queueCreateInfoCount = DeviceQueueCreateCount,
+        .pQueueCreateInfos = DeviceQueueCreateInfos,
+        .enabledExtensionCount = Safe_U32(Extensions.Count),
+        .ppEnabledExtensionNames = Extensions.Ptr
+    };
+
+    Context->JobSystem = CreateInfo.JobSystem;
+    Context->PhysicalDevice = Device;
+    Context->VKAllocator = &GDI->VKAllocator;
+    if(vkCreateDevice(Device->PhysicalDevice, &DeviceCreateInfo, Context->VKAllocator, &Context->Device) != VK_SUCCESS) {
+        //todo: Logging
+        return false;
+    }
+
+    vkGetDeviceQueue(Context->Device, Device->GraphicsQueueFamilyIndex, 0, &Context->GraphicsQueue);
+    if(Device->GraphicsQueueFamilyIndex != Device->PresentQueueFamilyIndex) {
+        vkGetDeviceQueue(Context->Device, Device->PresentQueueFamilyIndex, 0, &Context->PresentQueue);
+    } else {
+        Context->PresentQueue = Context->GraphicsQueue;
+    }
+
+    VK_Load_Device_Funcs(GDI, Context);
+    return true;
+}
+
+vk_frame_context* VK_Get_Current_Frame_Context(gdi_context* Context) {
+    return &Context->Frames[Context->CurrentFrameIndex];
 }
 
 gdi* GDI_Create(const gdi_create_info& CreateInfo) {
@@ -349,8 +419,21 @@ void GDI_Get_Device(gdi* GDI, gdi_device* Device, u32 DeviceIndex) {
 }
 
 gdi_context* GDI_Create_Context(gdi* GDI, const gdi_context_create_info& CreateInfo) {
-    return NULL;
+    arena* Arena = Arena_Create(GDI->MainAllocator);
+    gdi_context* Result = Arena_Push_Struct(Arena, gdi_context);
+    Result->Arena = Arena;
+    if(!GDI_Create_Context__Internal(Result, GDI, CreateInfo)) {
+        GDI_Context_Delete(Result);
+        return NULL;
+    }
+
+    return Result;
+}
+
+void GDI_Context_Delete(gdi_context* Context) {
+    Not_Implemented();
 }
 
 #include "vk_swapchain.cpp"
+#include "vk_resource.cpp"
 #include "vk_functions.cpp"

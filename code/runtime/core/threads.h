@@ -13,7 +13,7 @@ struct scratch : public allocator {
 
 scratch Scratch_Get();
 void    Scratch_Release();
-void*   Scratch_Push(scratch* Scratch, uptr Size, uptr Alignment, allocator_clear_flag ClearFlag = DEFAULT_CLEAR_FLAG);
+void*   Scratch_Push(scratch* Scratch, uptr Size, uptr Alignment = DEFAULT_ALIGNMENT, allocator_clear_flag ClearFlag = DEFAULT_CLEAR_FLAG);
 
 #define Scratch_Push_Struct(scratch, type) (type*)Scratch_Push(scratch, sizeof(type), alignof(type))
 #define Scratch_Push_Array(scratch, count, type) (type*)Scratch_Push(scratch, sizeof(type)*count, alignof(type))

@@ -229,6 +229,7 @@ typedef intptr_t  sptr;
 #include "threads.h"
 #include "datetime.h"
 #include "log.h"
+#include "fixed_array.h"
 #include "array.h"
 
 struct allocator_tracker_manager {

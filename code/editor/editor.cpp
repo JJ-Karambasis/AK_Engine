@@ -42,9 +42,15 @@ int main() {
     gdi_device Device;
     GDI_Get_Device(GDI, &Device, 0);
 
-    Log_Info(modules::Editor, "Started creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
+    u32 TotalThreadCount = AK_Get_Processor_Thread_Count();
+    u32 HighPriorityThreadCount = TotalThreadCount - (TotalThreadCount / 4);
+    u32 LowPriorityThreadCount  = Min(TotalThreadCount-HighPriorityThreadCount, 1);
 
-    gdi_context* GDIContext = GDI_Create_Context(GDI, { });
+    ak_job_system* JobSystemHigh = Core_Create_Job_System(1024, HighPriorityThreadCount, 1024);
+    ak_job_system* JobSystemLow = Core_Create_Job_System(1024, LowPriorityThreadCount, 0);
+
+    Log_Info(modules::Editor, "Started creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
+    gdi_context* GDIContext = GDI_Create_Context(GDI, { .JobSystem = JobSystemLow });
     if(!GDIContext) {
         Fatal_Error_Message();
         return 1;
