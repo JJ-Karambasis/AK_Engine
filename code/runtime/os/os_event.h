@@ -8,6 +8,7 @@ typedef uint64_t os_window_id;
 enum os_event_type {
     OS_EVENT_TYPE_NONE,
     OS_EVENT_TYPE_WINDOW_CLOSED,
+    OS_EVENT_TYPE_WINDOW_RESIZE,
 #ifdef TEST_BUILD
     OS_EVENT_TYPE_TEST,
 #endif
@@ -17,6 +18,11 @@ enum os_event_type {
 struct os_event {
     os_event_type Type;
     os_window_id  WindowID;
+};
+
+struct os_event_window_resize : public os_event {
+    u32 Width;
+    u32 Height;
 };
 
 #ifdef TEST_BUILD
@@ -86,6 +92,7 @@ struct os_event_manager {
 static const uptr G_OSEventTypeSize[] = {
     0,
     sizeof(os_event),
+    sizeof(os_event_window_resize),
 #ifdef TEST_BUILD
     sizeof(os_event_test),
 #endif

@@ -1,9 +1,15 @@
-#include <core.h>
+#ifndef DEBUG_BUILD
+#define DEBUG_BUILD
+#endif
+
+#include <engine.h>
 #include <os/os_event.h>
 
 
 #include "utest.h"
 #include "os_event_tests.cpp"
+
+#include "resource_tests.cpp"
 
 UTEST_STATE();
 int main(int ArgCount, char* Args[]) {
@@ -17,5 +23,6 @@ int main(int ArgCount, char* Args[]) {
     return Result;
 }
 
+#include <resources/resource.cpp>
 #include <core.cpp>
 #include <os/os_event.cpp>

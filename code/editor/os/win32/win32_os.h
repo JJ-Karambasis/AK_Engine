@@ -1,7 +1,7 @@
 #ifndef WIN32_OS_H
 #define WIN32_OS_H
 
-#include <core.h>
+#include <engine.h>
 #include <os/os_event.h>
 #include <os.h>
 #include <os/win32/win32_shared.h>
@@ -18,13 +18,17 @@ struct os_window_title {
 };
 
 struct os_window {
-    os_window_id        ID;
-    uint32_t            Width;
-    uint32_t            Height;
-    os_window_title     Title;
-    os_window_flags     Flags;
-    ak_auto_reset_event CreationEvent;
-    HWND                Window;
+    os_window_id            ID;
+    gdi_swapchain           Swapchain;
+    uint32_t                Width;
+    uint32_t                Height;
+    os_window_title         Title;
+    os_window_flags         Flags;
+    gdi_format              TargetFormat;
+    gdi_format              Format;
+    gdi_texture_usage_flags UsageFlags;
+    ak_event                CreationEvent;
+    HWND                    Window;
 };
 
 struct os_window_storage {
@@ -34,6 +38,7 @@ struct os_window_storage {
 
 struct os {
     arena*              Arena;
+    gdi_context*        GDIContext;
     os_window_storage   WindowStorage;
     ak_auto_reset_event ThreadInitEvent;
     ak_atomic_u32       IsRunning;

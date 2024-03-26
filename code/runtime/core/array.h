@@ -15,6 +15,9 @@ struct array {
         Assert(Index < Count);
         return Ptr[Index];
     }
+
+    inline type* begin() { return Ptr; }
+    inline type* end() { return Ptr+Count; }
 };
 
 template <typename type>

@@ -3,6 +3,7 @@
 
 #include <core/core.h>
 #include <gdi/gdi.h>
+#include <resources/resource.h>
 
 #include "modules.h"
 

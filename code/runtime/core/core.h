@@ -253,6 +253,8 @@ void  	   	   Core_Delete();
 allocator* 	   Core_Get_Base_Allocator();
 ak_job_system* Core_Create_Job_System(uint32_t MaxJobCount, uint32_t NumThreads, uint32_t NumDependencies);
 void           Core_Delete_Job_System(ak_job_system* JobSystem);
+ak_job_queue*  Core_Create_Job_Queue(uint32_t MaxJobCount, uint32_t NumThreads, uint32_t NumDependencies);
+void           Core_Delete_Job_Queue(ak_job_queue* JobQueue);
 core* 	       Core_Get();
 void  	   	   Core_Set(core* Core);
 

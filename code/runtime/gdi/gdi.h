@@ -1,6 +1,35 @@
 #ifndef GDI_H
 #define GDI_H
 
+enum gdi_format {
+    GDI_FORMAT_NONE,
+    GDI_FORMAT_R8G8_UNORM,
+    GDI_FORMAT_R8G8B8_UNORM,
+    GDI_FORMAT_R8G8B8A8_UNORM,
+    GDI_FORMAT_R8G8B8A8_SRGB,
+    GDI_FORMAT_B8G8R8A8_UNORM,
+    GDI_FORMAT_B8G8R8A8_SRGB,
+    GDI_FORMAT_R16G16B16A16_FLOAT,
+    GDI_FORMAT_R16_UINT,
+    GDI_FORMAT_R32_UINT,
+    GDI_FORMAT_R32_FLOAT,
+    GDI_FORMAT_R32G32_FLOAT,
+    GDI_FORMAT_R32G32B32_FLOAT,
+    GDI_FORMAT_D16_UNORM,
+    GDI_FORMAT_COUNT
+};
+
+enum {
+    GDI_TEXTURE_USAGE_FLAG_NONE,
+    GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT = (1 << 0),
+    GDI_TEXTURE_USAGE_FLAG_DEPTH_ATTACHMENT_BIT = (1 << 1),
+    GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT = (1 << 2)
+};
+typedef uint32_t gdi_texture_usage_flags;
+
+typedef uint64_t gdi_texture;
+typedef uint64_t gdi_swapchain;
+
 struct gdi;
 struct gdi_context;
 
@@ -53,17 +82,29 @@ struct gdi_window_data {
 #endif
 };
 
-struct gdi_context_create_info {
-    u32 DeviceIndex = 0;
-    ak_job_system* JobSystem = nullptr;
+struct gdi_swapchain_create_info {
+    gdi_window_data         WindowData;
+    gdi_format              TargetFormat;
+    gdi_texture_usage_flags UsageFlags;
 };
 
-gdi*         GDI_Create(const gdi_create_info& CreateInfo);
-void         GDI_Delete(gdi* GDI);
-u32          GDI_Get_Device_Count(gdi* GDI);
-void         GDI_Get_Device(gdi* GDI, gdi_device* Device, u32 DeviceIndex);
-gdi_context* GDI_Create_Context(gdi* GDI, const gdi_context_create_info& CreateInfo);
+struct gdi_context_create_info {
+    u32 DeviceIndex             = 0;
+    ak_job_queue* ResourceQueue = nullptr;
+    u32 TextureCount            = 1024;
+    u32 SwapchainCount          = 32;
+};
 
-void GDI_Context_Delete(gdi_context* Context);
+gdi*              GDI_Create(const gdi_create_info& CreateInfo);
+void              GDI_Delete(gdi* GDI);
+u32               GDI_Get_Device_Count(gdi* GDI);
+void              GDI_Get_Device(gdi* GDI, gdi_device* Device, u32 DeviceIndex);
+gdi_context*      GDI_Create_Context(gdi* GDI, const gdi_context_create_info& CreateInfo);
+
+void              GDI_Context_Delete(gdi_context* Context);
+array<gdi_format> GDI_Context_Supported_Window_Formats(gdi_context* Context, const gdi_window_data& WindowData, arena* Arena);
+gdi_swapchain     GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo);
+void              GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_swapchain Swapchain);
+void              GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_swapchain Swapchain);
 
 #endif

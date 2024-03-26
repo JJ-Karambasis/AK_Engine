@@ -20,6 +20,7 @@ void VK_Shared_Loader_Load_Instance_Default_Funcs(vk_shared_loader* Loader, VkIn
         VK_Load_Instance_Func(InstanceFuncs, vkGetPhysicalDeviceProperties);
         VK_Load_Instance_Func(InstanceFuncs, vkGetPhysicalDeviceMemoryProperties);
         VK_Load_Instance_Func(InstanceFuncs, vkGetDeviceQueue);
+        VK_Load_Instance_Func(InstanceFuncs, vkDestroyInstance);
         Loader->HasLoadedInstances = true;
     }
     
@@ -162,6 +163,7 @@ void VK_Shared_Loader_Load_Device_Default_Funcs(vk_shared_loader* Loader, VkInst
         VK_Load_Device_Func(DeviceFuncs, vkFreeMemory);
         VK_Load_Device_Func(DeviceFuncs, vkDestroyImage);
         VK_Load_Device_Func(DeviceFuncs, vkDestroyFramebuffer);
+        VK_Load_Device_Func(DeviceFuncs, vkDestroyDevice);
         Loader->HasLoadedDevices = true;
     }
 }

@@ -170,6 +170,17 @@ void Core_Delete_Job_System(ak_job_system* JobSystem) {
     AK_Job_System_Delete(JobSystem);
 }
 
+ak_job_queue* Core_Create_Job_Queue(uint32_t MaxJobCount, uint32_t NumThreads, uint32_t NumDependencies) {
+    ak_job_thread_callbacks ThreadCallbacks = {0};
+    ThreadCallbacks.JobThreadUpdate = Core_Job_System_Thread_Update;
+    ThreadCallbacks.JobThreadEnd = Core_Job_System_Thread_End;
+    return AK_Job_Queue_Create(MaxJobCount, NumThreads, NumDependencies, &ThreadCallbacks, NULL);
+}
+
+void Core_Delete_Job_Queue(ak_job_queue* JobQueue) {
+    AK_Job_Queue_Delete(JobQueue);
+}
+
 global core* G_Core;
 core* Core_Get() {
     Assert(G_Core);
@@ -195,8 +206,8 @@ void Core_Set(core* Core) {
 #include "strings.cpp"
 #include "utility.cpp"
 
-#define AK_JOB_SYSTEM_MALLOC(size, user_data) Allocator_Allocate_Memory(Core_Get_Base_Allocator(), size)
-#define AK_JOB_SYSTEM_FREE(memory, user_data) Allocator_Free_Memory(Core_Get_Base_Allocator(), memory)
+#define AK_JOB_MALLOC(size, user_data) Allocator_Allocate_Memory(Core_Get_Base_Allocator(), size)
+#define AK_JOB_FREE(memory, user_data) Allocator_Free_Memory(Core_Get_Base_Allocator(), memory)
 #define AK_ATOMIC_IMPLEMENTATION
 #include <ak_atomic.h>
 

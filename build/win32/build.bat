@@ -15,14 +15,14 @@ set editor_path=%code_path%\editor
 set editor_os_path=%editor_path%\os
 set vk_include=%dependencies_path%\Vulkan-Headers\include
 
-set cl_warnings=/WX /Wall /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4577 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262
+set cl_warnings=/WX /Wall /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262
 set cl_common=  /nologo /FC /Z7 /Gs- /D_CRT_SECURE_NO_WARNINGS
 set cl_debug= 	call cl /Od /DDEBUG_BUILD %cl_common% %cl_warnings%
 set cl_release= call cl /O2 %cl_common% %cl_warnings%
 set cl_link= 	/link /MANIFEST:EMBED /INCREMENTAL:NO
 set cl_out= 	/out:
 
-set clang_warnings= -Werror -Wall -Wno-switch
+set clang_warnings= -Werror -Wall -Wno-switch -Wno-unused-variable -Wno-unused-function
 set clang_common=   -g -gcodeview -fdiagnostics-absolute-paths -D_CRT_SECURE_NO_WARNINGS
 
 if "%clang%"=="1" (

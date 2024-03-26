@@ -17,7 +17,9 @@
 #include <vulkan/vulkan.h>
 #include "loader/vk_loader.h"
 #include "vk_functions.h"
+#include "vk_memory.h"
 #include "vk_resource.h"
+#include "vk_texture.h"
 #include "vk_swapchain.h"
 
 struct vk_device {
@@ -37,7 +39,8 @@ struct vk_frame_context {
 
 struct gdi_context {
     arena*                  Arena;
-    ak_job_system*          JobSystem;
+    ak_job_queue*           ResourceQueue;
+    gdi*                    GDI;
     vk_device*              PhysicalDevice;
     VkAllocationCallbacks*  VKAllocator;
     VkDevice                Device;
@@ -46,6 +49,7 @@ struct gdi_context {
     VkQueue                 PresentQueue;
     u64                     CurrentFrameIndex;
     array<vk_frame_context> Frames;
+    vk_resource_manager     TextureManager;
     vk_resource_manager     SwapchainManager;
 };
 

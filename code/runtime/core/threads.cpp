@@ -19,8 +19,12 @@ internal thread_context* Thread_Pool__Allocate_Context(thread_pool* Pool) {
     }
 
     thread_context* ThreadContext = Pool->Threads + Index;
+    Zero_Struct(ThreadContext);
+    
     ThreadContext->PoolNextIndex = (u32)-1;
     ThreadContext->PoolIndex = Index;
+
+    
     
     return ThreadContext;
 }
@@ -116,6 +120,10 @@ void Thread_Context_Delete(thread_context* ThreadContext) {
             ThreadContext->ScratchPool[ScratchIndex] = NULL;
         }
     }
+
+    AK_Mutex_Lock(&ThreadManager->MapLock);
+    Thread_Map__Remove(&ThreadManager->ThreadMap, ThreadContext->ThreadID);
+    AK_Mutex_Unlock(&ThreadManager->MapLock);
 
     AK_Mutex_Lock(&ThreadManager->AllocateLock);
     Thread_Pool__Delete_Context(&ThreadManager->ThreadPool, ThreadContext);

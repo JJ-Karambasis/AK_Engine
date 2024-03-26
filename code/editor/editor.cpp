@@ -13,17 +13,6 @@ int main() {
         return 1;
     }
 
-    if(!OS_Create()) {
-        Fatal_Error_Message();
-        return 1;
-    }
-
-    os_window_id MainWindowID = OS_Create_Window({
-        .Width = 1920,
-        .Height = 1080,
-        .Title = String_Lit("AK_Engine")
-    });
-
     gdi* GDI = GDI_Create({});
     if(!GDI) {
         Fatal_Error_Message();
@@ -47,16 +36,28 @@ int main() {
     u32 LowPriorityThreadCount  = Min(TotalThreadCount-HighPriorityThreadCount, 1);
 
     ak_job_system* JobSystemHigh = Core_Create_Job_System(1024, HighPriorityThreadCount, 1024);
-    ak_job_system* JobSystemLow = Core_Create_Job_System(1024, LowPriorityThreadCount, 0);
+    ak_job_queue*  JobQueueLow = Core_Create_Job_Queue(1024, LowPriorityThreadCount, 0);
 
     Log_Info(modules::Editor, "Started creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
-    gdi_context* GDIContext = GDI_Create_Context(GDI, { .JobSystem = JobSystemLow });
+    gdi_context* GDIContext = GDI_Create_Context(GDI, { .ResourceQueue = JobQueueLow });
     if(!GDIContext) {
         Fatal_Error_Message();
         return 1;
     }
 
+    if(!OS_Create(GDIContext)) {
+        Fatal_Error_Message();
+        return 1;
+    }
     Log_Info(modules::Editor, "Finished creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
+
+    os_window_id MainWindowID = OS_Create_Window({
+        .Width = 1920,
+        .Height = 1080,
+        .Title = String_Lit("AK_Engine"),
+        .TargetFormat = GDI_FORMAT_R8G8B8A8_UNORM,
+        .UsageFlags = GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT
+    });
 
     while(MainWindowID) {
         while(const os_event* Event = OS_Next_Event()) {
@@ -67,9 +68,23 @@ int main() {
                         MainWindowID = 0;
                     }
                 } break;
+
+                case OS_EVENT_TYPE_WINDOW_RESIZE: {
+                    const os_event_window_resize* WindowResizeEvent = (const os_event_window_resize*)Event;
+                    gdi_swapchain Swapchain = OS_Window_Get_Swapchain(WindowResizeEvent->WindowID);
+                    if(Swapchain) {
+                        GDI_Context_Resize_Swapchain(GDIContext, Swapchain);
+                    }
+                } break;
             }
         }      
     }
+
+    AK_Job_System_Delete(JobSystemHigh);
+    AK_Job_Queue_Delete(JobQueueLow);
+
+    GDI_Context_Delete(GDIContext);
+    GDI_Delete(GDI);
 
     OS_Delete();
     Core_Delete();

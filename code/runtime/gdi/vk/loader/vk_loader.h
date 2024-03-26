@@ -93,6 +93,7 @@ typedef struct {
     VK_FUNCTION(vkGetPhysicalDeviceProperties);
     VK_FUNCTION(vkGetPhysicalDeviceMemoryProperties);
     VK_FUNCTION(vkGetDeviceQueue);
+    VK_FUNCTION(vkDestroyInstance);
 
     vk_khr_surface SurfaceKHR;
     vk_khr_get_physical_device_properties2 GetPhysicalDeviceProperties2KHR;
@@ -161,6 +162,7 @@ typedef struct {
     VK_FUNCTION(vkFreeMemory);
     VK_FUNCTION(vkDestroyImage);
     VK_FUNCTION(vkDestroyFramebuffer);
+    VK_FUNCTION(vkDestroyDevice);
 
     vk_khr_swapchain SwapchainKHR;
 }  vk_device_funcs;

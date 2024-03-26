@@ -18,6 +18,7 @@ void VK_Load_Instance_Funcs(gdi* GDI, vk_instance_extension_support* InstanceInf
     vkGetPhysicalDeviceProperties = InstanceFuncs->vkGetPhysicalDeviceProperties;
     vkGetPhysicalDeviceMemoryProperties = InstanceFuncs->vkGetPhysicalDeviceMemoryProperties;
     vkGetDeviceQueue = InstanceFuncs->vkGetDeviceQueue;
+    vkDestroyInstance = InstanceFuncs->vkDestroyInstance;
 
     Assert(InstanceFuncs->SurfaceKHR.Enabled);
     vkGetPhysicalDeviceSurfaceSupportKHR = InstanceFuncs->SurfaceKHR.vkGetPhysicalDeviceSurfaceSupportKHR;
@@ -84,6 +85,7 @@ void VK_Load_Device_Funcs(gdi* GDI, gdi_context* Context) {
     vkFreeMemory = DeviceFuncs->vkFreeMemory;
     vkDestroyImage = DeviceFuncs->vkDestroyImage;
     vkDestroyFramebuffer = DeviceFuncs->vkDestroyFramebuffer;
+    vkDestroyDevice = DeviceFuncs->vkDestroyDevice;
 ;
     Assert(DeviceFuncs->SwapchainKHR.Enabled);
 
