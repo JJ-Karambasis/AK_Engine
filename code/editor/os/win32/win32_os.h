@@ -18,17 +18,17 @@ struct os_window_title {
 };
 
 struct os_window {
-    os_window_id            ID;
-    gdi_swapchain           Swapchain;
-    uint32_t                Width;
-    uint32_t                Height;
-    os_window_title         Title;
-    os_window_flags         Flags;
-    gdi_format              TargetFormat;
-    gdi_format              Format;
-    gdi_texture_usage_flags UsageFlags;
-    ak_event                CreationEvent;
-    HWND                    Window;
+    os_window_id              ID;
+    gdi_handle<gdi_swapchain> Swapchain;
+    uint32_t                  Width;
+    uint32_t                  Height;
+    os_window_title           Title;
+    os_window_flags           Flags;
+    gdi_format                TargetFormat;
+    gdi_format                Format;
+    gdi_texture_usage_flags   UsageFlags;
+    ak_event                  CreationEvent;
+    HWND                      Window;
 };
 
 struct os_window_storage {

@@ -9,8 +9,6 @@
 #include "utest.h"
 #include "os_event_tests.cpp"
 
-#include "resource_tests.cpp"
-
 UTEST_STATE();
 int main(int ArgCount, char* Args[]) {
     if(!Core_Create()) {
@@ -23,6 +21,5 @@ int main(int ArgCount, char* Args[]) {
     return Result;
 }
 
-#include <resources/resource.cpp>
 #include <core.cpp>
 #include <os/os_event.cpp>

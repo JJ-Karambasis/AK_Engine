@@ -100,6 +100,7 @@
 #error "Invalid bitness!"
 #endif
 
+#include <initializer_list>
 #include <stdint.h>
 #include <wchar.h>
 #include <float.h>
@@ -231,6 +232,12 @@ typedef intptr_t  sptr;
 #include "log.h"
 #include "fixed_array.h"
 #include "array.h"
+#include "span.h"
+#include "math_lib.h"
+#include "async_pool.h"
+#include "async_queue.h"
+
+#include "fixed_array.inl"
 
 struct allocator_tracker_manager {
 	ak_mutex 		   TrackAllocLock;

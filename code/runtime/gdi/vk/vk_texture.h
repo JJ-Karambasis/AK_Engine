@@ -2,13 +2,19 @@
 #define VK_TEXTURE_H
 
 struct vk_texture : public vk_resource {
-    gdi_texture   ID;
     VkImage       Image;
     vk_allocation Allocation;
+    u32           Width;
+    u32           Height;
+    gdi_format    Format;
 };
 
-internal vk_texture* VK_Texture_Manager_Allocate_Sync(resource_manager* ResourceManager);
-internal RESOURCE_ALLOCATE_CALLBACK_DEFINE(VK_Texture_Allocate_Callback);
-internal RESOURCE_FREE_CALLBACK_DEFINE(VK_Texture_Free_Callback);
+struct vk_texture_view : public vk_resource {
+    gdi_handle<gdi_texture> TextureHandle;
+    VkImageView             ImageView;
+};
+
+bool VK_Create_Texture_View(gdi_context* Context, vk_texture_view* TextureView, const gdi_texture_view_create_info& CreateInfo);
+void VK_Delete_Texture_View(gdi_context* Context, vk_texture_view* TextureView);
 
 #endif

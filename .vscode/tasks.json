@@ -7,7 +7,7 @@
             "label": "build win32",
             "type": "shell",
             "windows": {
-                "command": "${workspaceFolder}/build/win32/build.bat debug x64"
+                "command": "${workspaceFolder}/build/win32/build.bat x64"
             },
             "options": {
                 "cwd": "${workspaceFolder}/build/win32"

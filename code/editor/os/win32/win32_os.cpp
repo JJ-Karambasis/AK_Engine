@@ -139,7 +139,7 @@ internal LRESULT Win32__OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARA
                 u32 Index = AK_Slot64_Index(Slot);
                 Assert(Index < AK_Async_Slot_Map64_Capacity(&WindowStorage->SlotMap));
                 os_window* Window = WindowStorage->Windows + Index;
-                Assert(Window->Window && Window->Swapchain);
+                Assert(Window->Window && !Window->Swapchain.Is_Null());
                 GDI_Context_Delete_Swapchain(OS->GDIContext, Window->Swapchain);
                 DestroyWindow(Window->Window);
                 OS_Window_Title__Free(&Window->Title);
@@ -301,7 +301,7 @@ void OS_Delete_Window(os_window_id WindowID) {
     }
 }
 
-gdi_swapchain OS_Window_Get_Swapchain(os_window_id WindowID) {
+gdi_handle<gdi_swapchain> OS_Window_Get_Swapchain(os_window_id WindowID, gdi_format* OutFormat) {
     os* OS = OS_Get();
     if(OS) {
         os_window_storage* WindowStorage = &OS->WindowStorage;
@@ -309,11 +309,32 @@ gdi_swapchain OS_Window_Get_Swapchain(os_window_id WindowID) {
         if(AK_Async_Slot_Map64_Is_Allocated(&WindowStorage->SlotMap, Slot)) {
             os_window* Window = WindowStorage->Windows + AK_Slot64_Index(Slot);
             AK_Event_Wait(&Window->CreationEvent);
+            if(OutFormat) {
+                *OutFormat = Window->Format;
+            }
             return Window->Swapchain;
         }
     }
 
     return 0;
+}
+
+void OS_Window_Get_Resolution(os_window_id WindowID, u32* Width, u32* Height) {
+    os* OS = OS_Get();
+    if(OS) {
+        os_window_storage* WindowStorage = &OS->WindowStorage;
+        ak_slot64 Slot = (ak_slot64)WindowID;
+        if(AK_Async_Slot_Map64_Is_Allocated(&WindowStorage->SlotMap, Slot)) {
+            os_window* Window = WindowStorage->Windows + AK_Slot64_Index(Slot);
+            AK_Event_Wait(&Window->CreationEvent);
+
+            RECT Rect;
+            GetClientRect(Window->Window, &Rect);
+
+            *Width = (u32)(Rect.right-Rect.left);
+            *Height = (u32)(Rect.bottom-Rect.top);
+        }
+    }
 }
 
 const os_event* OS_Next_Event() {

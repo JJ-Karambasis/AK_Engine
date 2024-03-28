@@ -1139,3 +1139,35 @@ void Lock_Allocator_Free(lock_allocator* LockAllocator, void* Memory) {
 void Lock_Allocator_Track(lock_allocator* LockAllocator, string DebugName) {
     Allocator_Create__Tracker((allocator*)LockAllocator, DebugName, ALLOCATOR_TYPE_LOCK);
 }
+
+void* operator new(uptr Size) {
+    return Allocator_Allocate_Memory(Core_Get_Base_Allocator(), Size);
+}
+
+void operator delete(void* Memory) noexcept {
+	Allocator_Free_Memory(Core_Get_Base_Allocator(), Memory);
+}
+
+void* operator new[](uptr Size) {
+	return Allocator_Allocate_Memory(Core_Get_Base_Allocator(), Size);
+}
+
+void operator delete[](void* Memory) noexcept {
+	Allocator_Free_Memory(Core_Get_Base_Allocator(), Memory);
+}
+
+void* operator new(uptr Size, allocator* Allocator) noexcept {
+    return Allocator_Allocate_Memory(Allocator, Size);
+}
+
+void  operator delete(void* Memory, allocator* Allocator) noexcept {
+	Allocator_Free_Memory(Allocator, Memory);
+}
+
+void* operator new[](uptr Size, allocator* Allocator) noexcept {
+    return Allocator_Allocate_Memory(Allocator, Size);
+}
+
+void operator delete[](void* Memory, allocator* Allocator) noexcept {
+	Allocator_Free_Memory(Allocator, Memory);
+}

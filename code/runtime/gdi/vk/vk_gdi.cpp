@@ -91,8 +91,26 @@ internal void VKAPI_PTR VK__Free(void* UserData, void* Memory) {
     }
 }
 
+internal VkAttachmentLoadOp VK_Get_Load_Op(gdi_load_op LoadOp) {
+    static VkAttachmentLoadOp VKLoadOps[] = {
+        VK_ATTACHMENT_LOAD_OP_LOAD
+    };
+    static_assert(Array_Count(VKLoadOps) == GDI_LOAD_OP_COUNT);
+    Assert(LoadOp < GDI_LOAD_OP_COUNT);
+    return VKLoadOps[LoadOp];
+}
+
+internal VkAttachmentStoreOp VK_Get_Store_Op(gdi_store_op StoreOp) {
+    static VkAttachmentStoreOp VKStoreOps[] = {
+        VK_ATTACHMENT_STORE_OP_STORE
+    };
+    static_assert(Array_Count(VKStoreOps) == GDI_STORE_OP_COUNT);
+    Assert(StoreOp < GDI_STORE_OP_COUNT);
+    return VKStoreOps[StoreOp];
+}
+
 internal VkFormat VK_Get_Format(gdi_format Format) {
-    static VkFormat VKFormats[] = {
+    local_persist VkFormat VKFormats[] = {
         VK_FORMAT_UNDEFINED,
         VK_FORMAT_R8G8_UNORM,
         VK_FORMAT_R8G8B8_UNORM,
@@ -474,25 +492,17 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
 
     VK_Load_Device_Funcs(GDI, Context);
 
-    VK_Resource_Manager_Create(&Context->TextureManager, Context, {
-        .ResourceSize = sizeof(vk_texture),
-        .MaxCount = CreateInfo.TextureCount,
-        .AllocateCallback = VK_Texture_Allocate_Callback,
-        .FreeCallback = VK_Texture_Free_Callback
-    });
-
-    VK_Resource_Manager_Create(&Context->SwapchainManager, Context, {
-        .ResourceSize = sizeof(vk_swapchain),
-        .MaxCount = CreateInfo.SwapchainCount,
-        .AllocateCallback = VK_Swapchain_Allocate_Callback,
-        .FreeCallback = VK_Swapchain_Free_Callback
-    });
+    VK_Resource_Manager_Create(&Context->RenderPassManager, Context, CreateInfo.RenderPassCount);
+    VK_Resource_Manager_Create(&Context->TextureManager, Context, CreateInfo.TextureCount);
+    VK_Resource_Manager_Create(&Context->TextureViewManager, Context, CreateInfo.TextureViewCount);
+    VK_Resource_Manager_Create(&Context->FramebufferManager, Context, CreateInfo.FramebufferCount);
+    VK_Resource_Manager_Create(&Context->SwapchainManager, Context, CreateInfo.SwapchainCount);
 
     return true;
 }
 
 vk_frame_context* VK_Get_Current_Frame_Context(gdi_context* Context) {
-    return &Context->Frames[Context->CurrentFrameIndex];
+    return &Context->Frames[Context->TotalFramesRendered % Context->Frames.Count];
 }
 
 gdi* GDI_Create(const gdi_create_info& CreateInfo) {
@@ -596,46 +606,202 @@ array<gdi_format> GDI_Context_Supported_Window_Formats(gdi_context* Context, con
     return Formats;
 }
 
-gdi_swapchain GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo) {
-    resource_id ResourceID = Resource_Manager_Allocate(&Context->SwapchainManager, &CreateInfo, sizeof(gdi_context_create_info));
-    return (gdi_swapchain)ResourceID;
+gdi_handle<gdi_render_pass> GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo) {
+    async_handle<vk_render_pass> RenderPassHandle = VK_Resource_Manager_Allocate(&Context->RenderPassManager);
+    if(RenderPassHandle.Is_Null()) {
+        //todo: Diagnostics
+        return {};
+    }
+
+    pool_writer_lock RenderPassLock(&Context->RenderPassManager.Pool, RenderPassHandle);
+    pool_scoped_lock RenderPassLockScoped(&RenderPassLock);
+    if(!VK_Create_Render_Pass(Context, RenderPassLock.Ptr, CreateInfo)) {
+        //todo: Diagnostic 
+        VK_Delete_Render_Pass(Context, RenderPassLock.Ptr);
+        VK_Resource_Manager_Free(&Context->RenderPassManager, RenderPassHandle);
+        return {};
+    }
+    return gdi_handle<gdi_render_pass>(RenderPassHandle.ID);
 }
 
-void GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_swapchain SwapchainID) {
-    if(SwapchainID) {
-        resource_id ResourceID = (resource_id)SwapchainID;
-        vk_swapchain_delete_info DeleteInfo = {};
-        Resource_Manager_Free(&Context->SwapchainManager, ResourceID, &DeleteInfo, sizeof(vk_swapchain_delete_info));
+void GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle) {
+    async_handle<vk_render_pass> RenderPassHandle(Handle.ID);
+    pool_reader_lock RenderPassReader(&Context->RenderPassManager.Pool, RenderPassHandle);
+    if(RenderPassReader.Ptr) {
+        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->RenderPassManager, RenderPassReader.Ptr);
+        RenderPassReader.Unlock();
+        if(TryDeleteQueue) {
+            pool_writer_lock RenderPassWriter(&Context->RenderPassManager.Pool, RenderPassHandle);
+            if(RenderPassWriter.Ptr) {
+                vk_render_pass RenderPass = *RenderPassWriter.Ptr;
+                RenderPassWriter.Unlock();
+                VK_Delete_Render_Pass(Context, &RenderPass);
+            }
+        }
+        VK_Resource_Manager_Free(&Context->RenderPassManager, RenderPassHandle);
     }
 }
 
-void GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_swapchain SwapchainID) {
-    if(SwapchainID) {
-        resource_id ResourceID = (resource_id)SwapchainID;
-        vk_swapchain* Swapchain = (vk_swapchain*)Resource_Manager_Get_Resource_No_Callback(&Context->SwapchainManager, ResourceID);
-        if(Swapchain) {
-            gdi_format TargetFormat            = Swapchain->Format;
-            gdi_texture_usage_flags UsageFlags = Swapchain->UsageFlags;
+gdi_handle<gdi_texture_view> GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo) {
+    async_handle<vk_texture_view> TextureViewHandle = VK_Resource_Manager_Allocate(&Context->TextureViewManager);
+    if(TextureViewHandle.Is_Null()) {
+        //todo: Diagnostics
+        return {};
+    }
 
-            vk_swapchain_delete_info DeleteInfo = {
-                .PartialDelete = true //Only remove the images
-            };
+    pool_writer_lock TextureViewLock(&Context->TextureViewManager.Pool, TextureViewHandle);
+    pool_scoped_lock TextureViewLockScoped(&TextureViewLock);
+    if(!VK_Create_Texture_View(Context, TextureViewLock.Ptr, CreateInfo)) {
+        //todo: Diagnostic 
+        VK_Delete_Texture_View(Context, TextureViewLock.Ptr);
+        VK_Resource_Manager_Free(&Context->TextureViewManager, TextureViewHandle);
+        return {};
+    }
+    return gdi_handle<gdi_texture_view>(TextureViewHandle.ID);
+}
 
-            Resource_Manager_Dispatch_Free(&Context->SwapchainManager, ResourceID, &DeleteInfo, sizeof(vk_swapchain_delete_info));
-            
-            gdi_swapchain_create_info CreateInfo = {
-                .TargetFormat = TargetFormat,
-                .UsageFlags = UsageFlags
-            };
-            
-            Resource_Manager_Dispatch_Allocate(&Context->SwapchainManager, ResourceID, &CreateInfo, sizeof(gdi_context_create_info));
+void GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle) {
+    async_handle<vk_texture_view> TextureViewHandle(Handle.ID);
+    pool_reader_lock TextureViewReader(&Context->TextureViewManager.Pool, TextureViewHandle);
+    if(TextureViewReader.Ptr) {
+        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->TextureViewManager, TextureViewReader.Ptr);
+        TextureViewReader.Unlock();
+        if(!TryDeleteQueue) {
+            pool_writer_lock TextureViewWriter(&Context->TextureViewManager.Pool, TextureViewHandle);
+            if(TextureViewWriter.Ptr) {
+                vk_texture_view TextureView = *TextureViewWriter.Ptr;
+                TextureViewWriter.Unlock();
+                VK_Delete_Texture_View(Context, &TextureView);
+            }
+        } 
+        VK_Resource_Manager_Free(&Context->TextureViewManager, TextureViewHandle);
+    }
+}
+
+gdi_handle<gdi_framebuffer> GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo) {
+    async_handle<vk_framebuffer> FramebufferHandle = VK_Resource_Manager_Allocate(&Context->FramebufferManager);
+    if(FramebufferHandle.Is_Null()) {
+        //todo: Diagnostics
+        return {};
+    }
+
+    pool_writer_lock FramebufferLock(&Context->FramebufferManager.Pool, FramebufferHandle);
+    pool_scoped_lock FramebufferLockScoped(&FramebufferLock);
+    if(!VK_Create_Framebuffer(Context, FramebufferLock.Ptr, CreateInfo)) {
+        //todo: Diagnostics
+        VK_Delete_Framebuffer(Context, FramebufferLock.Ptr);
+        VK_Resource_Manager_Free(&Context->FramebufferManager, FramebufferHandle);
+        return {};
+    }
+    return gdi_handle<gdi_framebuffer>(FramebufferHandle.ID);
+}
+
+void GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle) {
+    async_handle<vk_framebuffer> FramebufferHandle(Handle.ID);
+    pool_reader_lock FramebufferReader(&Context->FramebufferManager.Pool, FramebufferHandle);
+    if(FramebufferReader.Ptr) {
+        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->FramebufferManager, FramebufferReader.Ptr); 
+        FramebufferReader.Unlock();
+        if(!TryDeleteQueue) {
+            pool_writer_lock FramebufferWriter(&Context->FramebufferManager.Pool, FramebufferHandle);
+            if(FramebufferWriter.Ptr) {
+                vk_framebuffer Framebuffer = *FramebufferWriter.Ptr;
+                FramebufferWriter.Unlock();
+                VK_Delete_Framebuffer(Context, &Framebuffer);
+            }
+        }
+        VK_Resource_Manager_Free(&Context->FramebufferManager, FramebufferHandle);
+    }
+}
+
+gdi_handle<gdi_swapchain> GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo) {
+    async_handle<vk_swapchain> SwapchainHandle = VK_Resource_Manager_Allocate(&Context->SwapchainManager);
+    if(SwapchainHandle.Is_Null()) {
+        //todo: diagnostics
+        return {};
+    }
+
+    pool_writer_lock SwapchainLock(&Context->SwapchainManager.Pool, SwapchainHandle);
+    pool_scoped_lock SwapchainLockScoped(&SwapchainLock);
+    if(!VK_Create_Swapchain(Context, SwapchainLock.Ptr, CreateInfo)) {
+        //todo: Diagnostics
+        VK_Delete_Swapchain(Context, SwapchainLock.Ptr);
+        VK_Resource_Manager_Free(&Context->SwapchainManager, SwapchainHandle);
+        return {};
+    }
+
+    if(!VK_Create_Swapchain_Textures(Context, SwapchainLock.Ptr)) {
+        //todo: Diagnostics
+        VK_Delete_Swapchain_Full(Context, SwapchainLock.Ptr);
+        VK_Resource_Manager_Free(&Context->SwapchainManager, SwapchainHandle);
+        return {};
+    }
+
+    return gdi_handle<gdi_swapchain>(SwapchainHandle.ID);
+}
+
+void GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
+    async_handle<vk_swapchain> SwapchainHandle(Handle.ID);
+    pool_writer_lock SwapchainWriter(&Context->SwapchainManager.Pool, SwapchainHandle);
+    if(SwapchainWriter.Ptr) {
+        VK_Delete_Swapchain_Textures(Context, SwapchainWriter.Ptr);    
+        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->SwapchainManager, SwapchainWriter.Ptr); 
+        if(!TryDeleteQueue) {
+            VK_Delete_Swapchain(Context, SwapchainWriter.Ptr);
+        }
+        SwapchainWriter.Unlock();
+        VK_Resource_Manager_Free(&Context->SwapchainManager, SwapchainHandle);    
+    }
+}
+
+bool GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
+    async_handle<vk_swapchain> SwapchainHandle(Handle.ID);
+    pool_writer_lock SwapchainWriter(&Context->SwapchainManager.Pool, SwapchainHandle);
+    if(SwapchainWriter.Ptr) {
+        //Copy the old swapchain so we can write the new one into the writer lock
+        vk_swapchain Swapchain = *SwapchainWriter.Ptr;
+
+        gdi_swapchain_create_info CreateInfo = {
+            .TargetFormat = SwapchainWriter->Format,
+            .UsageFlags = SwapchainWriter->UsageFlags
+        };
+
+        VK_Delete_Swapchain_Textures(Context, SwapchainWriter.Ptr);    
+        if(!VK_Create_Swapchain(Context, SwapchainWriter.Ptr, CreateInfo)) {
+            //todo: some error logging
+            return false;
+        }
+
+        if(!VK_Create_Swapchain_Textures(Context, SwapchainWriter.Ptr)) {
+            //todo: some error logging
+            return false;
+        }
+        SwapchainWriter.Unlock();
+
+        //Prevent the surface from being deleted by setting it to null when we resize
+        Swapchain.Surface = VK_NULL_HANDLE;
+        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->SwapchainManager, &Swapchain);
+        if(!TryDeleteQueue) {
+            VK_Delete_Swapchain(Context, &Swapchain);
         }
     }
+    return true;
 }
+
+span<gdi_handle<gdi_texture>> GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
+    async_handle<vk_swapchain> SwapchainHandle(Handle.ID);
+    pool_reader_lock SwapchainReader(&Context->SwapchainManager.Pool, SwapchainHandle);
+    pool_scoped_lock SwapchainReaderLock(&SwapchainReader);
+    if(SwapchainReader.Ptr) {
+        return span<gdi_handle<gdi_texture>>(SwapchainReader->Textures);
+    }
+    return span<gdi_handle<gdi_texture>>();
+}
+
+#include <gdi/gdi_shared.cpp>
 
 #include "vk_swapchain.cpp"
 #include "vk_texture.cpp"
+#include "vk_render_pass.cpp"
 #include "vk_resource.cpp"
 #include "vk_functions.cpp"
-
-#include <resources/resource.cpp>

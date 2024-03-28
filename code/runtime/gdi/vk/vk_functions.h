@@ -80,6 +80,7 @@ internal VK_FUNCTION(vkDestroySwapchainKHR);
 internal VK_FUNCTION(vkDestroyFramebuffer);
 internal VK_FUNCTION(vkDestroySurfaceKHR);
 internal VK_FUNCTION(vkDestroyDevice);
+internal VK_FUNCTION(vkDestroyRenderPass);
 
 void VK_Load_Global_Funcs(gdi* GDI);
 void VK_Load_Instance_Funcs(gdi* GDI, vk_instance_extension_support* InstanceInfo);

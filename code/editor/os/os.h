@@ -22,10 +22,10 @@ struct os_window_create_info {
 
 const os_event* OS_Next_Event();
 
-os_window_id  OS_Create_Window(const os_window_create_info& CreateInfo);
-void          OS_Delete_Window(os_window_id WindowID);
-gdi_swapchain OS_Window_Get_Swapchain(os_window_id WindowID);
-void          OS_Window_Get_Resolution(os_window_id WindowID, u32* Width, u32* Height);
+os_window_id              OS_Create_Window(const os_window_create_info& CreateInfo);
+void                      OS_Delete_Window(os_window_id WindowID);
+gdi_handle<gdi_swapchain> OS_Window_Get_Swapchain(os_window_id WindowID, gdi_format* OutFormat = NULL);
+void                      OS_Window_Get_Resolution(os_window_id WindowID, u32* Width, u32* Height);
 
 struct os_create_info {
     u32 EventIterCount = 1;

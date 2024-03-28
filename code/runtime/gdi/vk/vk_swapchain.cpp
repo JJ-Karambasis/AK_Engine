@@ -87,20 +87,14 @@ internal VkSurfaceKHR VK_Create_Temp_Surface(gdi* GDI) {
     return VK_Create_Surface(GDI, &WindowData);
 }
 
-internal RESOURCE_ALLOCATE_CALLBACK_DEFINE(VK_Swapchain_Allocate_Callback) {
-    vk_resource_manager* ResourceManager = (vk_resource_manager*)Manager;
-    gdi_context* Context = ResourceManager->Context;
-    vk_swapchain* Swapchain = (vk_swapchain*)ResourceData;
-    gdi_swapchain_create_info* CreateInfo = (gdi_swapchain_create_info*)UserData;
-    
-    /*Only recreate the surface if we are creating a swapchain*/
+internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain, const gdi_swapchain_create_info& CreateInfo) {
     if(!Swapchain->Swapchain) {
         Zero_Struct(Swapchain);
-        
-        Swapchain->Surface = VK_Create_Surface(Context->GDI, &CreateInfo->WindowData);
+
+        Swapchain->Surface = VK_Create_Surface(Context->GDI, &CreateInfo.WindowData);
         if(!Swapchain->Surface) {
             //todo: Diagnostic
-            return RESOURCE_RESULT_FAILURE;
+            return false;
         }
     }
 
@@ -116,18 +110,18 @@ internal RESOURCE_ALLOCATE_CALLBACK_DEFINE(VK_Swapchain_Allocate_Callback) {
     }
     else {
         //todo: Diagnostic
-        return RESOURCE_RESULT_FAILURE;
+        return false;
     }
 
     //Max of 3 swapchain images
     u32 MinImageCount = Min(SurfaceCaps.maxImageCount, 3);
     if (MinImageCount < 2) {
         //todo: Diagnostic
-        return RESOURCE_RESULT_FAILURE;
+        return false;
     }
 
-    Swapchain->Format = CreateInfo->TargetFormat;
-    Swapchain->UsageFlags = CreateInfo->UsageFlags;
+    Swapchain->Format = CreateInfo.TargetFormat;
+    Swapchain->UsageFlags = CreateInfo.UsageFlags;
 
     VkFormat TargetFormat = VK_Get_Format(Swapchain->Format);
 
@@ -150,67 +144,71 @@ internal RESOURCE_ALLOCATE_CALLBACK_DEFINE(VK_Swapchain_Allocate_Callback) {
     VkSwapchainKHR SwapchainHandle;
     if(vkCreateSwapchainKHR(Context->Device, &SwapchainCreateInfo, Context->VKAllocator, &SwapchainHandle) != VK_SUCCESS) {
         //todo: Diagnostic
-        return RESOURCE_RESULT_FAILURE;
+        return false;
     }
 
+    Swapchain->Width = SurfaceCaps.currentExtent.width;
+    Swapchain->Height = SurfaceCaps.currentExtent.height;
+    Swapchain->Swapchain = SwapchainHandle;
+
+    return true;
+}
+
+internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* Swapchain) {
     u32 ImageCount;
-    vkGetSwapchainImagesKHR(Context->Device, SwapchainHandle, &ImageCount, VK_NULL_HANDLE);
+    vkGetSwapchainImagesKHR(Context->Device, Swapchain->Swapchain, &ImageCount, VK_NULL_HANDLE);
 
     Assert(ImageCount >= 2);
     
     scratch Scratch = Scratch_Get();
     VkImage* Images = Scratch_Push_Array(&Scratch, ImageCount, VkImage);
-    vkGetSwapchainImagesKHR(Context->Device, SwapchainHandle, &ImageCount, Images);
+    vkGetSwapchainImagesKHR(Context->Device, Swapchain->Swapchain, &ImageCount, Images);
 
-    if(Swapchain->Swapchain) {
-        vkDestroySwapchainKHR(Context->Device, Swapchain->Swapchain, Context->VKAllocator);
-    }
-
-    Swapchain->Swapchain = SwapchainHandle;
-    Swapchain->Textures = array<gdi_texture>(Context->GDI->MainAllocator, ImageCount);
+    Swapchain->Textures = array<gdi_handle<gdi_texture>>(Context->GDI->MainAllocator, ImageCount);
     Array_Resize(&Swapchain->Textures, ImageCount);
 
     for(u32 i = 0; i < ImageCount; i++) {
-        vk_texture* Texture = VK_Texture_Manager_Allocate_Sync(&Context->TextureManager);
-        if(!Texture) {
-            //todo: Diagnostic
-            return RESOURCE_RESULT_FAILURE;
+        async_handle<vk_texture> TextureHandle = VK_Resource_Manager_Allocate(&Context->TextureManager);
+        if(TextureHandle.Is_Null()) {
+            //todo: Diagnostic 
+            return false;
         }
 
-        Texture->Image = Images[i];
-        Swapchain->Textures[i] = Texture->ID;
-        Resource_Manager_Set_Allocated_State(&Context->TextureManager, Texture->ID);
+        pool_writer_lock TextureWriter(&Context->TextureManager.Pool, TextureHandle);
+        TextureWriter->Image  = Images[i];
+        TextureWriter->Width  = Swapchain->Width;
+        TextureWriter->Height = Swapchain->Height;
+        TextureWriter->Format = Swapchain->Format;
+        TextureWriter.Unlock();
+
+        Swapchain->Textures[i] = gdi_handle<gdi_texture>(TextureHandle.ID);
     }
 
-    return RESOURCE_RESULT_SUCCESS;
+    return true;
 }
 
-internal RESOURCE_FREE_CALLBACK_DEFINE(VK_Swapchain_Free_Callback) {
-    vk_resource_manager* ResourceManager = (vk_resource_manager*)Manager;
-    gdi_context* Context = ResourceManager->Context;
-    vk_swapchain* Swapchain = (vk_swapchain*)ResourceData;
-    vk_swapchain_delete_info* DeleteInfo = (vk_swapchain_delete_info*)UserData;
-
-    for(uptr i = 0; i < Swapchain->Textures.Count; i++) {
-        if(Swapchain->Textures[i]) {
-            Resource_Manager_Free_ID(&Context->TextureManager, Swapchain->Textures[i]);
-            Swapchain->Textures[i] = 0;
-        }
+internal void VK_Delete_Swapchain(gdi_context* Context, vk_swapchain* Swapchain) {
+    if(Swapchain->Swapchain) {
+        vkDestroySwapchainKHR(Context->Device, Swapchain->Swapchain, Context->VKAllocator);
+        Swapchain->Swapchain = VK_NULL_HANDLE;
     }
 
+    if(Swapchain->Surface) {
+        vkDestroySurfaceKHR(Context->GDI->Instance, Swapchain->Surface, Context->VKAllocator);
+        Swapchain->Surface = VK_NULL_HANDLE;
+    }
+}
+
+internal void VK_Delete_Swapchain_Textures(gdi_context* Context, vk_swapchain* Swapchain) {
+    for(gdi_handle<gdi_texture>& Handle : Swapchain->Textures) {
+        async_handle<vk_texture> TextureHandle(Handle.ID);
+        VK_Resource_Manager_Free(&Context->TextureManager, TextureHandle);
+        Handle = {};
+    }
     Array_Free(&Swapchain->Textures);
+}
 
-    if(!DeleteInfo->PartialDelete) {
-        if(Swapchain->Swapchain) {
-            vkDestroySwapchainKHR(Context->Device, Swapchain->Swapchain, Context->VKAllocator);
-            Swapchain->Swapchain = VK_NULL_HANDLE;
-        }
-
-        if(Swapchain->Surface) {
-            vkDestroySurfaceKHR(Context->GDI->Instance, Swapchain->Surface, Context->VKAllocator);
-            Swapchain->Surface = VK_NULL_HANDLE;
-        }
-    }
-
-    return RESOURCE_RESULT_SUCCESS;
+internal void VK_Delete_Swapchain_Full(gdi_context* Context, vk_swapchain* Swapchain) {
+    VK_Delete_Swapchain_Textures(Context, Swapchain);
+    VK_Delete_Swapchain(Context, Swapchain);
 }
