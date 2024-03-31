@@ -252,6 +252,11 @@ inline internal void VK_Delete_List_Clear(vk_delete_list<type>* List) {
     Array_Clear(&List->List);
 }
 
+template <typename type>
+inline internal void VK_Delete_List_Free(vk_delete_list<type>* List) {
+    Array_Free(&List->List);
+}
+
 internal vk_delete_context* VK_Get_Delete_Context(gdi_context* Context) {
     vk_delete_context* Result = (vk_delete_context*)AK_TLS_Get(&Context->DeleteContextTLS);
     if(!Result) {
@@ -871,10 +876,76 @@ gdi_context* GDI_Create_Context(gdi* GDI, const gdi_context_create_info& CreateI
 
 void GDI_Context_Delete(gdi_context* Context) {
     if(Context && Context->Arena) {
+        Context->TotalFramesRendered = (u64)-1;
+        vkDeviceWaitIdle(Context->Device);
+
+        vk_resource_context* ResourceContext = &Context->ResourceContext;
+
+        //First delete everything from the delete context
+        vk_delete_context* DeleteContext = (vk_delete_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->DeleteContextList);
+        while(DeleteContext) {
+            for(u32 i = 0; i < 2; i++) {
+                for(vk_delete_list_entry<vk_render_pass>& RenderPassEntry : DeleteContext->RenderPassList[i]) {
+                    VK_Delete_Render_Pass(Context, &RenderPassEntry.Resource);
+                }
+
+                for(vk_delete_list_entry<vk_texture_view>& TextureViewEntry : DeleteContext->TextureViewList[i]) {
+                    VK_Delete_Texture_View(Context, &TextureViewEntry.Resource);
+                }
+
+                for(vk_delete_list_entry<vk_framebuffer>& FramebufferEntry : DeleteContext->FramebufferList[i]) {
+                    VK_Delete_Framebuffer(Context, &FramebufferEntry.Resource);
+                }
+
+                for(vk_delete_list_entry<vk_swapchain>& SwapchainEntry : DeleteContext->SwapchainList[i]) {
+                    VK_Delete_Swapchain(Context, &SwapchainEntry.Resource);
+                }
+
+                VK_Delete_List_Free(&DeleteContext->RenderPassList[i]);
+                VK_Delete_List_Free(&DeleteContext->TextureViewList[i]);
+                VK_Delete_List_Free(&DeleteContext->FramebufferList[i]);
+                VK_Delete_List_Free(&DeleteContext->SwapchainList[i]);
+            }
+
+            DeleteContext = DeleteContext->Next;
+        }
+
+        //Delete any remaining resources that are not on the delete queue
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->RenderPasses); i++) {
+            vk_render_pass* RenderPass = ResourceContext->RenderPasses.Ptr + i; 
+            if(RenderPass->RenderPass) {
+                VK_Delete_Render_Pass(Context, RenderPass);
+            }
+        }
+
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->TextureViews); i++) {
+            vk_texture_view* TextureView = ResourceContext->TextureViews.Ptr + i; 
+            if(TextureView->ImageView) {
+                VK_Delete_Texture_View(Context, TextureView);
+            }
+        }
+
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->Framebuffers); i++) {
+            vk_framebuffer* Framebuffer = ResourceContext->Framebuffers.Ptr + i; 
+            if(Framebuffer->Framebuffer) {
+                VK_Delete_Framebuffer(Context, Framebuffer);
+            }
+        }
+
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->Swapchains); i++) {
+            vk_swapchain* Swapchain = ResourceContext->Swapchains.Ptr + i; 
+            if(Swapchain->Swapchain) {
+                VK_Delete_Swapchain_Full(Context, Swapchain);
+            }
+        }
+
         if(Context->Device) {
             vkDestroyDevice(Context->Device, Context->VKAllocator);
             Context->Device = VK_NULL_HANDLE;
         }
+        AK_Mutex_Delete(&Context->DeleteContextLock);
+        AK_TLS_Delete(&Context->DeleteContextTLS);
+        Arena_Delete(Context->DeleteContextArena);
         Arena_Delete(Context->Arena);
     }
 }
@@ -1203,8 +1274,6 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
 
     return (gdi_cmd_list*)CmdList;
 }
-
-
 
 void GDI_Context_Execute(gdi_context* Context) {
     scratch Scratch = Scratch_Get();

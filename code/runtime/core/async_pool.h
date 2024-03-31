@@ -98,15 +98,15 @@ inline async_handle<type> Async_Pool_Allocate(async_pool<type>* Pool) {
         return {};
     }
 
-    u32 Index = AK_Slot64_Index(SlotID);
-    type* Entry = Pool->Ptr + Index;
-    Zero_Struct(Entry);
     return async_handle<type>(SlotID);
 }
 
 template <typename type>
 inline void Async_Pool_Free(async_pool<type>* Pool, async_handle<type> Handle) {
     if(AK_Async_Slot_Map64_Is_Allocated(&Pool->SlotMap, Handle.ID)) {
+        u32 Index   = AK_Slot64_Index(Handle.ID);
+        type* Entry = Pool->Ptr + Index;
+        Zero_Struct(Entry);
         AK_Async_Slot_Map64_Free_Slot(&Pool->SlotMap, Handle.ID);
     }
 }

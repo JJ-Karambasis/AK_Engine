@@ -80,6 +80,19 @@ int main() {
                 case OS_EVENT_TYPE_WINDOW_CLOSED: {
                     OS_Delete_Window(Event->WindowID);
                     if(Event->WindowID == MainWindowID) {
+                        if(SwapchainFramebuffers.Count) {
+                            for(gdi_handle<gdi_framebuffer> Framebuffer : SwapchainFramebuffers) {
+                                GDI_Context_Delete_Framebuffer(GDIContext, Framebuffer);
+                            }
+                            Array_Clear(&SwapchainFramebuffers);
+                        }
+
+                        if(SwapchainViews.Count) {
+                            for(gdi_handle<gdi_texture_view> View : SwapchainViews) {
+                                GDI_Context_Delete_Texture_View(GDIContext, View);
+                            }
+                            Array_Clear(&SwapchainViews);
+                        }
                         MainWindowID = 0;
                     }
                 } break;
