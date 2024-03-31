@@ -18,10 +18,55 @@
 #include "loader/vk_loader.h"
 #include "vk_functions.h"
 #include "vk_memory.h"
-#include "vk_resource.h"
 #include "vk_render_pass.h"
 #include "vk_texture.h"
 #include "vk_swapchain.h"
+
+template <typename type>
+struct vk_delete_list_entry {
+    u64  LastUsedFrameIndex;
+    type Resource;
+};
+
+template <typename type>
+struct vk_delete_list {
+    array<vk_delete_list_entry<type>> List;
+
+    vk_delete_list_entry<type>* begin() { return List.begin(); }
+    vk_delete_list_entry<type>* end() { return List.end(); }
+};
+
+struct vk_delete_context {
+    ak_rw_lock                      RWLock;
+    u32                             CurrentListIndex;
+    vk_delete_list<vk_render_pass>  RenderPassList[2];
+    vk_delete_list<vk_texture_view> TextureViewList[2];
+    vk_delete_list<vk_framebuffer>  FramebufferList[2];
+    vk_delete_list<vk_swapchain>    SwapchainList[2];
+    vk_delete_context* Next;
+};
+
+struct vk_resource_context {
+    async_pool<vk_render_pass>  RenderPasses;
+    async_pool<vk_texture>      Textures;
+    async_pool<vk_texture_view> TextureViews;
+    async_pool<vk_framebuffer>  Framebuffers;
+    async_pool<vk_swapchain>    Swapchains;
+
+    //TODO: These probably should be atomic u8 but ak atomic 
+    //doesn't support those (yet)
+    ak_atomic_u32* RenderPassesInUse;
+    ak_atomic_u32* TexturesInUse;
+    ak_atomic_u32* TextureViewsInUse;
+    ak_atomic_u32* FramebuffersInUse;
+    ak_atomic_u32* SwapchainsInUse;
+
+    u64* RenderPassLastFrameIndices;
+    u64* TextureLastFrameIndices;
+    u64* TextureViewLastFrameIndices;
+    u64* FramebufferLastFrameIndices;
+    u64* SwapchainLastFrameIndices;
+};
 
 struct vk_device {
     VkPhysicalDevice                 Device;
@@ -34,13 +79,34 @@ struct vk_device {
     string                           Name;
 };
 
+struct vk_cmd_list {
+    gdi_context*               Context;
+    VkCommandPool              CmdPool;
+    VkCommandBuffer            CmdBuffer;
+    VkPipelineStageFlags       ExecuteLockWaitStage;
+    VkSemaphore                SubmitLock;
+    VkSemaphore                PresentLock;
+    async_handle<vk_swapchain> SwapchainHandle;
+    u32                        SwapchainTextureIndex;
+    vk_cmd_list*               Next;
+    vk_cmd_list*               Prev;
+};
+
+struct vk_cmd_pool {
+    VkCommandBufferLevel Level;
+    vk_cmd_list*         FreeCmdList;
+    vk_cmd_list*         CurrentCmdListHead;
+    vk_cmd_list*         CurrentCmdListTail;
+};
+
 struct vk_frame_context {
-    VkFence Fence;
+    VkFence     Fence;
+    vk_cmd_pool PrimaryCmdPool;
+    vk_cmd_pool SecondaryCmdPool;
 };
 
 struct gdi_context {
     arena*                  Arena;
-    ak_job_queue*           ResourceQueue;
     gdi*                    GDI;
     vk_device*              PhysicalDevice;
     VkAllocationCallbacks*  VKAllocator;
@@ -51,11 +117,11 @@ struct gdi_context {
     u64                     TotalFramesRendered;
     array<vk_frame_context> Frames;
 
-    vk_resource_manager<vk_render_pass>  RenderPassManager;
-    vk_resource_manager<vk_texture>      TextureManager;
-    vk_resource_manager<vk_texture_view> TextureViewManager;
-    vk_resource_manager<vk_framebuffer>  FramebufferManager;
-    vk_resource_manager<vk_swapchain>    SwapchainManager;
+    ak_mutex            DeleteContextLock;
+    arena*              DeleteContextArena;
+    ak_atomic_ptr       DeleteContextList;
+    ak_tls              DeleteContextTLS;
+    vk_resource_context ResourceContext;
 };
 
 struct gdi {
@@ -76,7 +142,49 @@ struct gdi {
     #endif
 };
 
-#include "vk_resource_manager.inl"
+struct vk_pipeline_barrier {
+    bool                        InUse;
+    array<VkImageMemoryBarrier> ImageMemoryBarriers;
+};
+
+enum class vk_pipeline_stage {
+    None,
+    Present,
+    Color_Attachment,
+    Count
+};
+
+static const vk_pipeline_stage G_PipelineStages[] = {
+    vk_pipeline_stage::None,
+    vk_pipeline_stage::Present,
+    vk_pipeline_stage::Color_Attachment
+};
+
+static_assert(Array_Count(G_PipelineStages) == GDI_RESOURCE_STATE_COUNT);
+
+static const VkPipelineStageFlags G_PipelineStageMasks[] = {
+    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+};
+
+static_assert(Array_Count(G_PipelineStageMasks) == (u32)vk_pipeline_stage::Count);
+
+static const VkAccessFlags G_VKAccessMasks[] = {
+    0,
+    0,
+    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+};
+
+static_assert(Array_Count(G_VKAccessMasks) == GDI_RESOURCE_STATE_COUNT);
+
+static const VkImageLayout G_VKImageLayouts[] = {
+    VK_IMAGE_LAYOUT_UNDEFINED,
+    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+};
+
+static_assert(Array_Count(G_VKImageLayouts) == GDI_RESOURCE_STATE_COUNT);
 
 vk_frame_context* VK_Get_Current_Frame_Context(gdi_context* Context);
 

@@ -60,8 +60,9 @@ void VK_Delete_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass) {
     }
 }
 
-using texture_view_reader_lock = pool_reader_lock<vk_texture_view>;
-using texture_reader_lock = pool_reader_lock<vk_texture>; 
+internal void VK_Render_Pass_Record_Frame(gdi_context* Context, async_handle<vk_render_pass> Handle) {
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[Handle.Index()], true);
+}
 
 bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, const gdi_framebuffer_create_info& CreateInfo) {
     scratch Scratch = Scratch_Get();
@@ -70,8 +71,8 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
     fixed_array<texture_view_reader_lock> TextureViews(&Scratch, CreateInfo.Attachments.Count);
     fixed_array<texture_reader_lock> Textures(&Scratch, CreateInfo.Attachments.Count);
 
-    array_scoped<pool_scoped_lock<texture_view_reader_lock>> TextureViewsScoped(&Scratch, CreateInfo.Attachments.Count);
-    array_scoped<pool_scoped_lock<texture_reader_lock>> TexturesScoped(&Scratch, CreateInfo.Attachments.Count);
+    fixed_array_scoped<pool_scoped_lock<texture_view_reader_lock>> TextureViewsScoped(&Scratch, CreateInfo.Attachments.Count);
+    fixed_array_scoped<pool_scoped_lock<texture_reader_lock>> TexturesScoped(&Scratch, CreateInfo.Attachments.Count);
 
     u32 Width  = (u32)-1;
     u32 Height = (u32)-1;
@@ -81,7 +82,7 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
         gdi_handle<gdi_texture_view> Handle = CreateInfo.Attachments[i];
         async_handle<vk_texture_view> TextureViewHandle(Handle.ID);
 
-        TextureViews[i] = pool_reader_lock(&Context->TextureViewManager.Pool, TextureViewHandle);
+        TextureViews[i] = pool_reader_lock(&Context->ResourceContext.TextureViews, TextureViewHandle);
         if(!TextureViews[i].Ptr) {
             //todo: diagnostic 
             return false;
@@ -89,7 +90,7 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
         TextureViewsScoped[i] = pool_scoped_lock(&TextureViews[i]);
 
         async_handle<vk_texture> TextureHandle(TextureViews[i]->TextureHandle.ID);
-        Textures[i] = pool_reader_lock(&Context->TextureManager.Pool, TextureHandle);
+        Textures[i] = pool_reader_lock(&Context->ResourceContext.Textures, TextureHandle);
         if(!Textures[i].Ptr) {
             //todo: diagnostic 
             return false;
@@ -118,7 +119,7 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
     }
 
     async_handle<vk_render_pass> RenderPassHandle(CreateInfo.RenderPass.ID);
-    pool_reader_lock RenderPassReader(&Context->RenderPassManager.Pool, RenderPassHandle);
+    pool_reader_lock RenderPassReader(&Context->ResourceContext.RenderPasses, RenderPassHandle);
     if(!RenderPassReader.Ptr) {
         //todo: diagnostic
         return false;
@@ -141,6 +142,8 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
         return false;
     }
 
+    Framebuffer->Width  = Width;
+    Framebuffer->Height = Height;
     Array_Init(&Framebuffer->Attachments, Context->GDI->MainAllocator, CreateInfo.Attachments);
     return true;
 }
@@ -151,4 +154,13 @@ void VK_Delete_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer) {
         vkDestroyFramebuffer(Context->Device, Framebuffer->Framebuffer, Context->VKAllocator);
         Framebuffer->Framebuffer = VK_NULL_HANDLE;
     }
+} 
+
+internal void VK_Framebuffer_Record_Frame(gdi_context* Context, async_handle<vk_framebuffer> Handle) {
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.FramebuffersInUse[Handle.Index()], true);
+    pool_reader_lock FramebufferReader(&Context->ResourceContext.Framebuffers, Handle);
+    for(gdi_handle<gdi_texture_view> Attachment : FramebufferReader->Attachments) {
+        VK_Texture_View_Record_Frame(Context, async_handle<vk_texture_view>(Attachment.ID));
+    }
+    FramebufferReader.Unlock();
 }

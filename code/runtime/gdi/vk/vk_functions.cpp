@@ -87,6 +87,8 @@ void VK_Load_Device_Funcs(gdi* GDI, gdi_context* Context) {
     vkDestroyFramebuffer = DeviceFuncs->vkDestroyFramebuffer;
     vkDestroyDevice = DeviceFuncs->vkDestroyDevice;
     vkDestroyRenderPass = DeviceFuncs->vkDestroyRenderPass;
+    vkDestroyCommandPool = DeviceFuncs->vkDestroyCommandPool;
+    vkDestroySemaphore = DeviceFuncs->vkDestroySemaphore;
 ;
     Assert(DeviceFuncs->SwapchainKHR.Enabled);
 

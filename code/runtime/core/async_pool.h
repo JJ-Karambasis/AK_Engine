@@ -7,11 +7,13 @@ struct async_handle {
     async_handle() = default;
     inline async_handle(u64 _ID) : ID(_ID) { } 
     inline bool Is_Null() { return ID == 0; }
+    inline u32 Index() {
+        return AK_Slot64_Index(ID);
+    }
 };
 
 template <typename type>
 struct async_pool {
-    allocator*          Allocator;
     type*               Ptr;
     ak_rw_lock*         Locks;
     ak_async_slot_map64 SlotMap;
@@ -25,7 +27,6 @@ inline void Async_Pool_Create(async_pool<type>* Pool, allocator* Allocator, u32 
     type* Ptr = (type*)Allocator_Allocate_Memory(Allocator, AllocationSize);
     if(!Ptr) return;
 
-    Pool->Allocator = Allocator;
     Pool->Ptr = Ptr;
     Pool->Locks = (ak_rw_lock*)(Ptr+Capacity);
     
@@ -39,15 +40,14 @@ inline void Async_Pool_Create(async_pool<type>* Pool, allocator* Allocator, u32 
 }
 
 template <typename type>
-inline void Async_Pool_Delete(async_pool<type>* Pool) {
+inline void Async_Pool_Delete(async_pool<type>* Pool, allocator* Allocator) {
     for(u32 i = 0; i < Async_Pool_Capacity(Pool); i++) {
         AK_RW_Lock_Delete(&Pool->Locks[i]);
     }
     
-    if(Pool->Allocator && Pool->Ptr) {
-        Allocator_Free_Memory(Pool->Ptr);
+    if(Allocator && Pool->Ptr) {
+        Allocator_Free_Memory(Allocator, Pool->Ptr);
         Pool->Ptr = NULL;
-        Pool->Allocator = NULL;
     }
 }
 
@@ -168,7 +168,8 @@ struct pool_scoped_lock {
         Scope.Lock = NULL;
         return *this;
     }
-    inline ~pool_scoped_lock() { if(Lock) { Lock->Unlock(); Lock = NULL; }}
+    inline void Unlock() { if(Lock) { Lock->Unlock(); Lock = NULL; }}
+    inline ~pool_scoped_lock() { Unlock(); }
 };
 
 template <typename type>

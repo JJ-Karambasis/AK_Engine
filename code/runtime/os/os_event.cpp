@@ -138,7 +138,7 @@ const os_event* OS_Event_Queue_Iter_Next(os_event_queue_iter* Iter) {
 
     //Check if we exceed pass the initial event buffer size
     //If we do, we need to pull the next event buffer in the stream
-    if(Iter->BufferIndex >= Iter->EventBuffer->Used) {
+    while(Iter->BufferIndex >= Iter->EventBuffer->Used) {
         Assert(Iter->BufferIndex == Iter->EventBuffer->Used);
         os_event_buffer* NewEventBuffer = Iter->EventBuffer->Next;
 

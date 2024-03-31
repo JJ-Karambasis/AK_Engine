@@ -113,7 +113,6 @@ core* Core_Create() {
     Virtual_Allocator_Track(VirtualAllocator, String_Lit("Base Virtual Allocator"));
     Heap_Track(Heap, String_Lit("Base Heap Allocator"));
     Lock_Allocator_Track(LockAllocator, String_Lit("Base Allocator"));
-
     Core->LogManager = Log_Manager_Create();
 
     return Core;
@@ -151,6 +150,7 @@ allocator* Core_Get_Base_Allocator() {
 
 static AK_JOB_THREAD_UPDATE_DEFINE(Core_Job_System_Thread_Update) {
     thread_context* ThreadContext = Thread_Context_Get();
+    QSBR_Update();
     Assert(ThreadContext->CurrentScratchIndex == 0);
 }
 

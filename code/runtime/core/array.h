@@ -89,8 +89,60 @@ inline void Array_Push(array<type>* Array, const type& Entry) {
 }
 
 template <typename type>
+inline void Array_Push(array<type>* Array, type&& Entry) {
+    if(Array->Count == Array->Capacity) {
+        Array_Reserve(Array, Array->Capacity*2);
+    }
+    Array->Ptr[Array->Count++] = Entry;
+}
+
+template <typename type>
+void Array_Destruct(array<type>* Array) {
+    if(Array->Ptr) {
+        for(u32 i = 0; i < Array->Count; i++) {
+            Array->Ptr[i].~type();
+        }
+        Array_Free(Array);
+    }
+}
+
+template <typename type>
 inline array<type>::array(allocator* _Allocator, uptr InitialCapacity) {
     Array_Init(this, _Allocator, InitialCapacity);
+}
+
+template <typename type>
+struct array_scoped {
+    array<type> Array;
+    inline array_scoped(allocator* Allocator) {
+        Array_Init(&Array, Allocator);
+    }
+
+    inline ~array_scoped() { 
+        Array_Destruct(&Array); 
+    }
+
+    inline type& operator[](uptr Index) {
+        return Array[Index];
+    }
+
+    inline array<type>* operator*() {
+        return &Array;
+    }
+
+    inline array<type>* operator->() {
+        return &Array;
+    }
+};
+
+template <typename type>
+inline void Array_Push(array_scoped<type>* Arr, const type& Entry) {
+    Array_Push(&Arr->Array, Entry);
+}
+
+template <typename type>
+inline void Array_Push(array_scoped<type>* Arr, type&& Entry) {
+    Array_Push(&Arr->Array, Entry);
 }
 
 #endif

@@ -93,7 +93,8 @@ internal void VKAPI_PTR VK__Free(void* UserData, void* Memory) {
 
 internal VkAttachmentLoadOp VK_Get_Load_Op(gdi_load_op LoadOp) {
     static VkAttachmentLoadOp VKLoadOps[] = {
-        VK_ATTACHMENT_LOAD_OP_LOAD
+        VK_ATTACHMENT_LOAD_OP_LOAD,
+        VK_ATTACHMENT_LOAD_OP_CLEAR
     };
     static_assert(Array_Count(VKLoadOps) == GDI_LOAD_OP_COUNT);
     Assert(LoadOp < GDI_LOAD_OP_COUNT);
@@ -199,6 +200,265 @@ internal VkImageUsageFlags VK_Convert_To_Image_Usage_Flags(gdi_texture_usage_fla
     if(Flags & GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT) {
         Result |= VK_IMAGE_USAGE_SAMPLED_BIT;
     }
+
+    return Result;
+}
+
+internal vk_pipeline_stage VK_Get_Pipeline_Stage(gdi_resource_state ResourceState) {
+    Assert(ResourceState < GDI_RESOURCE_STATE_COUNT);
+    return G_PipelineStages[ResourceState];
+}
+
+internal VkPipelineStageFlags VK_Get_Pipeline_Stage_Flags(gdi_resource_state ResourceState) {
+    u32 PipelineStage = (u32)VK_Get_Pipeline_Stage(ResourceState);
+    Assert(PipelineStage < (u32)vk_pipeline_stage::Count);
+    return G_PipelineStageMasks[PipelineStage];
+}
+
+internal VkAccessFlags VK_Get_Access_Masks(gdi_resource_state ResourceState) {
+    Assert(ResourceState < GDI_RESOURCE_STATE_COUNT);
+    return G_VKAccessMasks[ResourceState];
+}
+
+internal VkImageLayout VK_Get_Image_Layout(gdi_resource_state ResourceState) {
+    Assert(ResourceState < GDI_RESOURCE_STATE_COUNT);
+    return G_VKImageLayouts[ResourceState];
+}
+
+inline internal void VK_Resource_Update_Frame_Indices(gdi_context* Context, u64* LastFrameIndices, ak_atomic_u32* InUse, uint32_t Count) {
+    for(u32 i = 0; i < Count; i++) {
+        if(AK_Atomic_Load_U32_Relaxed(&InUse[i])) {
+            LastFrameIndices[i] = Context->TotalFramesRendered;
+            AK_Atomic_Store_U32_Relaxed(&InUse[i], false);
+        }
+    }
+}
+
+template <typename type>
+inline internal void VK_Delete_List_Init(vk_delete_list<type>* List, allocator* Allocator) {
+    Array_Init(&List->List, Allocator, 128);
+}
+
+template <typename type>
+inline internal void VK_Delete_List_Add(vk_delete_list<type>* List, type* Resource, u64 LastUsedFrameIndex) {
+    Array_Push(&List->List, {
+        .LastUsedFrameIndex = LastUsedFrameIndex,
+        .Resource = *Resource
+    });
+}
+
+template <typename type>
+inline internal void VK_Delete_List_Clear(vk_delete_list<type>* List) {
+    Array_Clear(&List->List);
+}
+
+internal vk_delete_context* VK_Get_Delete_Context(gdi_context* Context) {
+    vk_delete_context* Result = (vk_delete_context*)AK_TLS_Get(&Context->DeleteContextTLS);
+    if(!Result) {
+        //One allocation for the entire delete context
+        arena* DeleteContextArena = Context->DeleteContextArena;
+        AK_Mutex_Lock(&Context->DeleteContextLock);
+        Result = Arena_Push_Struct(DeleteContextArena, vk_delete_context);
+        AK_Mutex_Unlock(&Context->DeleteContextLock);
+
+        AK_RW_Lock_Create(&Result->RWLock);
+
+        SLL_Push_Front_Async(Context->DeleteContextList, Result);
+        for(u32 i = 0; i < 2; i++) {
+            VK_Delete_List_Init(&Result->RenderPassList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&Result->TextureViewList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&Result->FramebufferList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&Result->SwapchainList[i], Context->GDI->MainAllocator);
+        }
+
+        AK_TLS_Set(&Context->DeleteContextTLS, Result);
+    }
+    return Result;
+}
+
+inline internal u32 VK_Delete_Context_Swap(vk_delete_context* DeleteContext) {
+    AK_RW_Lock_Writer(&DeleteContext->RWLock);
+    u32 Result = DeleteContext->CurrentListIndex;
+    DeleteContext->CurrentListIndex = !DeleteContext->CurrentListIndex;
+    AK_RW_Unlock_Writer(&DeleteContext->RWLock);
+    return Result;
+}
+
+inline internal void VK_Delete_Context_Add_Render_Pass(vk_delete_context* DeleteContext, vk_render_pass* RenderPass, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->RenderPassList[ListIndex], RenderPass, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
+inline internal void VK_Delete_Context_Add_Texture_View(vk_delete_context* DeleteContext, vk_texture_view* TextureView, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->TextureViewList[ListIndex], TextureView, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
+inline internal void VK_Delete_Context_Add_Framebuffer(vk_delete_context* DeleteContext, vk_framebuffer* Framebuffer, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->FramebufferList[ListIndex], Framebuffer, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
+inline internal void VK_Delete_Context_Add_Swapchain(vk_delete_context* DeleteContext, vk_swapchain* Swapchain, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->SwapchainList[ListIndex], Swapchain, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
+inline internal async_handle<vk_render_pass> VK_Context_Allocate_Render_Pass(gdi_context* Context) {
+    async_handle<vk_render_pass> RenderPassHandle = Async_Pool_Allocate(&Context->ResourceContext.RenderPasses);
+    if(RenderPassHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.RenderPassLastFrameIndices[RenderPassHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[RenderPassHandle.Index()]) == false);
+    return RenderPassHandle;
+}
+
+inline internal async_handle<vk_texture> VK_Context_Allocate_Texture(gdi_context* Context) {
+    async_handle<vk_texture> TextureHandle = Async_Pool_Allocate(&Context->ResourceContext.Textures);
+    if(TextureHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.TextureLastFrameIndices[TextureHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.TexturesInUse[TextureHandle.Index()]) == false);
+    return TextureHandle;
+}
+
+inline internal async_handle<vk_texture_view> VK_Context_Allocate_Texture_View(gdi_context* Context) {
+    async_handle<vk_texture_view> TextureViewHandle = Async_Pool_Allocate(&Context->ResourceContext.TextureViews);
+    if(TextureViewHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.TextureViewLastFrameIndices[TextureViewHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.TextureViewsInUse[TextureViewHandle.Index()]) == false);
+    return TextureViewHandle;
+}
+
+inline internal async_handle<vk_framebuffer> VK_Context_Allocate_Framebuffer(gdi_context* Context) {
+    async_handle<vk_framebuffer> FramebufferHandle = Async_Pool_Allocate(&Context->ResourceContext.Framebuffers);
+    if(FramebufferHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.FramebufferLastFrameIndices[FramebufferHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.FramebuffersInUse[FramebufferHandle.Index()]) == false);
+    return FramebufferHandle;
+}
+
+inline internal async_handle<vk_swapchain> VK_Context_Allocate_Swapchain(gdi_context* Context) {
+    async_handle<vk_swapchain> SwapchainHandle = Async_Pool_Allocate(&Context->ResourceContext.Swapchains);
+    if(SwapchainHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.SwapchainLastFrameIndices[SwapchainHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.SwapchainsInUse[SwapchainHandle.Index()]) == false);
+    return SwapchainHandle;
+}
+
+inline internal void VK_Context_Free_Render_Pass(gdi_context* Context, async_handle<vk_render_pass> RenderPassHandle) {
+    Context->ResourceContext.RenderPassLastFrameIndices[RenderPassHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[RenderPassHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.RenderPasses, RenderPassHandle);
+}
+
+inline internal void VK_Context_Free_Texture(gdi_context* Context, async_handle<vk_texture> TextureHandle) {
+    Context->ResourceContext.TextureLastFrameIndices[TextureHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TexturesInUse[TextureHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.Textures, TextureHandle);
+}
+
+inline internal void VK_Context_Free_Texture_View(gdi_context* Context, async_handle<vk_texture_view> TextureViewHandle) {
+    Context->ResourceContext.TextureViewLastFrameIndices[TextureViewHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TextureViewsInUse[TextureViewHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.TextureViews, TextureViewHandle);
+}
+
+inline internal void VK_Context_Free_Framebuffer(gdi_context* Context, async_handle<vk_framebuffer> FramebufferHandle) {
+    Context->ResourceContext.FramebufferLastFrameIndices[FramebufferHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.FramebuffersInUse[FramebufferHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.Framebuffers, FramebufferHandle);
+}
+
+inline internal void VK_Context_Free_Swapchain(gdi_context* Context, async_handle<vk_swapchain> SwapchainHandle) {
+    Context->ResourceContext.SwapchainLastFrameIndices[SwapchainHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.SwapchainsInUse[SwapchainHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.Swapchains, SwapchainHandle);
+}
+
+void VK_Free_Cmd_List(gdi_context* Context, vk_cmd_pool* CmdPool, vk_cmd_list* CmdList) {
+    if(CmdList) {
+        if(CmdList->CmdPool) {
+            vkDestroyCommandPool(Context->Device, CmdList->CmdPool, Context->VKAllocator);
+            CmdList->CmdPool = VK_NULL_HANDLE;
+        }
+
+        DLL_Remove(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail, CmdList);
+        SLL_Push_Front(CmdPool->FreeCmdList, CmdList);
+    }
+}
+
+vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context, vk_cmd_pool* CmdPool) {
+    vk_cmd_list* Result = CmdPool->FreeCmdList;
+    if(Result) SLL_Pop_Front(CmdPool->FreeCmdList);
+    else {
+        VkSemaphore SubmitLock = VK_NULL_HANDLE;
+        VkSemaphore PresentLock = VK_NULL_HANDLE;
+        if(CmdPool->Level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+            VkSemaphoreCreateInfo SemaphoreCreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            };
+
+            vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &SubmitLock);
+            vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &PresentLock);
+        }
+
+        VkCommandPoolCreateInfo CmdPoolCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .queueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex
+        };
+
+        VkCommandPool VkCmdPool;
+        if(vkCreateCommandPool(Context->Device, &CmdPoolCreateInfo, Context->VKAllocator, &VkCmdPool) != VK_SUCCESS) {
+            //todo: diagnostics
+            if(SubmitLock)  vkDestroySemaphore(Context->Device, SubmitLock, Context->VKAllocator);
+            if(PresentLock) vkDestroySemaphore(Context->Device, PresentLock, Context->VKAllocator);
+            return NULL;
+        }
+
+        VkCommandBufferAllocateInfo CmdBufferAllocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = VkCmdPool,
+            .level = CmdPool->Level,
+            .commandBufferCount = 1,
+        };
+
+        VkCommandBuffer CmdBuffer;
+        if(vkAllocateCommandBuffers(Context->Device, &CmdBufferAllocateInfo, &CmdBuffer) != VK_SUCCESS) {
+            //todo: diagnostics
+            if(SubmitLock)  vkDestroySemaphore(Context->Device, SubmitLock, Context->VKAllocator);
+            if(PresentLock) vkDestroySemaphore(Context->Device, PresentLock, Context->VKAllocator);
+            vkDestroyCommandPool(Context->Device, VkCmdPool, Context->VKAllocator);
+            return NULL;
+        }
+
+        Result = Arena_Push_Struct(Context->Arena, vk_cmd_list);
+        Result->Context = Context;
+        Result->CmdPool = VkCmdPool;
+        Result->CmdBuffer = CmdBuffer;
+        Result->SubmitLock = SubmitLock;
+        Result->PresentLock = PresentLock;
+    }
+    Result->SwapchainTextureIndex = (u32)-1;
+    Result->Next = Result->Prev = NULL;
+
+    DLL_Push_Back(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail, Result);
 
     return Result;
 }
@@ -427,9 +687,7 @@ internal bool VK_Create__Internal(gdi* GDI, const gdi_create_info& CreateInfo) {
 }
 
 
-bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_context_create_info& CreateInfo) {
-    Assert(CreateInfo.ResourceQueue);
-    
+bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_context_create_info& CreateInfo) {    
     vk_device* Device = &GDI->Devices[CreateInfo.DeviceIndex];
 
     f32 Priority = 1.0f;
@@ -474,7 +732,6 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
         .ppEnabledExtensionNames = Extensions.Ptr
     };
 
-    Context->ResourceQueue = CreateInfo.ResourceQueue;
     Context->GDI = GDI;
     Context->PhysicalDevice = Device;
     Context->VKAllocator = &GDI->VKAllocator;
@@ -492,11 +749,53 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
 
     VK_Load_Device_Funcs(GDI, Context);
 
-    VK_Resource_Manager_Create(&Context->RenderPassManager, Context, CreateInfo.RenderPassCount);
-    VK_Resource_Manager_Create(&Context->TextureManager, Context, CreateInfo.TextureCount);
-    VK_Resource_Manager_Create(&Context->TextureViewManager, Context, CreateInfo.TextureViewCount);
-    VK_Resource_Manager_Create(&Context->FramebufferManager, Context, CreateInfo.FramebufferCount);
-    VK_Resource_Manager_Create(&Context->SwapchainManager, Context, CreateInfo.SwapchainCount);
+    Context->Frames = array<vk_frame_context>(Context->Arena, CreateInfo.FrameCount);
+    for(u32 i = 0; i < CreateInfo.FrameCount; i++) {
+        vk_frame_context Frame = {};
+
+        VkFenceCreateInfo FenceCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+        };
+
+        if(i != 0) {
+            FenceCreateInfo.flags |= VK_FENCE_CREATE_SIGNALED_BIT;
+        }
+
+        vkCreateFence(Context->Device, &FenceCreateInfo, Context->VKAllocator, &Frame.Fence);
+
+        Frame.PrimaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        Frame.SecondaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+        Array_Push(&Context->Frames, Frame);
+    }
+
+    AK_Mutex_Create(&Context->DeleteContextLock);
+    Context->DeleteContextArena = Arena_Create(Context->GDI->MainAllocator);
+    AK_TLS_Create(&Context->DeleteContextTLS);
+
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    Async_Pool_Create(&ResourceContext->RenderPasses, Context->Arena, CreateInfo.RenderPassCount);
+    Async_Pool_Create(&ResourceContext->Textures, Context->Arena, CreateInfo.TextureCount);
+    Async_Pool_Create(&ResourceContext->TextureViews, Context->Arena, CreateInfo.TextureViewCount);
+    Async_Pool_Create(&ResourceContext->Framebuffers, Context->Arena, CreateInfo.FramebufferCount);
+    Async_Pool_Create(&ResourceContext->Swapchains, Context->Arena, CreateInfo.SwapchainCount);
+
+    ResourceContext->RenderPassesInUse = Arena_Push_Array(Context->Arena, CreateInfo.RenderPassCount, ak_atomic_u32);
+    ResourceContext->TexturesInUse = Arena_Push_Array(Context->Arena, CreateInfo.TextureCount, ak_atomic_u32);
+    ResourceContext->TextureViewsInUse = Arena_Push_Array(Context->Arena, CreateInfo.TextureViewCount, ak_atomic_u32);
+    ResourceContext->FramebuffersInUse = Arena_Push_Array(Context->Arena, CreateInfo.FramebufferCount, ak_atomic_u32);
+    ResourceContext->SwapchainsInUse = Arena_Push_Array(Context->Arena, CreateInfo.SwapchainCount, ak_atomic_u32);
+
+    ResourceContext->RenderPassLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.RenderPassCount, u64);
+    ResourceContext->TextureLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.TextureCount, u64);
+    ResourceContext->TextureViewLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.TextureViewCount, u64);
+    ResourceContext->FramebufferLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.FramebufferCount, u64);
+    ResourceContext->SwapchainLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.SwapchainCount, u64);
+
+    for(u32 i = 0; i < CreateInfo.RenderPassCount; i++) { ResourceContext->RenderPassLastFrameIndices[i] = (u64)-1; }
+    for(u32 i = 0; i < CreateInfo.TextureCount; i++) { ResourceContext->TextureLastFrameIndices[i] = (u64)-1; }
+    for(u32 i = 0; i < CreateInfo.TextureViewCount; i++) { ResourceContext->TextureViewLastFrameIndices[i] = (u64)-1; }
+    for(u32 i = 0; i < CreateInfo.FramebufferCount; i++) { ResourceContext->FramebufferLastFrameIndices[i] = (u64)-1; }
+    for(u32 i = 0; i < CreateInfo.SwapchainCount; i++) { ResourceContext->SwapchainLastFrameIndices[i] = (u64)-1; }
 
     return true;
 }
@@ -606,134 +905,151 @@ array<gdi_format> GDI_Context_Supported_Window_Formats(gdi_context* Context, con
     return Formats;
 }
 
-gdi_handle<gdi_render_pass> GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo) {
-    async_handle<vk_render_pass> RenderPassHandle = VK_Resource_Manager_Allocate(&Context->RenderPassManager);
+gdi_handle<gdi_render_pass> GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo) { 
+    async_handle<vk_render_pass> RenderPassHandle = VK_Context_Allocate_Render_Pass(Context);
     if(RenderPassHandle.Is_Null()) {
         //todo: Diagnostics
         return {};
     }
 
-    pool_writer_lock RenderPassLock(&Context->RenderPassManager.Pool, RenderPassHandle);
+    pool_writer_lock RenderPassLock(&Context->ResourceContext.RenderPasses, RenderPassHandle);
     pool_scoped_lock RenderPassLockScoped(&RenderPassLock);
     if(!VK_Create_Render_Pass(Context, RenderPassLock.Ptr, CreateInfo)) {
         //todo: Diagnostic 
         VK_Delete_Render_Pass(Context, RenderPassLock.Ptr);
-        VK_Resource_Manager_Free(&Context->RenderPassManager, RenderPassHandle);
+        VK_Context_Free_Render_Pass(Context, RenderPassHandle);
         return {};
     }
     return gdi_handle<gdi_render_pass>(RenderPassHandle.ID);
 }
 
 void GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
     async_handle<vk_render_pass> RenderPassHandle(Handle.ID);
-    pool_reader_lock RenderPassReader(&Context->RenderPassManager.Pool, RenderPassHandle);
+    pool_reader_lock RenderPassReader(&ResourceContext->RenderPasses, RenderPassHandle);
     if(RenderPassReader.Ptr) {
-        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->RenderPassManager, RenderPassReader.Ptr);
+        vk_render_pass RenderPass = *RenderPassReader.Ptr;
         RenderPassReader.Unlock();
-        if(TryDeleteQueue) {
-            pool_writer_lock RenderPassWriter(&Context->RenderPassManager.Pool, RenderPassHandle);
-            if(RenderPassWriter.Ptr) {
-                vk_render_pass RenderPass = *RenderPassWriter.Ptr;
-                RenderPassWriter.Unlock();
-                VK_Delete_Render_Pass(Context, &RenderPass);
-            }
+        u64 LastUsedFrameIndex = ResourceContext->RenderPassLastFrameIndices[RenderPassHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->RenderPassesInUse[RenderPassHandle.Index()]) &&
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Render_Pass(Context, &RenderPass);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->RenderPassesInUse[RenderPassHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Render_Pass(DeleteContext, &RenderPass, FrameIndex);
         }
-        VK_Resource_Manager_Free(&Context->RenderPassManager, RenderPassHandle);
     }
+
+    VK_Context_Free_Render_Pass(Context, RenderPassHandle);
 }
 
 gdi_handle<gdi_texture_view> GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo) {
-    async_handle<vk_texture_view> TextureViewHandle = VK_Resource_Manager_Allocate(&Context->TextureViewManager);
+    async_handle<vk_texture_view> TextureViewHandle = VK_Context_Allocate_Texture_View(Context);
     if(TextureViewHandle.Is_Null()) {
         //todo: Diagnostics
         return {};
     }
 
-    pool_writer_lock TextureViewLock(&Context->TextureViewManager.Pool, TextureViewHandle);
+    pool_writer_lock TextureViewLock(&Context->ResourceContext.TextureViews, TextureViewHandle);
     pool_scoped_lock TextureViewLockScoped(&TextureViewLock);
     if(!VK_Create_Texture_View(Context, TextureViewLock.Ptr, CreateInfo)) {
         //todo: Diagnostic 
         VK_Delete_Texture_View(Context, TextureViewLock.Ptr);
-        VK_Resource_Manager_Free(&Context->TextureViewManager, TextureViewHandle);
+        VK_Context_Free_Texture_View(Context, TextureViewHandle);
         return {};
     }
     return gdi_handle<gdi_texture_view>(TextureViewHandle.ID);
 }
 
 void GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
     async_handle<vk_texture_view> TextureViewHandle(Handle.ID);
-    pool_reader_lock TextureViewReader(&Context->TextureViewManager.Pool, TextureViewHandle);
+    pool_reader_lock TextureViewReader(&ResourceContext->TextureViews, TextureViewHandle);
     if(TextureViewReader.Ptr) {
-        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->TextureViewManager, TextureViewReader.Ptr);
+        vk_texture_view TextureView = *TextureViewReader.Ptr;
         TextureViewReader.Unlock();
-        if(!TryDeleteQueue) {
-            pool_writer_lock TextureViewWriter(&Context->TextureViewManager.Pool, TextureViewHandle);
-            if(TextureViewWriter.Ptr) {
-                vk_texture_view TextureView = *TextureViewWriter.Ptr;
-                TextureViewWriter.Unlock();
-                VK_Delete_Texture_View(Context, &TextureView);
-            }
-        } 
-        VK_Resource_Manager_Free(&Context->TextureViewManager, TextureViewHandle);
+
+        u64 LastUsedFrameIndex = ResourceContext->TextureViewLastFrameIndices[TextureViewHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->TextureViewsInUse[TextureViewHandle.Index()]) && 
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Texture_View(Context, &TextureView);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->TextureViewsInUse[TextureViewHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Texture_View(DeleteContext, &TextureView, FrameIndex);
+        }
     }
+
+    VK_Context_Free_Texture_View(Context, TextureViewHandle);
 }
 
 gdi_handle<gdi_framebuffer> GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo) {
-    async_handle<vk_framebuffer> FramebufferHandle = VK_Resource_Manager_Allocate(&Context->FramebufferManager);
+    async_handle<vk_framebuffer> FramebufferHandle = VK_Context_Allocate_Framebuffer(Context);
     if(FramebufferHandle.Is_Null()) {
         //todo: Diagnostics
         return {};
     }
 
-    pool_writer_lock FramebufferLock(&Context->FramebufferManager.Pool, FramebufferHandle);
+    pool_writer_lock FramebufferLock(&Context->ResourceContext.Framebuffers, FramebufferHandle);
     pool_scoped_lock FramebufferLockScoped(&FramebufferLock);
     if(!VK_Create_Framebuffer(Context, FramebufferLock.Ptr, CreateInfo)) {
         //todo: Diagnostics
         VK_Delete_Framebuffer(Context, FramebufferLock.Ptr);
-        VK_Resource_Manager_Free(&Context->FramebufferManager, FramebufferHandle);
+        VK_Context_Free_Framebuffer(Context, FramebufferHandle);
         return {};
     }
     return gdi_handle<gdi_framebuffer>(FramebufferHandle.ID);
 }
 
 void GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
     async_handle<vk_framebuffer> FramebufferHandle(Handle.ID);
-    pool_reader_lock FramebufferReader(&Context->FramebufferManager.Pool, FramebufferHandle);
+    pool_reader_lock FramebufferReader(&ResourceContext->Framebuffers, FramebufferHandle);
     if(FramebufferReader.Ptr) {
-        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->FramebufferManager, FramebufferReader.Ptr); 
+        vk_framebuffer Framebuffer = *FramebufferReader.Ptr;
         FramebufferReader.Unlock();
-        if(!TryDeleteQueue) {
-            pool_writer_lock FramebufferWriter(&Context->FramebufferManager.Pool, FramebufferHandle);
-            if(FramebufferWriter.Ptr) {
-                vk_framebuffer Framebuffer = *FramebufferWriter.Ptr;
-                FramebufferWriter.Unlock();
-                VK_Delete_Framebuffer(Context, &Framebuffer);
-            }
+
+        u64 LastUsedFrameIndex = ResourceContext->FramebufferLastFrameIndices[FramebufferHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 ||
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->FramebuffersInUse[FramebufferHandle.Index()]) &&
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Framebuffer(Context, &Framebuffer);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->FramebuffersInUse[FramebufferHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Framebuffer(DeleteContext, &Framebuffer, FrameIndex);
         }
-        VK_Resource_Manager_Free(&Context->FramebufferManager, FramebufferHandle);
     }
+
+    VK_Context_Free_Framebuffer(Context, FramebufferHandle);
 }
 
 gdi_handle<gdi_swapchain> GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo) {
-    async_handle<vk_swapchain> SwapchainHandle = VK_Resource_Manager_Allocate(&Context->SwapchainManager);
+    async_handle<vk_swapchain> SwapchainHandle = VK_Context_Allocate_Swapchain(Context);
     if(SwapchainHandle.Is_Null()) {
         //todo: diagnostics
         return {};
     }
 
-    pool_writer_lock SwapchainLock(&Context->SwapchainManager.Pool, SwapchainHandle);
+    pool_writer_lock SwapchainLock(&Context->ResourceContext.Swapchains, SwapchainHandle);
     pool_scoped_lock SwapchainLockScoped(&SwapchainLock);
     if(!VK_Create_Swapchain(Context, SwapchainLock.Ptr, CreateInfo)) {
         //todo: Diagnostics
         VK_Delete_Swapchain(Context, SwapchainLock.Ptr);
-        VK_Resource_Manager_Free(&Context->SwapchainManager, SwapchainHandle);
+        VK_Context_Free_Swapchain(Context, SwapchainHandle);
         return {};
     }
 
     if(!VK_Create_Swapchain_Textures(Context, SwapchainLock.Ptr)) {
         //todo: Diagnostics
         VK_Delete_Swapchain_Full(Context, SwapchainLock.Ptr);
-        VK_Resource_Manager_Free(&Context->SwapchainManager, SwapchainHandle);
+        VK_Context_Free_Swapchain(Context, SwapchainHandle);
         return {};
     }
 
@@ -741,22 +1057,35 @@ gdi_handle<gdi_swapchain> GDI_Context_Create_Swapchain(gdi_context* Context, con
 }
 
 void GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
     async_handle<vk_swapchain> SwapchainHandle(Handle.ID);
-    pool_writer_lock SwapchainWriter(&Context->SwapchainManager.Pool, SwapchainHandle);
-    if(SwapchainWriter.Ptr) {
-        VK_Delete_Swapchain_Textures(Context, SwapchainWriter.Ptr);    
-        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->SwapchainManager, SwapchainWriter.Ptr); 
-        if(!TryDeleteQueue) {
-            VK_Delete_Swapchain(Context, SwapchainWriter.Ptr);
+    pool_reader_lock SwapchainReader(&ResourceContext->Swapchains, SwapchainHandle);
+    if(SwapchainReader.Ptr) {
+        vk_swapchain Swapchain = *SwapchainReader.Ptr;
+        SwapchainReader.Unlock();
+
+        VK_Delete_Swapchain_Textures(Context, &Swapchain);    
+
+        u64 LastUsedFrameIndex = ResourceContext->SwapchainLastFrameIndices[SwapchainHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->SwapchainsInUse[SwapchainHandle.Index()]) &&
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Swapchain(Context, &Swapchain);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->SwapchainsInUse[SwapchainHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Swapchain(DeleteContext, &Swapchain, FrameIndex);
         }
-        SwapchainWriter.Unlock();
-        VK_Resource_Manager_Free(&Context->SwapchainManager, SwapchainHandle);    
     }
+
+    VK_Context_Free_Swapchain(Context, SwapchainHandle);
 }
 
 bool GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
     async_handle<vk_swapchain> SwapchainHandle(Handle.ID);
-    pool_writer_lock SwapchainWriter(&Context->SwapchainManager.Pool, SwapchainHandle);
+    pool_writer_lock SwapchainWriter(&ResourceContext->Swapchains, SwapchainHandle);
     if(SwapchainWriter.Ptr) {
         //Copy the old swapchain so we can write the new one into the writer lock
         vk_swapchain Swapchain = *SwapchainWriter.Ptr;
@@ -780,9 +1109,17 @@ bool GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain
 
         //Prevent the surface from being deleted by setting it to null when we resize
         Swapchain.Surface = VK_NULL_HANDLE;
-        bool TryDeleteQueue = VK_Resource_Manager_Try_Delete_Queue(&Context->SwapchainManager, &Swapchain);
-        if(!TryDeleteQueue) {
+        u64 LastUsedFrameIndex = ResourceContext->SwapchainLastFrameIndices[SwapchainHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->SwapchainsInUse[SwapchainHandle.Index()]) &&
+           (!Difference || Difference > Context->Frames.Count))) {
             VK_Delete_Swapchain(Context, &Swapchain);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->SwapchainsInUse[SwapchainHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Swapchain(DeleteContext, &Swapchain, FrameIndex);
+        
         }
     }
     return true;
@@ -790,7 +1127,7 @@ bool GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain
 
 span<gdi_handle<gdi_texture>> GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
     async_handle<vk_swapchain> SwapchainHandle(Handle.ID);
-    pool_reader_lock SwapchainReader(&Context->SwapchainManager.Pool, SwapchainHandle);
+    pool_reader_lock SwapchainReader(&Context->ResourceContext.Swapchains, SwapchainHandle);
     pool_scoped_lock SwapchainReaderLock(&SwapchainReader);
     if(SwapchainReader.Ptr) {
         return span<gdi_handle<gdi_texture>>(SwapchainReader->Textures);
@@ -798,10 +1135,341 @@ span<gdi_handle<gdi_texture>> GDI_Context_Get_Swapchain_Textures(gdi_context* Co
     return span<gdi_handle<gdi_texture>>();
 }
 
+gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_swapchain> Swapchain) {
+    vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
+    
+    async_handle<vk_swapchain> SwapchainHandle(Swapchain.ID);
+    pool_reader_lock SwapchainReader(&Context->ResourceContext.Swapchains, SwapchainHandle);
+
+    vk_cmd_pool* CmdPool;
+    vk_cmd_list* CmdList;
+
+    if(SwapchainReader.Ptr) {
+        pool_scoped_lock SwapchainScoped(&SwapchainReader);
+        CmdPool = &FrameContext->PrimaryCmdPool;
+        CmdList = VK_Allocate_Cmd_List(Context, CmdPool);
+        //Just in case the swapchain is suboptimal we will need to perform 
+        //this in a loop to try again
+        for(;;) {
+            if(!SwapchainReader.Ptr) break;
+            VkResult SwapchainStatus = vkAcquireNextImageKHR(Context->Device, SwapchainReader->Swapchain, UINT64_MAX, CmdList->SubmitLock, VK_NULL_HANDLE, &CmdList->SwapchainTextureIndex);
+            if(SwapchainStatus == VK_SUBOPTIMAL_KHR) {
+                SwapchainScoped.Unlock();
+                if(!GDI_Context_Resize_Swapchain(Context, Swapchain)) {
+                    //todo: error logging
+                    VK_Free_Cmd_List(Context, CmdPool, CmdList);
+                    return NULL;
+                }
+                SwapchainReader = pool_reader_lock(&Context->ResourceContext.Swapchains, SwapchainHandle);
+                SwapchainScoped = pool_scoped_lock(&SwapchainReader);
+            } else if(SwapchainStatus != VK_SUCCESS) {
+                //todo: error logging
+                VK_Free_Cmd_List(Context, CmdPool, CmdList);
+                return NULL;
+            } else {
+                //Success and we can break and write that the swapchain is
+                //used in this frame
+                SwapchainScoped.Unlock();
+                CmdList->SwapchainHandle = async_handle<vk_swapchain>(Swapchain.ID);
+                VK_Swapchain_Record_Frame(Context, SwapchainHandle);
+                break;
+            }
+        }
+    } else {
+        CmdPool = &FrameContext->SecondaryCmdPool;
+        CmdList = VK_Allocate_Cmd_List(Context, CmdPool);
+    }
+    
+    if(vkResetCommandPool(Context->Device, CmdList->CmdPool, 0) != VK_SUCCESS) {
+        //todo: error logging
+        VK_Free_Cmd_List(Context, CmdPool, CmdList);
+        return NULL;
+    }
+
+    VkCommandBufferBeginInfo BeginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+
+    if(CmdPool->Level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+        BeginInfo.flags |= VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+    }
+
+    if(vkBeginCommandBuffer(CmdList->CmdBuffer, &BeginInfo) != VK_SUCCESS) {
+        //todo: error logging
+        VK_Free_Cmd_List(Context, CmdPool, CmdList);
+        return NULL;
+    }
+
+    return (gdi_cmd_list*)CmdList;
+}
+
+
+
+void GDI_Context_Execute(gdi_context* Context) {
+    scratch Scratch = Scratch_Get();
+    vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
+    array<VkCommandBuffer>      CmdBuffers(&Scratch);
+    array<VkPipelineStageFlags> SubmitWaitStages(&Scratch);
+    array<VkSemaphore>          SubmitSemaphores(&Scratch);
+    array<VkSemaphore>          PresentSemaphores(&Scratch);
+    array<VkSwapchainKHR>       Swapchains(&Scratch);
+    array<uint32_t>             SwapchainImageIndices(&Scratch);
+    
+    array<pool_reader_lock<vk_swapchain>> SwapchainReaders(&Scratch);
+
+    vk_cmd_pool* CmdPool = &FrameContext->PrimaryCmdPool;
+    uptr i = 0;
+    for(vk_cmd_list* CmdList = CmdPool->CurrentCmdListHead; CmdList; CmdList = CmdList->Next) {
+        vkEndCommandBuffer(CmdList->CmdBuffer);
+        Array_Push(&CmdBuffers, CmdList->CmdBuffer);
+        Array_Push(&SubmitWaitStages, CmdList->ExecuteLockWaitStage);
+        Array_Push(&SubmitSemaphores, CmdList->SubmitLock);
+        Array_Push(&PresentSemaphores, CmdList->PresentLock);
+        Array_Push(&SwapchainImageIndices, CmdList->SwapchainTextureIndex);
+        
+        pool_reader_lock<vk_swapchain> SwapchainReader(&Context->ResourceContext.Swapchains, CmdList->SwapchainHandle);
+        Assert(SwapchainReader.Ptr);
+        Array_Push(&Swapchains, SwapchainReader->Swapchain);
+        Array_Push(&SwapchainReaders, SwapchainReader);
+    }
+
+    VkSubmitInfo SubmitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = Safe_U32(SubmitSemaphores.Count),
+        .pWaitSemaphores = SubmitSemaphores.Ptr,
+        .commandBufferCount = Safe_U32(CmdBuffers.Count),
+        .pCommandBuffers = CmdBuffers.Ptr,
+        .signalSemaphoreCount = Safe_U32(PresentSemaphores.Count),
+        .pSignalSemaphores = PresentSemaphores.Ptr
+    };
+
+    vkQueueSubmit(Context->GraphicsQueue, 1, &SubmitInfo, FrameContext->Fence);
+
+    VkPresentInfoKHR PresentInfo = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = Safe_U32(PresentSemaphores.Count),
+        .pWaitSemaphores = PresentSemaphores.Ptr,
+        .swapchainCount = Safe_U32(Swapchains.Count),
+        .pSwapchains = Swapchains.Ptr,
+        .pImageIndices = SwapchainImageIndices.Ptr
+    };
+
+    vkQueuePresentKHR(Context->PresentQueue, &PresentInfo);
+
+    for(pool_reader_lock<vk_swapchain>& SwapchainReader : SwapchainReaders) {
+        SwapchainReader.Unlock();
+    }
+
+    while(CmdPool->CurrentCmdListHead) {
+        vk_cmd_list* CmdListToDelete = CmdPool->CurrentCmdListHead;
+        DLL_Remove_Front(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail);
+        SLL_Push_Front(CmdPool->FreeCmdList, CmdListToDelete);
+    }
+
+    CmdPool = &FrameContext->SecondaryCmdPool;
+    while(CmdPool->CurrentCmdListHead) {
+        vk_cmd_list* CmdListToDelete = CmdPool->CurrentCmdListHead;
+        DLL_Remove_Front(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail);
+        SLL_Push_Front(CmdPool->FreeCmdList, CmdListToDelete);
+    }
+
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->RenderPassLastFrameIndices, ResourceContext->RenderPassesInUse, Async_Pool_Capacity(&ResourceContext->RenderPasses));
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->TextureLastFrameIndices, ResourceContext->RenderPassesInUse, Async_Pool_Capacity(&ResourceContext->Textures));
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->TextureViewLastFrameIndices, ResourceContext->RenderPassesInUse, Async_Pool_Capacity(&ResourceContext->TextureViews));
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->FramebufferLastFrameIndices, ResourceContext->FramebuffersInUse, Async_Pool_Capacity(&ResourceContext->Framebuffers));
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->SwapchainLastFrameIndices, ResourceContext->SwapchainsInUse, Async_Pool_Capacity(&ResourceContext->Swapchains));
+
+    Context->TotalFramesRendered++;
+    FrameContext = VK_Get_Current_Frame_Context(Context);
+    if(vkGetFenceStatus(Context->Device, FrameContext->Fence) == VK_NOT_READY) {
+        vkWaitForFences(Context->Device, 1, &FrameContext->Fence, VK_TRUE, UINT64_MAX);
+    }
+    vkResetFences(Context->Device, 1, &FrameContext->Fence);
+
+    vk_delete_context* DeleteContext = (vk_delete_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->DeleteContextList);
+    while(DeleteContext) {
+        u32 DeleteIndex = VK_Delete_Context_Swap(DeleteContext);
+        
+        for(vk_delete_list_entry<vk_render_pass>& RenderPassEntry : DeleteContext->RenderPassList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - RenderPassEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Render_Pass(Context, &RenderPassEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Render_Pass(DeleteContext, &RenderPassEntry.Resource, RenderPassEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->RenderPassList[DeleteIndex]);
+
+        for(vk_delete_list_entry<vk_texture_view>& TextureViewEntry : DeleteContext->TextureViewList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - TextureViewEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Texture_View(Context, &TextureViewEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Texture_View(DeleteContext, &TextureViewEntry.Resource, TextureViewEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->TextureViewList[DeleteIndex]);
+
+        for(vk_delete_list_entry<vk_framebuffer>& FramebufferEntry : DeleteContext->FramebufferList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - FramebufferEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Framebuffer(Context, &FramebufferEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Framebuffer(DeleteContext, &FramebufferEntry.Resource, FramebufferEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->FramebufferList[DeleteIndex]);
+
+        for(vk_delete_list_entry<vk_swapchain>& SwapchainEntry : DeleteContext->SwapchainList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - SwapchainEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Swapchain(Context, &SwapchainEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Swapchain(DeleteContext, &SwapchainEntry.Resource, SwapchainEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->SwapchainList[DeleteIndex]);
+
+        DeleteContext = DeleteContext->Next;
+    }
+}
+
+u32 GDI_Cmd_List_Get_Swapchain_Texture_Index(gdi_cmd_list* _CmdList, gdi_resource_state ResourceState) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    Assert(CmdList->SwapchainTextureIndex != (u32)-1);
+    CmdList->ExecuteLockWaitStage = VK_Get_Pipeline_Stage_Flags(ResourceState);
+    return CmdList->SwapchainTextureIndex;
+}
+
+void GDI_Cmd_List_Barrier(gdi_cmd_list* _CmdList, span<gdi_barrier> Barriers) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    gdi_context* Context = CmdList->Context;
+    
+    scratch Scratch = Scratch_Get();
+    vk_pipeline_barrier PipelineBarriers[(u32)vk_pipeline_stage::Count][(u32)vk_pipeline_stage::Count] = {};
+    array<texture_reader_lock> BarrierTextures(&Scratch);
+
+    for(const gdi_barrier& Barrier : Barriers) {
+        u32 OldStage = (u32)VK_Get_Pipeline_Stage(Barrier.OldState);
+        u32 NewStage = (u32)VK_Get_Pipeline_Stage(Barrier.NewState);
+
+        PipelineBarriers[OldStage][NewStage].InUse = true;
+
+        if(Barrier.Resource.Type == gdi_resource_type::Texture) {
+            if(!PipelineBarriers[OldStage][NewStage].ImageMemoryBarriers.Allocator) {
+                PipelineBarriers[OldStage][NewStage].ImageMemoryBarriers = array<VkImageMemoryBarrier>(&Scratch);
+            }
+
+            async_handle<vk_texture> TextureHandle(Barrier.Resource.TextureHandle.ID);
+            texture_reader_lock TextureLock(&Context->ResourceContext.Textures, TextureHandle);        
+            if(TextureLock.Ptr) {
+                Array_Push(&PipelineBarriers[OldStage][NewStage].ImageMemoryBarriers, {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                    .srcAccessMask = VK_Get_Access_Masks(Barrier.OldState),
+                    .dstAccessMask = VK_Get_Access_Masks(Barrier.NewState),
+                    .oldLayout     = VK_Get_Image_Layout(Barrier.OldState),
+                    .newLayout     = VK_Get_Image_Layout(Barrier.NewState),
+                    .srcQueueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex,
+                    .dstQueueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex,
+                    .image = TextureLock->Image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+                });
+
+                Array_Push(&BarrierTextures, TextureLock);
+            }
+        } else if(Barrier.Resource.Type == gdi_resource_type::Buffer) {
+            Not_Implemented();
+        }
+    }
+
+    for(u32 i = 0; i < (u32)vk_pipeline_stage::Count; i++) {
+        for(u32 j = 0; j < (u32)vk_pipeline_stage::Count; j++) {
+            if(PipelineBarriers[i][j].InUse) {
+                span<VkImageMemoryBarrier> ImageMemoryBarriers = PipelineBarriers[i][j].ImageMemoryBarriers;
+                vkCmdPipelineBarrier(CmdList->CmdBuffer, G_PipelineStageMasks[i], G_PipelineStageMasks[j], VK_DEPENDENCY_BY_REGION_BIT, 
+                                    0, nullptr, 0, nullptr, Safe_U32(ImageMemoryBarriers.Count), ImageMemoryBarriers.Ptr);
+            }
+        }
+    }
+
+    for(texture_reader_lock& Lock : BarrierTextures) {
+        async_handle<vk_texture> Handle = Lock.Handle;
+        Lock.Unlock();
+        VK_Texture_Record_Frame(Context, Handle);
+    }
+}
+
+void GDI_Cmd_List_Begin_Render_Pass(gdi_cmd_list* _CmdList, const gdi_render_pass_begin_info& BeginInfo) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    gdi_context* Context = CmdList->Context;
+
+    async_handle<vk_framebuffer> FramebufferHandle(BeginInfo.Framebuffer.ID);
+    pool_reader_lock FramebufferReader(&Context->ResourceContext.Framebuffers, FramebufferHandle);
+    if(!FramebufferReader.Ptr) {
+        return;
+    }
+
+    pool_scoped_lock FramebufferScoped(&FramebufferReader);
+
+    async_handle<vk_render_pass> RenderPassHandle(BeginInfo.RenderPass.ID);
+    pool_reader_lock RenderPassReader(&Context->ResourceContext.RenderPasses, RenderPassHandle);
+    if(!RenderPassReader.Ptr) {
+        return;
+    }
+
+    pool_scoped_lock RenderPassScoped(&RenderPassReader);
+
+    scratch Scratch = Scratch_Get();
+    fixed_array<VkClearValue> ClearValues(&Scratch, BeginInfo.ClearValues.Count);
+
+    for(u32 i = 0; i < BeginInfo.ClearValues.Count; i++) {
+        if(BeginInfo.ClearValues[i].Type == gdi_clear_type::Color) {
+            
+
+            Memory_Copy(&ClearValues[i].color, &BeginInfo.ClearValues[i].ClearColor, sizeof(VkClearColorValue));
+        } else if(BeginInfo.ClearValues[i].Type == gdi_clear_type::Depth) {
+            ClearValues[i].depthStencil.depth = BeginInfo.ClearValues[i].ClearDepth.Depth;
+        }
+    }
+
+    VkRenderPassBeginInfo RenderPassBeginInfo = {
+        .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass  = RenderPassReader->RenderPass,
+        .framebuffer = FramebufferReader->Framebuffer,
+        .renderArea  = {{}, {FramebufferReader->Width, FramebufferReader->Height}},
+        .clearValueCount = Safe_U32(ClearValues.Count),
+        .pClearValues = ClearValues.Ptr
+    };
+
+    vkCmdBeginRenderPass(CmdList->CmdBuffer, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkRect2D Scissor = {{}, {FramebufferReader->Width, FramebufferReader->Height}};
+    VkViewport Viewport = {
+        .width = (f32)FramebufferReader->Width,
+        .height = (f32)FramebufferReader->Height,
+        .maxDepth = 1.0f
+    };
+
+    vkCmdSetScissor(CmdList->CmdBuffer, 0, 1, &Scissor);
+    vkCmdSetViewport(CmdList->CmdBuffer, 0, 1, &Viewport);
+
+    RenderPassScoped.Unlock();
+    FramebufferScoped.Unlock();
+
+    VK_Render_Pass_Record_Frame(Context, RenderPassHandle);
+    VK_Framebuffer_Record_Frame(Context, FramebufferHandle);
+}
+
+void GDI_Cmd_List_End_Render_Pass(gdi_cmd_list* _CmdList) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    vkCmdEndRenderPass(CmdList->CmdBuffer);
+}
+
 #include <gdi/gdi_shared.cpp>
 
 #include "vk_swapchain.cpp"
 #include "vk_texture.cpp"
 #include "vk_render_pass.cpp"
-#include "vk_resource.cpp"
 #include "vk_functions.cpp"

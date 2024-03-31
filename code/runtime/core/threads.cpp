@@ -1,3 +1,8 @@
+void QSBR_Update() {
+    thread_context* ThreadContext = Thread_Context_Get();
+    AK_QSBR_Update(Core_Get()->ThreadManager->QSBR, ThreadContext->QSBRContext);
+}
+
 internal void Thread_Pool__Init(thread_pool* ThreadPool) {
     Zero_Struct(ThreadPool);
     ThreadPool->FirstFreeIndex = (u32)-1;
@@ -80,6 +85,7 @@ thread_context* Thread_Manager__Create_Raw_Context(thread_manager* ThreadManager
     AK_Mutex_Unlock(&ThreadManager->AllocateLock);
     
     Result->ThreadID = ThreadID;
+    Result->QSBRContext = AK_QSBR_Create_Context(ThreadManager->QSBR);
 
     AK_Mutex_Lock(&ThreadManager->MapLock);
     Thread_Map__Add(&ThreadManager->ThreadMap, Result->ThreadID, Result);
@@ -120,6 +126,9 @@ void Thread_Context_Delete(thread_context* ThreadContext) {
             ThreadContext->ScratchPool[ScratchIndex] = NULL;
         }
     }
+
+    AK_QSBR_Delete_Context(ThreadManager->QSBR, ThreadContext->QSBRContext);
+    ThreadContext->QSBRContext = 0;
 
     AK_Mutex_Lock(&ThreadManager->MapLock);
     Thread_Map__Remove(&ThreadManager->ThreadMap, ThreadContext->ThreadID);
@@ -169,6 +178,7 @@ scratch::~scratch() {
     }
 }
 
+
 scratch Scratch_Get() {
     thread_context* ThreadContext = Thread_Context_Get();
     Assert(ThreadContext->CurrentScratchIndex < MAX_SCRATCH_COUNT);
@@ -208,6 +218,7 @@ thread_manager* Thread_Manager_Create() {
     AK_Mutex_Create(&ThreadManager->MapLock);
     Thread_Pool__Init(&ThreadManager->ThreadPool);
     AK_TLS_Create(&ThreadManager->ThreadContextLocalStorage);
+    ThreadManager->QSBR = AK_QSBR_Create(ThreadManager->QSBR);
 
     ThreadManager->MainThreadContext = Thread_Manager__Create_Raw_Context(ThreadManager, AK_Thread_Get_Current_ID());
 
@@ -227,6 +238,7 @@ void Thread_Manager_Delete() {
             }
         }
 
+        AK_QSBR_Delete(ThreadManager->QSBR);
         AK_Mutex_Delete(&ThreadManager->AllocateLock);
         AK_Mutex_Delete(&ThreadManager->MapLock);
 

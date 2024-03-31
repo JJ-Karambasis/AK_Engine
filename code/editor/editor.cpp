@@ -39,7 +39,7 @@ int main() {
     ak_job_queue*  JobQueueLow = Core_Create_Job_Queue(1024, LowPriorityThreadCount, 0);
 
     Log_Info(modules::Editor, "Started creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
-    gdi_context* GDIContext = GDI_Create_Context(GDI, { .ResourceQueue = JobQueueLow });
+    gdi_context* GDIContext = GDI_Create_Context(GDI, {});
     if(!GDIContext) {
         Fatal_Error_Message();
         return 1;
@@ -65,7 +65,7 @@ int main() {
     
     gdi_handle<gdi_render_pass> RenderPass = GDI_Context_Create_Render_Pass(GDIContext, {
         .Attachments = {
-            gdi_render_pass_attachment::Color(SwapchainFormat, GDI_LOAD_OP_LOAD, GDI_STORE_OP_STORE)
+            gdi_render_pass_attachment::Color(SwapchainFormat, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_STORE)
         }
     });
 
@@ -121,6 +121,31 @@ int main() {
 
                 LastWindowSize = CurrentWindowSize;
             }
+
+            span<gdi_handle<gdi_texture>> SwapchainTextures = GDI_Context_Get_Swapchain_Textures(GDIContext, Swapchain);
+
+            gdi_cmd_list* CmdList = GDI_Context_Begin_Cmd_List(GDIContext, gdi_cmd_list_type::Graphics, Swapchain);
+            u32 TextureIndex = GDI_Cmd_List_Get_Swapchain_Texture_Index(CmdList, GDI_RESOURCE_STATE_COLOR);
+
+            GDI_Cmd_List_Barrier(CmdList, {
+                {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_PRESENT, GDI_RESOURCE_STATE_COLOR}
+            });
+
+            GDI_Cmd_List_Begin_Render_Pass(CmdList, {
+                .RenderPass = RenderPass,
+                .Framebuffer = SwapchainFramebuffers[TextureIndex],
+                .ClearValues = { 
+                    gdi_clear::Color(0.0f, 0.0f, 1.0f, 0.0f)
+                }
+            });
+
+            GDI_Cmd_List_End_Render_Pass(CmdList);
+
+            GDI_Cmd_List_Barrier(CmdList, {
+                {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_COLOR, GDI_RESOURCE_STATE_PRESENT}
+            });
+
+            GDI_Context_Execute(GDIContext);
         }
     }
 

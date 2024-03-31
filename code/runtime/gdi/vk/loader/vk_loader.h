@@ -164,6 +164,8 @@ typedef struct {
     VK_FUNCTION(vkDestroyFramebuffer);
     VK_FUNCTION(vkDestroyDevice);
     VK_FUNCTION(vkDestroyRenderPass);
+    VK_FUNCTION(vkDestroyCommandPool);
+    VK_FUNCTION(vkDestroySemaphore);
 
     vk_khr_swapchain SwapchainKHR;
 }  vk_device_funcs;

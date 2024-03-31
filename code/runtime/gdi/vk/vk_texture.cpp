@@ -1,7 +1,11 @@
+void VK_Texture_Record_Frame(gdi_context* Context, async_handle<vk_texture> Handle) {
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TexturesInUse[Handle.Index()], true);
+}
+
 bool VK_Create_Texture_View(gdi_context* Context, vk_texture_view* TextureView, const gdi_texture_view_create_info& CreateInfo) {
 
     async_handle<vk_texture> TextureHandle(CreateInfo.Texture.ID);
-    pool_reader_lock TextureReader(&Context->TextureManager.Pool, TextureHandle);
+    pool_reader_lock TextureReader(&Context->ResourceContext.Textures, TextureHandle);
     if(!TextureReader.Ptr) {
         return false;
     }
@@ -38,4 +42,11 @@ void VK_Delete_Texture_View(gdi_context* Context, vk_texture_view* TextureView) 
         vkDestroyImageView(Context->Device, TextureView->ImageView, Context->VKAllocator);
         TextureView->ImageView = VK_NULL_HANDLE;
     }
+}
+
+void VK_Texture_View_Record_Frame(gdi_context* Context, async_handle<vk_texture_view> Handle) {
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TextureViewsInUse[Handle.Index()], true);
+    pool_reader_lock TextureViewReader(&Context->ResourceContext.TextureViews, Handle);
+    VK_Texture_Record_Frame(Context, async_handle<vk_texture>(TextureViewReader->TextureHandle.ID));
+    TextureViewReader.Unlock();
 }

@@ -4,6 +4,7 @@
 #define MAX_SCRATCH_COUNT 128
 #define MAX_THREAD_COUNT  128
 
+void QSBR_Update();
 
 struct scratch : public allocator {
     arena* Arena;
@@ -22,9 +23,10 @@ struct thread_context;
 typedef u32 thread_context_callback(thread_context* Context, void* UserData);
 
 struct thread_context {
-	arena* 		 ScratchPool[MAX_SCRATCH_COUNT];
-	arena_marker ScratchMarkers[MAX_SCRATCH_COUNT];
-	u32    		 CurrentScratchIndex;
+	arena* 		    ScratchPool[MAX_SCRATCH_COUNT];
+	arena_marker    ScratchMarkers[MAX_SCRATCH_COUNT];
+	u32    		    CurrentScratchIndex;
+	ak_qsbr_context QSBRContext;
 	
     u64    	  ThreadID;
 	ak_thread Thread;
@@ -65,6 +67,7 @@ struct thread_manager {
 	thread_pool     ThreadPool;
 	thread_context* MainThreadContext;
 	ak_tls          ThreadContextLocalStorage;
+	ak_qsbr*        QSBR;
 };
 
 thread_manager* Thread_Manager_Create();

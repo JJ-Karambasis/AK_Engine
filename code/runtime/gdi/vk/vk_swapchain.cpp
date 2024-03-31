@@ -168,13 +168,13 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
     Array_Resize(&Swapchain->Textures, ImageCount);
 
     for(u32 i = 0; i < ImageCount; i++) {
-        async_handle<vk_texture> TextureHandle = VK_Resource_Manager_Allocate(&Context->TextureManager);
+        async_handle<vk_texture> TextureHandle = VK_Context_Allocate_Texture(Context);
         if(TextureHandle.Is_Null()) {
             //todo: Diagnostic 
             return false;
         }
 
-        pool_writer_lock TextureWriter(&Context->TextureManager.Pool, TextureHandle);
+        pool_writer_lock TextureWriter(&Context->ResourceContext.Textures, TextureHandle);
         TextureWriter->Image  = Images[i];
         TextureWriter->Width  = Swapchain->Width;
         TextureWriter->Height = Swapchain->Height;
@@ -202,7 +202,7 @@ internal void VK_Delete_Swapchain(gdi_context* Context, vk_swapchain* Swapchain)
 internal void VK_Delete_Swapchain_Textures(gdi_context* Context, vk_swapchain* Swapchain) {
     for(gdi_handle<gdi_texture>& Handle : Swapchain->Textures) {
         async_handle<vk_texture> TextureHandle(Handle.ID);
-        VK_Resource_Manager_Free(&Context->TextureManager, TextureHandle);
+        VK_Context_Free_Texture(Context, TextureHandle);
         Handle = {};
     }
     Array_Free(&Swapchain->Textures);
@@ -211,4 +211,8 @@ internal void VK_Delete_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
 internal void VK_Delete_Swapchain_Full(gdi_context* Context, vk_swapchain* Swapchain) {
     VK_Delete_Swapchain_Textures(Context, Swapchain);
     VK_Delete_Swapchain(Context, Swapchain);
+}
+
+internal void VK_Swapchain_Record_Frame(gdi_context* Context, async_handle<vk_swapchain> Handle) {
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.SwapchainsInUse[Handle.Index()], true);
 }

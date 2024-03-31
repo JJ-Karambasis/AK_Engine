@@ -28,3 +28,24 @@ gdi_render_pass_attachment gdi_render_pass_attachment::Color(gdi_format Format, 
         .StoreOp = StoreOp
     };
 }
+
+gdi_resource gdi_resource::Texture(gdi_handle<gdi_texture> Texture) {
+    return {
+        .Type = gdi_resource_type::Texture,
+        .TextureHandle = Texture
+    };
+}
+
+gdi_clear gdi_clear::Color(f32 r, f32 g, f32 b, f32 a) {
+    return {
+        .Type = gdi_clear_type::Color,
+        .ClearColor = {r, g, b, a}
+    };
+}
+
+gdi_clear gdi_clear::Depth(f32 Depth) {
+    return {
+        .Type = gdi_clear_type::Depth,
+        .ClearDepth = {Depth}
+    };
+}

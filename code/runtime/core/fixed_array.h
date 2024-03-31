@@ -21,6 +21,14 @@ struct fixed_array {
     inline type* end() {
         return Ptr+Count;
     }
+
+    inline const type* begin() const {
+        return Ptr;
+    }
+
+    inline const type* end() const {
+        return Ptr+Count;
+    }
 };
 
 template <typename type>
@@ -42,15 +50,15 @@ void Array_Destruct(fixed_array<type>* Array, allocator* Allocator) {
 }
 
 template <typename type>
-struct array_scoped {
+struct fixed_array_scoped {
     allocator*        Allocator;
     fixed_array<type> Array;
-    inline array_scoped(allocator* _Allocator, uptr Count) {
+    inline fixed_array_scoped(allocator* _Allocator, uptr Count) {
         Allocator = _Allocator;
         Array_Construct(&Array, Allocator, Count);
     }
 
-    inline ~array_scoped() { 
+    inline ~fixed_array_scoped() { 
         if(Allocator) { 
             Array_Destruct(&Array, Allocator); 
             Allocator = NULL; 

@@ -235,6 +235,8 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
         if(!PeekMessageW(&Message, NULL, 0, 0, PM_REMOVE)) {
             GetMessageW(&Message, NULL, 0, 0);
 
+            QSBR_Update();
+
             OS_Event_Manager_Push_Back_Stream(&OS->EventManager, OS->EventStream);
             OS->EventStream = OS_Event_Manager_Allocate_Stream(&OS->EventManager);
         }

@@ -137,6 +137,24 @@
 #define SLL_Push_Front(First, Node) SLL_Push_Front_N(First, Node, Next)
 #define SLL_Pop_Front(First) SLL_Pop_Front_N(First, Next)
 
+#define SLL_Push_Front_Async(First, Node) \
+    do { \
+        auto OldTop = AK_Atomic_Load_Ptr_Relaxed(&First); \
+        Node->Next = (decltype(Node))OldTop; \
+        if(AK_Atomic_Compare_Exchange_Bool_Ptr_Explicit(&First, OldTop, Node, AK_ATOMIC_MEMORY_ORDER_RELEASE, AK_ATOMIC_MEMORY_ORDER_RELAXED)) { \
+            break; \
+        } \
+    } while(1)
+
+#define DLL_Remove_Front(First, Last) \
+    do { \
+        if(First == Last) \
+            First = Last = NULL; \
+        else { \
+            First = First->Next; \
+            First->Prev = NULL; \
+        } \
+    } while(0)
 
 #define DLL_Push_Back_NP(First, Last, Node, Next, Prev) (!(First) ? ((First) = (Last) = (Node)) : ((Node)->Prev = (Last), (Last)->Next = (Node), (Last) = (Node)))
 #define DLL_Remove_NP(First, Last, Node, Next, Prev) \

@@ -1,7 +1,7 @@
 #ifndef VK_SWAPCHAIN_H
 #define VK_SWAPCHAIN_H
 
-struct vk_swapchain : public vk_resource {
+struct vk_swapchain {
     gdi_format                     Format;
     gdi_texture_usage_flags        UsageFlags;
     VkSurfaceKHR                   Surface;
@@ -23,5 +23,6 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
 internal void VK_Delete_Swapchain(gdi_context* Context, vk_swapchain* Swapchain);
 internal void VK_Delete_Swapchain_Textures(gdi_context* Context, vk_swapchain* Swapchain);
 internal void VK_Delete_Swapchain_Full(gdi_context* Context, vk_swapchain* Swapchain);
+internal void VK_Swapchain_Record_Frame(gdi_context* Context, async_handle<vk_swapchain> Handle);
 
 #endif
