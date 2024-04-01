@@ -5,6 +5,9 @@
 *.obj 
 *.o
 
+## Data files
+*.shader
+
 ## vscode 
 .vscode/settings.json
 

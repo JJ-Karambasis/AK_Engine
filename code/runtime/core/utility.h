@@ -34,6 +34,12 @@ bool Is_Nan(f32 Value);
 bool Is_Finite(f32 Value);
 s32 Random_Between(s32 Min, s32 Max);
 
+struct scoped_mutex {
+    ak_mutex* Mutex;
+    scoped_mutex(ak_mutex* _Mutex);
+    ~scoped_mutex();
+};
+
 template <typename type> 
 struct range_iter {
     type Current;

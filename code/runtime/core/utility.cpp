@@ -149,3 +149,14 @@ s32 Random_Between(s32 Min, s32 Max) {
     } while (x >= RAND_MAX - remainder);
     return Min + x % n;
 }
+
+scoped_mutex::scoped_mutex(ak_mutex* _Mutex) : Mutex(_Mutex) { 
+    AK_Mutex_Lock(Mutex);
+}
+
+scoped_mutex::~scoped_mutex() {
+    if(Mutex) {
+        AK_Mutex_Unlock(Mutex);
+        Mutex = NULL;
+    }
+}

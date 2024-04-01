@@ -49,3 +49,5 @@ gdi_clear gdi_clear::Depth(f32 Depth) {
         .ClearDepth = {Depth}
     };
 }
+
+#include "gdi_memory.cpp"

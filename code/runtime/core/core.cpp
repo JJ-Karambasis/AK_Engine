@@ -198,6 +198,7 @@ void Core_Set(core* Core) {
     }
 }
 
+#include "math_lib.cpp"
 #include "log.cpp"
 #include "datetime.cpp"
 #include "threads.cpp"

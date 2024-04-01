@@ -3,7 +3,8 @@
 
 struct os;
 
-void OS_Message_Box(string Message, string Title);
+void   OS_Message_Box(string Message, string Title);
+buffer OS_Read_Entire_File(allocator* Allocator, string Filepath);
 
 enum {
     OS_WINDOW_NONE = 0,

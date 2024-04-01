@@ -7,22 +7,17 @@ void Fatal_Error_Message() {
     OS_Message_Box("A fatal error occurred during initialization!\nPlease view the error logs for more info.", "Error");
 }
 
-int main() {
-    if(!Core_Create()) {
-        OS_Message_Box("A fatal error occurred during initialization!", "Error");
-        return 1;
-    }
-
+bool Editor_Main() {
     gdi* GDI = GDI_Create({});
     if(!GDI) {
         Fatal_Error_Message();
-        return 1;
+        return false;
     }
 
     u32 DeviceCount = GDI_Get_Device_Count(GDI);
     if(!DeviceCount) {
         Fatal_Error_Message();
-        return 1;
+        return false;
     }
 
     //Right now we are just grabbing the first gpu. 
@@ -42,12 +37,12 @@ int main() {
     gdi_context* GDIContext = GDI_Create_Context(GDI, {});
     if(!GDIContext) {
         Fatal_Error_Message();
-        return 1;
+        return false;
     }
 
     if(!OS_Create(GDIContext)) {
         Fatal_Error_Message();
-        return 1;
+        return false;
     }
     Log_Info(modules::Editor, "Finished creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
 
@@ -68,11 +63,50 @@ int main() {
             gdi_render_pass_attachment::Color(SwapchainFormat, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_STORE)
         }
     });
+    
+    scratch Scratch = Scratch_Get();
+    buffer VtxShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_vs.shader"));
+    buffer PxlShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_ps.shader"));
+    
+    gdi_handle<gdi_pipeline> Pipeline = GDI_Context_Create_Graphics_Pipeline(GDIContext, {
+        .VS = {VtxShader, String_Lit("VS_Main")},
+        .PS = {PxlShader, String_Lit("PS_Main")},
+        .GraphicsState = {
+            .VtxBufferBindings = { {
+                    .ByteStride = sizeof(vec3),
+                    .Attributes = {
+                        { .Semantic = String_Lit("POSITION"), .Format = GDI_FORMAT_R32G32B32_FLOAT }
+                    }
+                }
+            }
+        },
+        .RenderPass = RenderPass
+    });
 
     arena* Arena = Arena_Create(Core_Get_Base_Allocator());
 
     array<gdi_handle<gdi_texture_view>> SwapchainViews(Arena);
     array<gdi_handle<gdi_framebuffer>>  SwapchainFramebuffers(Arena);
+
+    vec3 TestTriangle[3] = {
+        vec3(-0.5f, -0.5f, 0.0f),
+        vec3( 0.5f, -0.5f, 0.0f),
+        vec3( 0.0f,  0.5f, 0.0f)
+    };
+
+    u16 TestIndices[3] = {0, 1, 2};
+
+    gdi_handle<gdi_buffer> VtxBuffer = GDI_Context_Create_Buffer(GDIContext, {
+        .ByteSize = sizeof(TestTriangle),
+        .UsageFlags = GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT,
+        .InitialData = const_buffer(TestTriangle)
+    });
+
+    gdi_handle<gdi_buffer> IdxBuffer = GDI_Context_Create_Buffer(GDIContext, {
+        .ByteSize = sizeof(TestIndices),
+        .UsageFlags = GDI_BUFFER_USAGE_FLAG_IDX_BUFFER_BIT,
+        .InitialData = const_buffer(TestIndices)
+    });
 
     while(MainWindowID) {
         while(const os_event* Event = OS_Next_Event()) {
@@ -152,6 +186,12 @@ int main() {
                 }
             });
 
+            GDI_Cmd_List_Set_Vtx_Buffers(CmdList, {VtxBuffer});
+            GDI_Cmd_List_Set_Idx_Buffer(CmdList, IdxBuffer, GDI_FORMAT_R16_UINT);
+            GDI_Cmd_List_Set_Pipeline(CmdList, Pipeline);
+
+            GDI_Cmd_List_Draw_Indexed_Instance(CmdList, 3, 0, 0, 1, 0);
+
             GDI_Cmd_List_End_Render_Pass(CmdList);
 
             GDI_Cmd_List_Barrier(CmdList, {
@@ -164,13 +204,23 @@ int main() {
 
     AK_Job_System_Delete(JobSystemHigh);
     AK_Job_Queue_Delete(JobQueueLow);
+    OS_Delete();
 
     GDI_Context_Delete(GDIContext);
     GDI_Delete(GDI);
+    return true;
+}
 
-    OS_Delete();
+int main() {
+    if(!Core_Create()) {
+        OS_Message_Box("A fatal error occurred during initialization!", "Error");
+        return 1;
+    }
+
+    bool Result = Editor_Main();
+
     Core_Delete();
-    return 0;
+    return Result ? 0 : 1;
 }
 
 #include <core.cpp>

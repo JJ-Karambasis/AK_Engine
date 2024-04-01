@@ -186,6 +186,19 @@ internal gdi_format VK_Get_GDI_Format(VkFormat Format) {
     return Result;
 }
 
+internal VkIndexType VK_Get_Index_Type(gdi_format Format) {
+    switch(Format) {
+        case GDI_FORMAT_R16_UINT:
+        return VK_INDEX_TYPE_UINT16;
+
+        case GDI_FORMAT_R32_UINT:
+        return VK_INDEX_TYPE_UINT32;
+
+        Invalid_Default_Case();
+    }
+    return (VkIndexType)-1;
+}
+
 internal VkImageUsageFlags VK_Convert_To_Image_Usage_Flags(gdi_texture_usage_flags Flags) {
     VkImageUsageFlags Result = 0;
 
@@ -199,6 +212,20 @@ internal VkImageUsageFlags VK_Convert_To_Image_Usage_Flags(gdi_texture_usage_fla
 
     if(Flags & GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT) {
         Result |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+
+    return Result;
+}
+
+internal VkBufferUsageFlags VK_Convert_To_Buffer_Usage_Flags(gdi_buffer_usage_flags Flags) {
+    VkBufferUsageFlags Result = 0;
+
+    if(Flags & GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT) {
+        Result |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    }
+
+    if(Flags & GDI_BUFFER_USAGE_FLAG_IDX_BUFFER_BIT) {
+        Result |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     }
 
     return Result;
@@ -257,28 +284,203 @@ inline internal void VK_Delete_List_Free(vk_delete_list<type>* List) {
     Array_Free(&List->List);
 }
 
-internal vk_delete_context* VK_Get_Delete_Context(gdi_context* Context) {
-    vk_delete_context* Result = (vk_delete_context*)AK_TLS_Get(&Context->DeleteContextTLS);
-    if(!Result) {
-        //One allocation for the entire delete context
-        arena* DeleteContextArena = Context->DeleteContextArena;
-        AK_Mutex_Lock(&Context->DeleteContextLock);
-        Result = Arena_Push_Struct(DeleteContextArena, vk_delete_context);
-        AK_Mutex_Unlock(&Context->DeleteContextLock);
-
-        AK_RW_Lock_Create(&Result->RWLock);
-
-        SLL_Push_Front_Async(Context->DeleteContextList, Result);
-        for(u32 i = 0; i < 2; i++) {
-            VK_Delete_List_Init(&Result->RenderPassList[i], Context->GDI->MainAllocator);
-            VK_Delete_List_Init(&Result->TextureViewList[i], Context->GDI->MainAllocator);
-            VK_Delete_List_Init(&Result->FramebufferList[i], Context->GDI->MainAllocator);
-            VK_Delete_List_Init(&Result->SwapchainList[i], Context->GDI->MainAllocator);
-        }
-
-        AK_TLS_Set(&Context->DeleteContextTLS, Result);
+vk_upload_buffer_block* VK_Upload_Buffer_Get_Current_Block(vk_upload_buffer* UploadBuffer, uptr Size, uptr Alignment) {
+    vk_upload_buffer_block* Result = UploadBuffer->Current;
+    while(Result && (Result->Data.Size < (Align_Pow2(Result->Used, Alignment)+Size))) {
+        Result = Result->Next;
     }
     return Result;
+}
+
+vk_upload_buffer_block* VK_Upload_Buffer_Create_Block(vk_upload_buffer* UploadBuffer, size_t AllocationSize) {
+    VkBufferCreateInfo BufferCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size  = AllocationSize,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+
+    VkBuffer Buffer;
+    if(vkCreateBuffer(UploadBuffer->Device, &BufferCreateInfo, UploadBuffer->VKAllocator, &Buffer) != VK_SUCCESS) {
+        //todo: Logging
+        return NULL;
+    }
+
+    VkMemoryRequirements MemoryRequirements;
+    vkGetBufferMemoryRequirements(UploadBuffer->Device, Buffer, &MemoryRequirements);
+
+    vk_allocation Allocation;
+    if(!VK_Memory_Allocate(UploadBuffer->MemoryManager, &MemoryRequirements, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &Allocation)) {
+        //todo: Logging
+        vkDestroyBuffer(UploadBuffer->Device, Buffer, UploadBuffer->VKAllocator);
+        return NULL;
+    }
+
+    VkDeviceMemory Memory = VK_Get_Memory_Block(&Allocation.Allocate)->Memory;
+    if(vkBindBufferMemory(UploadBuffer->Device, Buffer, Memory, Allocation.Allocate.Offset) != VK_SUCCESS) {
+        //todo: Logging
+        VK_Memory_Free(UploadBuffer->MemoryManager, &Allocation);
+        vkDestroyBuffer(UploadBuffer->Device, Buffer, UploadBuffer->VKAllocator);
+        return NULL;
+    }
+
+    buffer Data;
+    if(!VK_Memory_Map(UploadBuffer->Device, &Allocation, MemoryRequirements.size, &Data)) {
+        //todo: Logging
+        VK_Memory_Free(UploadBuffer->MemoryManager, &Allocation);
+        vkDestroyBuffer(UploadBuffer->Device, Buffer, UploadBuffer->VKAllocator);
+        return NULL;
+    }
+
+    vk_upload_buffer_block* Block = Arena_Push_Struct(UploadBuffer->Arena, vk_upload_buffer_block);
+    Block->Buffer     = Buffer;
+    Block->Allocation = Allocation;
+    Block->Data       = Data;
+    Block->Used       = 0;
+    return Block;
+}
+
+void VK_Upload_Buffer_Delete_Block(vk_upload_buffer* UploadBuffer, vk_upload_buffer_block* Block) {
+    if(Block->Data.Ptr) {
+        VK_Memory_Unmap(UploadBuffer->Device, &Block->Allocation);
+        Block->Data = {};
+    }
+
+    VK_Memory_Free(UploadBuffer->MemoryManager, &Block->Allocation);
+
+    if(Block->Buffer) {
+        vkDestroyBuffer(UploadBuffer->Device, Block->Buffer, UploadBuffer->VKAllocator);
+        Block->Buffer = VK_NULL_HANDLE;
+    }
+}
+
+vk_upload_buffer* VK_Get_Current_Upload_Buffer(gdi_context* Context, vk_thread_context* ThreadContext) {
+    u64 FrameIndex = Context->TotalFramesRendered % Context->Frames.Count;
+    return &ThreadContext->UploadBuffers[FrameIndex];
+}
+
+void VK_Upload_Buffer_Create(gdi_context* Context, vk_upload_buffer* UploadBuffer) {
+    UploadBuffer->Arena = Arena_Create(Context->GDI->MainAllocator);
+    UploadBuffer->Device = Context->Device;
+    UploadBuffer->VKAllocator = Context->VKAllocator;
+    UploadBuffer->MemoryManager = &Context->MemoryManager;
+}
+
+void VK_Upload_Buffer_Delete(vk_upload_buffer* UploadBuffer) {
+    if(UploadBuffer->Arena) {
+        vk_upload_buffer_block* Block = UploadBuffer->First;
+        while(Block) {
+            vk_upload_buffer_block* BlockToDelete = Block;
+            Block = BlockToDelete->Next;
+            VK_Upload_Buffer_Delete_Block(UploadBuffer, BlockToDelete);
+        }
+
+        Arena_Delete(UploadBuffer->Arena);
+        UploadBuffer->Arena = NULL;
+    }
+
+    UploadBuffer->Device = VK_NULL_HANDLE;
+    UploadBuffer->VKAllocator = NULL;
+    UploadBuffer->MemoryManager = NULL;
+}
+
+bool VK_Upload_Buffer_Push(vk_upload_buffer* UploadBuffer, const_buffer Data, vk_upload* Upload) {
+    const uptr Alignment = DEFAULT_ALIGNMENT;
+
+    vk_upload_buffer_block* Block = VK_Upload_Buffer_Get_Current_Block(UploadBuffer, Data.Size, Alignment);
+    if(!Block) {
+        uptr BlockSize = VK_UPLOAD_BUFFER_MINIMUM_BLOCK_SIZE;
+
+        uptr Mask = Alignment-1;
+        if(BlockSize < (Data.Size+Mask)) {
+            BlockSize = Ceil_Pow2(Data.Size+Mask);
+        }
+
+        Block = VK_Upload_Buffer_Create_Block(UploadBuffer, BlockSize);
+        if(!Block) {
+            return false;
+        }
+
+        SLL_Push_Back(UploadBuffer->First, UploadBuffer->Last, Block);
+    }
+
+    UploadBuffer->Current = Block;
+    vk_upload_buffer_block* CurrentBlock = UploadBuffer->Current;
+
+    CurrentBlock->Used = Align_Pow2(CurrentBlock->Used, Alignment);
+    Assert(CurrentBlock->Used+Data.Size <= CurrentBlock->Data.Size);
+
+    Upload->Buffer = CurrentBlock->Buffer;
+    Upload->Offset = CurrentBlock->Used;
+    Upload->Size   = Data.Size;
+
+    Memory_Copy(CurrentBlock->Data.Ptr+CurrentBlock->Used, Data.Ptr, Data.Size);
+    CurrentBlock->Used += Data.Size;
+
+    return true; 
+}
+
+void VK_Upload_Buffer_Clear(vk_upload_buffer* UploadBuffer) {
+    for(vk_upload_buffer_block* Block = UploadBuffer->First; Block; Block = Block->Next) {
+        Block->Used = 0;
+    }
+    UploadBuffer->Current = UploadBuffer->First;
+}
+
+internal vk_thread_context* VK_Get_Thread_Context(gdi_context* Context) {
+    vk_thread_context* Result = (vk_thread_context*)AK_TLS_Get(&Context->ThreadContextTLS);
+    if(!Result) {
+        //One allocation for the entire delete context
+        arena* ThreadContextArena = Context->ThreadContextArena;
+        AK_Mutex_Lock(&Context->ThreadContextLock);
+        Result = Arena_Push_Struct(ThreadContextArena, vk_thread_context);
+        Result->UploadBuffers = fixed_array<vk_upload_buffer>(ThreadContextArena, Context->Frames.Count);
+        AK_Mutex_Unlock(&Context->ThreadContextLock);
+
+        SLL_Push_Front_Async(Context->ThreadContextList, Result);
+
+        vk_delete_context* DeleteContext = &Result->DeleteContext;
+        AK_RW_Lock_Create(&DeleteContext->RWLock);
+        for(u32 i = 0; i < 2; i++) {
+            VK_Delete_List_Init(&DeleteContext->RenderPassList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&DeleteContext->BufferList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&DeleteContext->TextureViewList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&DeleteContext->FramebufferList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&DeleteContext->SwapchainList[i], Context->GDI->MainAllocator);
+        }
+
+        vk_copy_context* CopyContext = &Result->CopyContext;
+        AK_RW_Lock_Create(&CopyContext->RWLock);
+        for(u32 i = 0; i < 2; i++) {
+            Array_Init(&CopyContext->CopyUploadToBufferList[i], Context->GDI->MainAllocator);
+        }
+
+        for(vk_upload_buffer& UploadBuffer : Result->UploadBuffers) {
+            VK_Upload_Buffer_Create(Context, &UploadBuffer);
+        }
+
+        AK_TLS_Set(&Context->ThreadContextTLS, Result);
+    }
+    return Result;
+}
+
+inline internal u32 VK_Copy_Context_Swap(vk_copy_context* CopyContext) {
+    AK_RW_Lock_Writer(&CopyContext->RWLock);
+    u32 Result = CopyContext->CurrentListIndex;
+    CopyContext->CurrentListIndex = !CopyContext->CurrentListIndex;
+    AK_RW_Unlock_Writer(&CopyContext->RWLock);
+    return Result;
+}
+
+internal void VK_Copy_Context_Add_Upload_To_Buffer_Copy(vk_copy_context* CopyContext, const vk_copy_upload_to_buffer& CopyUploadToBuffer) {
+    AK_RW_Lock_Reader(&CopyContext->RWLock);
+    u32 ListIndex = CopyContext->CurrentListIndex;
+    Array_Push(&CopyContext->CopyUploadToBufferList[ListIndex], CopyUploadToBuffer);
+    AK_RW_Unlock_Reader(&CopyContext->RWLock);
+}
+
+internal vk_delete_context* VK_Get_Delete_Context(gdi_context* Context) {
+    return &VK_Get_Thread_Context(Context)->DeleteContext;
 }
 
 inline internal u32 VK_Delete_Context_Swap(vk_delete_context* DeleteContext) {
@@ -293,6 +495,13 @@ inline internal void VK_Delete_Context_Add_Render_Pass(vk_delete_context* Delete
     AK_RW_Lock_Reader(&DeleteContext->RWLock);
     u32 ListIndex = DeleteContext->CurrentListIndex;
     VK_Delete_List_Add(&DeleteContext->RenderPassList[ListIndex], RenderPass, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
+inline internal void VK_Delete_Context_Add_Buffer(vk_delete_context* DeleteContext, vk_buffer* Buffer, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->BufferList[ListIndex], Buffer, LastUsedFrameIndex);
     AK_RW_Unlock_Reader(&DeleteContext->RWLock);
 }
 
@@ -317,6 +526,13 @@ inline internal void VK_Delete_Context_Add_Swapchain(vk_delete_context* DeleteCo
     AK_RW_Unlock_Reader(&DeleteContext->RWLock);
 }
 
+inline internal void VK_Delete_Context_Add_Pipeline(vk_delete_context* DeleteContext, vk_pipeline* Pipeline, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->PipelineList[ListIndex], Pipeline, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
 inline internal async_handle<vk_render_pass> VK_Context_Allocate_Render_Pass(gdi_context* Context) {
     async_handle<vk_render_pass> RenderPassHandle = Async_Pool_Allocate(&Context->ResourceContext.RenderPasses);
     if(RenderPassHandle.Is_Null()) {
@@ -325,6 +541,16 @@ inline internal async_handle<vk_render_pass> VK_Context_Allocate_Render_Pass(gdi
     Assert(Context->ResourceContext.RenderPassLastFrameIndices[RenderPassHandle.Index()] == (u64)-1);
     Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[RenderPassHandle.Index()]) == false);
     return RenderPassHandle;
+}
+
+inline internal async_handle<vk_buffer> VK_Context_Allocate_Buffer(gdi_context* Context) {
+    async_handle<vk_buffer> BufferHandle = Async_Pool_Allocate(&Context->ResourceContext.Buffers);
+    if(BufferHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.BufferLastFrameIndices[BufferHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.BuffersInUse[BufferHandle.Index()]) == false);
+    return BufferHandle;
 }
 
 inline internal async_handle<vk_texture> VK_Context_Allocate_Texture(gdi_context* Context) {
@@ -367,10 +593,26 @@ inline internal async_handle<vk_swapchain> VK_Context_Allocate_Swapchain(gdi_con
     return SwapchainHandle;
 }
 
+inline internal async_handle<vk_pipeline> VK_Context_Allocate_Pipeline(gdi_context* Context) {
+    async_handle<vk_pipeline> PipelineHandle = Async_Pool_Allocate(&Context->ResourceContext.Pipelines);
+    if(PipelineHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.PipelineLastFrameIndices[PipelineHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.PipelinesInUse[PipelineHandle.Index()]) == false);
+    return PipelineHandle;
+}
+
 inline internal void VK_Context_Free_Render_Pass(gdi_context* Context, async_handle<vk_render_pass> RenderPassHandle) {
     Context->ResourceContext.RenderPassLastFrameIndices[RenderPassHandle.Index()] = (u64)-1;
     AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[RenderPassHandle.Index()], false);
     Async_Pool_Free(&Context->ResourceContext.RenderPasses, RenderPassHandle);
+}
+
+inline internal void VK_Context_Free_Buffer(gdi_context* Context, async_handle<vk_buffer> BufferHandle) {
+    Context->ResourceContext.BufferLastFrameIndices[BufferHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.BuffersInUse[BufferHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.Buffers, BufferHandle);
 }
 
 inline internal void VK_Context_Free_Texture(gdi_context* Context, async_handle<vk_texture> TextureHandle) {
@@ -396,6 +638,12 @@ inline internal void VK_Context_Free_Swapchain(gdi_context* Context, async_handl
     AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.SwapchainsInUse[SwapchainHandle.Index()], false);
     Async_Pool_Free(&Context->ResourceContext.Swapchains, SwapchainHandle);
 }
+
+inline internal void VK_Context_Free_Pipeline(gdi_context* Context, async_handle<vk_pipeline> PipelineHandle) {
+    Context->ResourceContext.PipelineLastFrameIndices[PipelineHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.PipelinesInUse[PipelineHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.Pipelines, PipelineHandle);
+} 
 
 void VK_Free_Cmd_List(gdi_context* Context, vk_cmd_pool* CmdPool, vk_cmd_list* CmdList) {
     if(CmdList) {
@@ -754,9 +1002,35 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
 
     VK_Load_Device_Funcs(GDI, Context);
 
+    VK_Memory_Manager_Create(&Context->MemoryManager, Context);
+
     Context->Frames = array<vk_frame_context>(Context->Arena, CreateInfo.FrameCount);
+    Array_Resize(&Context->Frames, CreateInfo.FrameCount);
+    
     for(u32 i = 0; i < CreateInfo.FrameCount; i++) {
-        vk_frame_context Frame = {};
+        vk_frame_context* Frame = &Context->Frames[i];
+
+        VkCommandPoolCreateInfo CmdPoolCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .queueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex
+        };
+
+        if(vkCreateCommandPool(Context->Device, &CmdPoolCreateInfo, Context->VKAllocator, &Frame->CopyCmdPool) != VK_SUCCESS) {
+            //todo: logging
+            return false;
+        }
+
+        VkCommandBufferAllocateInfo CmdBufferAllocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = Frame->CopyCmdPool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1
+        };
+
+        if(vkAllocateCommandBuffers(Context->Device, &CmdBufferAllocateInfo, &Frame->CopyCmdBuffer) != VK_SUCCESS) {
+            //todo: logging
+            return false;
+        }
 
         VkFenceCreateInfo FenceCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
@@ -764,43 +1038,65 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
 
         if(i != 0) {
             FenceCreateInfo.flags |= VK_FENCE_CREATE_SIGNALED_BIT;
+        } else {
+            if(vkResetCommandPool(Context->Device, Frame->CopyCmdPool, 0) != VK_SUCCESS) {
+                //todo: logging
+                return false;
+            }
+
+            VkCommandBufferBeginInfo BeginInfo = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+            };
+
+            if(vkBeginCommandBuffer(Frame->CopyCmdBuffer, &BeginInfo) != VK_SUCCESS) {
+                //todo: logging
+                return false;
+            }
         }
 
-        vkCreateFence(Context->Device, &FenceCreateInfo, Context->VKAllocator, &Frame.Fence);
+        vkCreateFence(Context->Device, &FenceCreateInfo, Context->VKAllocator, &Frame->Fence);
 
-        Frame.PrimaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        Frame.SecondaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
-        Array_Push(&Context->Frames, Frame);
+        Frame->PrimaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        Frame->SecondaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
     }
 
-    AK_Mutex_Create(&Context->DeleteContextLock);
-    Context->DeleteContextArena = Arena_Create(Context->GDI->MainAllocator);
-    AK_TLS_Create(&Context->DeleteContextTLS);
+    AK_Mutex_Create(&Context->ThreadContextLock);
+    Context->ThreadContextArena = Arena_Create(Context->GDI->MainAllocator);
+    AK_TLS_Create(&Context->ThreadContextTLS);
 
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     Async_Pool_Create(&ResourceContext->RenderPasses, Context->Arena, CreateInfo.RenderPassCount);
+    Async_Pool_Create(&ResourceContext->Buffers, Context->Arena, CreateInfo.BufferCount);
     Async_Pool_Create(&ResourceContext->Textures, Context->Arena, CreateInfo.TextureCount);
     Async_Pool_Create(&ResourceContext->TextureViews, Context->Arena, CreateInfo.TextureViewCount);
     Async_Pool_Create(&ResourceContext->Framebuffers, Context->Arena, CreateInfo.FramebufferCount);
     Async_Pool_Create(&ResourceContext->Swapchains, Context->Arena, CreateInfo.SwapchainCount);
+    Async_Pool_Create(&ResourceContext->Pipelines, Context->Arena, CreateInfo.PipelineCount);
 
     ResourceContext->RenderPassesInUse = Arena_Push_Array(Context->Arena, CreateInfo.RenderPassCount, ak_atomic_u32);
+    ResourceContext->BuffersInUse = Arena_Push_Array(Context->Arena, CreateInfo.BufferCount, ak_atomic_u32);
     ResourceContext->TexturesInUse = Arena_Push_Array(Context->Arena, CreateInfo.TextureCount, ak_atomic_u32);
     ResourceContext->TextureViewsInUse = Arena_Push_Array(Context->Arena, CreateInfo.TextureViewCount, ak_atomic_u32);
     ResourceContext->FramebuffersInUse = Arena_Push_Array(Context->Arena, CreateInfo.FramebufferCount, ak_atomic_u32);
     ResourceContext->SwapchainsInUse = Arena_Push_Array(Context->Arena, CreateInfo.SwapchainCount, ak_atomic_u32);
+    ResourceContext->PipelinesInUse = Arena_Push_Array(Context->Arena, CreateInfo.PipelineCount, ak_atomic_u32);
 
     ResourceContext->RenderPassLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.RenderPassCount, u64);
+    ResourceContext->BufferLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.BufferCount, u64);
     ResourceContext->TextureLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.TextureCount, u64);
     ResourceContext->TextureViewLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.TextureViewCount, u64);
     ResourceContext->FramebufferLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.FramebufferCount, u64);
     ResourceContext->SwapchainLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.SwapchainCount, u64);
+    ResourceContext->PipelineLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.PipelineCount, u64);
 
     for(u32 i = 0; i < CreateInfo.RenderPassCount; i++) { ResourceContext->RenderPassLastFrameIndices[i] = (u64)-1; }
+    for(u32 i = 0; i < CreateInfo.BufferCount; i++) { ResourceContext->BufferLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.TextureCount; i++) { ResourceContext->TextureLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.TextureViewCount; i++) { ResourceContext->TextureViewLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.FramebufferCount; i++) { ResourceContext->FramebufferLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.SwapchainCount; i++) { ResourceContext->SwapchainLastFrameIndices[i] = (u64)-1; }
+    for(u32 i = 0; i < CreateInfo.PipelineCount; i++) { ResourceContext->PipelineLastFrameIndices[i] = (u64)-1; }
 
     return true;
 }
@@ -882,11 +1178,19 @@ void GDI_Context_Delete(gdi_context* Context) {
         vk_resource_context* ResourceContext = &Context->ResourceContext;
 
         //First delete everything from the delete context
-        vk_delete_context* DeleteContext = (vk_delete_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->DeleteContextList);
-        while(DeleteContext) {
+        
+
+        vk_thread_context* ThreadContext = (vk_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->ThreadContextList);
+        while(ThreadContext) {
+
+            vk_delete_context* DeleteContext = &ThreadContext->DeleteContext;
             for(u32 i = 0; i < 2; i++) {
                 for(vk_delete_list_entry<vk_render_pass>& RenderPassEntry : DeleteContext->RenderPassList[i]) {
                     VK_Delete_Render_Pass(Context, &RenderPassEntry.Resource);
+                }
+
+                for(vk_delete_list_entry<vk_buffer>& BufferEntry : DeleteContext->BufferList[i]) {
+                    VK_Delete_Buffer(Context, &BufferEntry.Resource);
                 }
 
                 for(vk_delete_list_entry<vk_texture_view>& TextureViewEntry : DeleteContext->TextureViewList[i]) {
@@ -901,13 +1205,23 @@ void GDI_Context_Delete(gdi_context* Context) {
                     VK_Delete_Swapchain(Context, &SwapchainEntry.Resource);
                 }
 
+                for(vk_delete_list_entry<vk_pipeline>& PipelineEntry : DeleteContext->PipelineList[i]) {
+                    VK_Delete_Pipeline(Context, &PipelineEntry.Resource);
+                }
+
                 VK_Delete_List_Free(&DeleteContext->RenderPassList[i]);
+                VK_Delete_List_Free(&DeleteContext->BufferList[i]);
                 VK_Delete_List_Free(&DeleteContext->TextureViewList[i]);
                 VK_Delete_List_Free(&DeleteContext->FramebufferList[i]);
                 VK_Delete_List_Free(&DeleteContext->SwapchainList[i]);
+                VK_Delete_List_Free(&DeleteContext->PipelineList[i]);
             }
 
-            DeleteContext = DeleteContext->Next;
+            for(vk_upload_buffer& UploadBuffer : ThreadContext->UploadBuffers) {
+                VK_Upload_Buffer_Delete(&UploadBuffer);
+            }
+
+            ThreadContext = ThreadContext->Next;
         }
 
         //Delete any remaining resources that are not on the delete queue
@@ -915,6 +1229,13 @@ void GDI_Context_Delete(gdi_context* Context) {
             vk_render_pass* RenderPass = ResourceContext->RenderPasses.Ptr + i; 
             if(RenderPass->RenderPass) {
                 VK_Delete_Render_Pass(Context, RenderPass);
+            }
+        }
+
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->Buffers); i++) {
+            vk_buffer* Buffer = ResourceContext->Buffers.Ptr + i; 
+            if(Buffer->Buffer) {
+                VK_Delete_Buffer(Context, Buffer);
             }
         }
 
@@ -939,13 +1260,23 @@ void GDI_Context_Delete(gdi_context* Context) {
             }
         }
 
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->Pipelines); i++) {
+            vk_pipeline* Pipeline = ResourceContext->Pipelines.Ptr + i;
+            if(Pipeline->Pipeline) {
+                VK_Delete_Pipeline(Context, Pipeline);
+            }
+        }
+
+        AK_Mutex_Delete(&Context->ThreadContextLock);
+        AK_TLS_Delete(&Context->ThreadContextTLS);
+        VK_Memory_Manager_Delete(&Context->MemoryManager);
+        Arena_Delete(Context->ThreadContextArena);
+
         if(Context->Device) {
             vkDestroyDevice(Context->Device, Context->VKAllocator);
             Context->Device = VK_NULL_HANDLE;
         }
-        AK_Mutex_Delete(&Context->DeleteContextLock);
-        AK_TLS_Delete(&Context->DeleteContextTLS);
-        Arena_Delete(Context->DeleteContextArena);
+
         Arena_Delete(Context->Arena);
     }
 }
@@ -976,6 +1307,57 @@ array<gdi_format> GDI_Context_Supported_Window_Formats(gdi_context* Context, con
     return Formats;
 }
 
+gdi_handle<gdi_buffer> GDI_Context_Create_Buffer(gdi_context* Context, const gdi_buffer_create_info& CreateInfo) {
+    async_handle<vk_buffer> BufferHandle = VK_Context_Allocate_Buffer(Context);
+    if(BufferHandle.Is_Null()) {
+        //todo: Diagnostics
+        return {};
+    }
+
+    pool_writer_lock BufferLock(&Context->ResourceContext.Buffers, BufferHandle);
+    if(!VK_Create_Buffer(Context, BufferLock.Ptr, CreateInfo)) {
+        VK_Delete_Buffer(Context, BufferLock.Ptr);
+        BufferLock.Unlock();
+        VK_Context_Free_Buffer(Context, BufferHandle);
+        return {};
+    }
+
+    if(CreateInfo.InitialData.Ptr && CreateInfo.InitialData.Size) {
+        if(!VK_Buffer_Upload(Context, BufferHandle, CreateInfo.InitialData)) {
+            VK_Delete_Buffer(Context, BufferLock.Ptr);
+            BufferLock.Unlock();
+            VK_Context_Free_Buffer(Context, BufferHandle);
+            return {};
+        }
+    }
+
+    BufferLock.Unlock();
+    return gdi_handle<gdi_buffer>(BufferHandle.ID);
+}
+
+void GDI_Context_Delete_Buffer(gdi_context* Context, gdi_handle<gdi_buffer> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    async_handle<vk_buffer> BufferHandle(Handle.ID);
+    pool_reader_lock BufferReader(&ResourceContext->Buffers, BufferHandle);
+    if(BufferReader.Ptr) {
+        vk_buffer Buffer = *BufferReader.Ptr;
+        BufferReader.Unlock();
+        u64 LastUsedFrameIndex = ResourceContext->BufferLastFrameIndices[BufferHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->BuffersInUse[BufferHandle.Index()]) &&
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Buffer(Context, &Buffer);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->BuffersInUse[BufferHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Buffer(DeleteContext, &Buffer, FrameIndex);
+        }
+    }
+
+    VK_Context_Free_Buffer(Context, BufferHandle);
+}
+
 gdi_handle<gdi_render_pass> GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo) { 
     async_handle<vk_render_pass> RenderPassHandle = VK_Context_Allocate_Render_Pass(Context);
     if(RenderPassHandle.Is_Null()) {
@@ -984,13 +1366,14 @@ gdi_handle<gdi_render_pass> GDI_Context_Create_Render_Pass(gdi_context* Context,
     }
 
     pool_writer_lock RenderPassLock(&Context->ResourceContext.RenderPasses, RenderPassHandle);
-    pool_scoped_lock RenderPassLockScoped(&RenderPassLock);
     if(!VK_Create_Render_Pass(Context, RenderPassLock.Ptr, CreateInfo)) {
         //todo: Diagnostic 
         VK_Delete_Render_Pass(Context, RenderPassLock.Ptr);
+        RenderPassLock.Unlock();
         VK_Context_Free_Render_Pass(Context, RenderPassHandle);
         return {};
     }
+    RenderPassLock.Unlock();
     return gdi_handle<gdi_render_pass>(RenderPassHandle.ID);
 }
 
@@ -1025,13 +1408,14 @@ gdi_handle<gdi_texture_view> GDI_Context_Create_Texture_View(gdi_context* Contex
     }
 
     pool_writer_lock TextureViewLock(&Context->ResourceContext.TextureViews, TextureViewHandle);
-    pool_scoped_lock TextureViewLockScoped(&TextureViewLock);
     if(!VK_Create_Texture_View(Context, TextureViewLock.Ptr, CreateInfo)) {
         //todo: Diagnostic 
         VK_Delete_Texture_View(Context, TextureViewLock.Ptr);
+        TextureViewLock.Unlock();
         VK_Context_Free_Texture_View(Context, TextureViewHandle);
         return {};
     }
+    TextureViewLock.Unlock();
     return gdi_handle<gdi_texture_view>(TextureViewHandle.ID);
 }
 
@@ -1067,13 +1451,14 @@ gdi_handle<gdi_framebuffer> GDI_Context_Create_Framebuffer(gdi_context* Context,
     }
 
     pool_writer_lock FramebufferLock(&Context->ResourceContext.Framebuffers, FramebufferHandle);
-    pool_scoped_lock FramebufferLockScoped(&FramebufferLock);
     if(!VK_Create_Framebuffer(Context, FramebufferLock.Ptr, CreateInfo)) {
         //todo: Diagnostics
         VK_Delete_Framebuffer(Context, FramebufferLock.Ptr);
+        FramebufferLock.Unlock();
         VK_Context_Free_Framebuffer(Context, FramebufferHandle);
         return {};
     }
+    FramebufferLock.Unlock();
     return gdi_handle<gdi_framebuffer>(FramebufferHandle.ID);
 }
 
@@ -1109,10 +1494,10 @@ gdi_handle<gdi_swapchain> GDI_Context_Create_Swapchain(gdi_context* Context, con
     }
 
     pool_writer_lock SwapchainLock(&Context->ResourceContext.Swapchains, SwapchainHandle);
-    pool_scoped_lock SwapchainLockScoped(&SwapchainLock);
     if(!VK_Create_Swapchain(Context, SwapchainLock.Ptr, CreateInfo)) {
         //todo: Diagnostics
         VK_Delete_Swapchain(Context, SwapchainLock.Ptr);
+        SwapchainLock.Unlock();
         VK_Context_Free_Swapchain(Context, SwapchainHandle);
         return {};
     }
@@ -1120,10 +1505,12 @@ gdi_handle<gdi_swapchain> GDI_Context_Create_Swapchain(gdi_context* Context, con
     if(!VK_Create_Swapchain_Textures(Context, SwapchainLock.Ptr)) {
         //todo: Diagnostics
         VK_Delete_Swapchain_Full(Context, SwapchainLock.Ptr);
+        SwapchainLock.Unlock();
         VK_Context_Free_Swapchain(Context, SwapchainHandle);
         return {};
     }
 
+    SwapchainLock.Unlock();
     return gdi_handle<gdi_swapchain>(SwapchainHandle.ID);
 }
 
@@ -1204,6 +1591,48 @@ span<gdi_handle<gdi_texture>> GDI_Context_Get_Swapchain_Textures(gdi_context* Co
         return span<gdi_handle<gdi_texture>>(SwapchainReader->Textures);
     }
     return span<gdi_handle<gdi_texture>>();
+}
+
+gdi_handle<gdi_pipeline> GDI_Context_Create_Graphics_Pipeline(gdi_context* Context, const gdi_graphics_pipeline_create_info& CreateInfo) {
+    async_handle<vk_pipeline> PipelineHandle = VK_Context_Allocate_Pipeline(Context);
+    if(PipelineHandle.Is_Null()) {
+        //todo: Diagnostics
+        return {};
+    }
+
+    pool_writer_lock PipelineLock(&Context->ResourceContext.Pipelines, PipelineHandle);
+    if(!VK_Create_Pipeline(Context, PipelineLock.Ptr, CreateInfo)) {
+        //todo: Diagnostics
+        VK_Delete_Pipeline(Context, PipelineLock.Ptr);
+        PipelineLock.Unlock();
+        VK_Context_Free_Pipeline(Context, PipelineHandle);
+        return {};
+    }
+
+    PipelineLock.Unlock();
+    return gdi_handle<gdi_pipeline>(PipelineHandle.ID);
+}
+
+void GDI_Context_Delete_Pipeline(gdi_context* Context, gdi_handle<gdi_pipeline> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    async_handle<vk_pipeline> PipelineHandle(Handle.ID);
+    pool_reader_lock PipelineReader(&ResourceContext->Pipelines, PipelineHandle);
+    if(PipelineReader.Ptr) {
+        vk_pipeline Pipeline = *PipelineReader.Ptr;
+        PipelineReader.Unlock();
+        u64 LastUsedFrameIndex = ResourceContext->PipelineLastFrameIndices[PipelineHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->PipelinesInUse[PipelineHandle.Index()]) &&
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Pipeline(Context, &Pipeline);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->PipelinesInUse[PipelineHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Pipeline(DeleteContext, &Pipeline, FrameIndex);
+        }
+    }
+    VK_Context_Free_Pipeline(Context, PipelineHandle);
 }
 
 gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_swapchain> Swapchain) {
@@ -1287,6 +1716,32 @@ void GDI_Context_Execute(gdi_context* Context) {
     
     array<pool_reader_lock<vk_swapchain>> SwapchainReaders(&Scratch);
 
+    vk_thread_context* ThreadContext = (vk_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->ThreadContextList);
+    while(ThreadContext) {
+        vk_copy_context* CopyContext = &ThreadContext->CopyContext;
+        u32 CopyIndex = VK_Copy_Context_Swap(CopyContext);
+        
+        for(const vk_copy_upload_to_buffer& CopyUploadToBuffer : CopyContext->CopyUploadToBufferList[CopyIndex]) {
+            pool_reader_lock BufferReader(&Context->ResourceContext.Buffers, CopyUploadToBuffer.Buffer);
+            if(BufferReader.Ptr) {
+                VkBufferCopy BufferCopy = {
+                    .srcOffset = CopyUploadToBuffer.Upload.Offset,
+                    .size = CopyUploadToBuffer.Upload.Size
+                };
+                vkCmdCopyBuffer(FrameContext->CopyCmdBuffer, CopyUploadToBuffer.Upload.Buffer, BufferReader->Buffer, 1, &BufferCopy);
+                BufferReader.Unlock();
+                VK_Buffer_Record_Frame(Context, CopyUploadToBuffer.Buffer);
+            }
+        }
+
+        Array_Clear(&CopyContext->CopyUploadToBufferList[CopyIndex]);
+
+        ThreadContext = ThreadContext->Next;
+    }
+
+    vkEndCommandBuffer(FrameContext->CopyCmdBuffer);
+    Array_Push(&CmdBuffers, FrameContext->CopyCmdBuffer);
+
     vk_cmd_pool* CmdPool = &FrameContext->PrimaryCmdPool;
     uptr i = 0;
     for(vk_cmd_list* CmdList = CmdPool->CurrentCmdListHead; CmdList; CmdList = CmdList->Next) {
@@ -1345,10 +1800,12 @@ void GDI_Context_Execute(gdi_context* Context) {
 
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->RenderPassLastFrameIndices, ResourceContext->RenderPassesInUse, Async_Pool_Capacity(&ResourceContext->RenderPasses));
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->BufferLastFrameIndices, ResourceContext->BuffersInUse, Async_Pool_Capacity(&ResourceContext->Buffers));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->TextureLastFrameIndices, ResourceContext->RenderPassesInUse, Async_Pool_Capacity(&ResourceContext->Textures));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->TextureViewLastFrameIndices, ResourceContext->RenderPassesInUse, Async_Pool_Capacity(&ResourceContext->TextureViews));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->FramebufferLastFrameIndices, ResourceContext->FramebuffersInUse, Async_Pool_Capacity(&ResourceContext->Framebuffers));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->SwapchainLastFrameIndices, ResourceContext->SwapchainsInUse, Async_Pool_Capacity(&ResourceContext->Swapchains));
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->PipelineLastFrameIndices, ResourceContext->PipelinesInUse, Async_Pool_Capacity(&ResourceContext->Pipelines));
 
     Context->TotalFramesRendered++;
     FrameContext = VK_Get_Current_Frame_Context(Context);
@@ -1357,8 +1814,12 @@ void GDI_Context_Execute(gdi_context* Context) {
     }
     vkResetFences(Context->Device, 1, &FrameContext->Fence);
 
-    vk_delete_context* DeleteContext = (vk_delete_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->DeleteContextList);
-    while(DeleteContext) {
+    ThreadContext = (vk_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->ThreadContextList);
+    while(ThreadContext) {
+        vk_upload_buffer* UploadBuffer = VK_Get_Current_Upload_Buffer(Context, ThreadContext);
+        VK_Upload_Buffer_Clear(UploadBuffer);
+
+        vk_delete_context* DeleteContext = &ThreadContext->DeleteContext;
         u32 DeleteIndex = VK_Delete_Context_Swap(DeleteContext);
         
         for(vk_delete_list_entry<vk_render_pass>& RenderPassEntry : DeleteContext->RenderPassList[DeleteIndex]) {
@@ -1370,6 +1831,16 @@ void GDI_Context_Execute(gdi_context* Context) {
             }
         }
         VK_Delete_List_Clear(&DeleteContext->RenderPassList[DeleteIndex]);
+
+        for(vk_delete_list_entry<vk_buffer>& BufferEntry : DeleteContext->BufferList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - BufferEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Buffer(Context, &BufferEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Buffer(DeleteContext, &BufferEntry.Resource, BufferEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->BufferList[DeleteIndex]);
 
         for(vk_delete_list_entry<vk_texture_view>& TextureViewEntry : DeleteContext->TextureViewList[DeleteIndex]) {
             uptr Difference = Context->TotalFramesRendered - TextureViewEntry.LastUsedFrameIndex;
@@ -1401,7 +1872,17 @@ void GDI_Context_Execute(gdi_context* Context) {
         }
         VK_Delete_List_Clear(&DeleteContext->SwapchainList[DeleteIndex]);
 
-        DeleteContext = DeleteContext->Next;
+        for(vk_delete_list_entry<vk_pipeline>& PipelineEntry : DeleteContext->PipelineList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - PipelineEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Pipeline(Context, &PipelineEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Pipeline(DeleteContext, &PipelineEntry.Resource, PipelineEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->PipelineList[DeleteIndex]);
+
+        ThreadContext = ThreadContext->Next;
     }
 }
 
@@ -1536,9 +2017,72 @@ void GDI_Cmd_List_End_Render_Pass(gdi_cmd_list* _CmdList) {
     vkCmdEndRenderPass(CmdList->CmdBuffer);
 }
 
-#include <gdi/gdi_shared.cpp>
+void GDI_Cmd_List_Set_Vtx_Buffers(gdi_cmd_list* _CmdList, span<gdi_handle<gdi_buffer>> VtxBuffers) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    gdi_context* Context = CmdList->Context;
 
+
+    scratch Scratch = Scratch_Get();
+    VkDeviceSize* Offsets = Scratch_Push_Array(&Scratch, VtxBuffers.Count, VkDeviceSize);
+    VkBuffer* Buffers = Scratch_Push_Array(&Scratch, VtxBuffers.Count, VkBuffer);
+    pool_reader_lock<vk_buffer>* BufferReaderLocks = Scratch_Push_Array(&Scratch, VtxBuffers.Count, pool_reader_lock<vk_buffer>);
+
+    for(uptr i = 0; i < VtxBuffers.Count; i++) {
+        async_handle<vk_buffer> BufferHandle(VtxBuffers[i].ID);
+        Offsets[i] = 0;
+        BufferReaderLocks[i] = pool_reader_lock(&Context->ResourceContext.Buffers, BufferHandle);
+        if(BufferReaderLocks[i].Ptr)
+            Buffers[i] = BufferReaderLocks[i]->Buffer;
+    }
+
+    vkCmdBindVertexBuffers(CmdList->CmdBuffer, 0, Safe_U32(VtxBuffers.Count), Buffers, Offsets);
+
+    for(uptr i = 0; i < VtxBuffers.Count; i++) {
+        if(BufferReaderLocks[i].Ptr) {
+            async_handle<vk_buffer> Handle = BufferReaderLocks[i].Handle;
+            BufferReaderLocks[i].Unlock();
+            VK_Buffer_Record_Frame(Context, Handle);
+        }
+    }
+}
+
+void GDI_Cmd_List_Set_Idx_Buffer(gdi_cmd_list* _CmdList, gdi_handle<gdi_buffer> IdxBuffer, gdi_format Format) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    gdi_context* Context = CmdList->Context;
+
+    async_handle<vk_buffer> BufferHandle(IdxBuffer.ID);
+    pool_reader_lock BufferReader(&Context->ResourceContext.Buffers, BufferHandle);
+    if(BufferReader.Ptr) {
+        vkCmdBindIndexBuffer(CmdList->CmdBuffer, BufferReader->Buffer, 0, VK_Get_Index_Type(Format));
+        BufferReader.Unlock();
+        VK_Buffer_Record_Frame(Context, BufferHandle);
+    }
+}
+
+void GDI_Cmd_List_Set_Pipeline(gdi_cmd_list* _CmdList, gdi_handle<gdi_pipeline> Pipeline) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    gdi_context* Context = CmdList->Context;
+
+    async_handle<vk_pipeline> PipelineHandle(Pipeline.ID);
+    pool_reader_lock PipelineReader(&Context->ResourceContext.Pipelines, PipelineHandle);
+    if(PipelineReader.Ptr) {
+        vkCmdBindPipeline(CmdList->CmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineReader->Pipeline);
+        PipelineReader.Unlock();
+        VK_Pipeline_Record_Frame(Context, PipelineHandle);
+    }
+}
+
+void GDI_Cmd_List_Draw_Indexed_Instance(gdi_cmd_list* _CmdList, u32 IdxCount, u32 IdxOffset, u32 VtxOffset, u32 InstanceCount, u32 InstanceOffset) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    vkCmdDrawIndexed(CmdList->CmdBuffer, IdxCount, InstanceCount, IdxOffset, (s32)VtxOffset, InstanceOffset);
+}
+
+#include "vk_pipeline.cpp"
 #include "vk_swapchain.cpp"
 #include "vk_texture.cpp"
+#include "vk_buffer.cpp"
 #include "vk_render_pass.cpp"
+#include "vk_memory.cpp"
 #include "vk_functions.cpp"
+
+#include <gdi/gdi_shared.cpp>

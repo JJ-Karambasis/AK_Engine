@@ -89,6 +89,10 @@ void VK_Load_Device_Funcs(gdi* GDI, gdi_context* Context) {
     vkDestroyRenderPass = DeviceFuncs->vkDestroyRenderPass;
     vkDestroyCommandPool = DeviceFuncs->vkDestroyCommandPool;
     vkDestroySemaphore = DeviceFuncs->vkDestroySemaphore;
+    vkDestroyPipelineLayout = DeviceFuncs->vkDestroyPipelineLayout;
+    vkDestroyPipeline = DeviceFuncs->vkDestroyPipeline;
+    vkDestroyBuffer = DeviceFuncs->vkDestroyBuffer;
+    vkUnmapMemory = DeviceFuncs->vkUnmapMemory;
 ;
     Assert(DeviceFuncs->SwapchainKHR.Enabled);
 

@@ -258,6 +258,33 @@ void OS_Message_Box(string Message, string Title) {
     Win32_Message_Box(Message, Title);
 }
 
+buffer OS_Read_Entire_File(allocator* Allocator, string Filepath) {
+    scratch Scratch = Scratch_Get();
+    wstring FilepathW(&Scratch, Filepath);
+
+    HANDLE Handle = CreateFileW(FilepathW.Str, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if(Handle == INVALID_HANDLE_VALUE) {
+        //todo: diagnostics 
+        return {};
+    }   
+
+    LARGE_INTEGER FileSizeLI;
+    GetFileSizeEx(Handle, &FileSizeLI);
+    u32 FileSize = Safe_U32((u64)(FileSizeLI.QuadPart));
+
+    DWORD BytesRead;
+    void* Memory = Allocator_Allocate_Memory(Allocator, FileSize);
+    if(!ReadFile(Handle, Memory, FileSize, &BytesRead, NULL) || (BytesRead != FileSize)) {
+        //todo: diagnostics
+        Allocator_Free_Memory(Allocator, Memory);
+        CloseHandle(Handle);
+        return {};
+    }
+
+    CloseHandle(Handle);
+    return buffer(Memory, FileSize);
+}
+
 os_window_id OS_Create_Window(const os_window_create_info& CreateInfo) {
     os* OS = OS_Get();
     if(OS) {

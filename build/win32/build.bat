@@ -15,7 +15,7 @@ set editor_path=%code_path%\editor
 set editor_os_path=%editor_path%\os
 set vk_include=%dependencies_path%\Vulkan-Headers\include
 
-set cl_warnings=/WX /Wall /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262
+set cl_warnings=/WX /Wall /wd4061 /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262
 set cl_common=  /nologo /FC /Z7 /Gs- /D_CRT_SECURE_NO_WARNINGS
 set cl_debug= 	call cl /Od /DDEBUG_BUILD /MTd %cl_common% %cl_warnings%
 set cl_release= call cl /O2 %cl_common% %cl_warnings%
@@ -67,7 +67,6 @@ if "%release%"=="1" set compile=%compile_release% %include_common%
 if not exist ..\..\bin mkdir ..\..\bin
 
 set gdi_objs=vk_loader.obj gdi.obj
-
 pushd ..\..\bin    
     %compile% %inc%%vk_include% %only_compile% %c% %runtime_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link% || exit /b 1
     %compile% %inc%%vk_include% %only_compile% %cpp% %runtime_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
@@ -77,4 +76,21 @@ pushd ..\..\bin
     del /s *.ilk >nul 2>&1
     del /s *.obj >nul 2>&1
     del /s *.exp >nul 2>&1
+popd
+
+set shader_common=  -nologo -Zi -spirv
+set shader_debug=   call %VULKAN_SDK%\Bin\dxc -Qembed_debug -Od %shader_common%
+set shader_release= call %VULKAN_SDK%\Bin\dxc -O3 %shader_common%
+
+if "%debug%"=="1"   set shader=%shader_debug% %include_common%
+if "%release%"=="1" set shader=%shader_release% %include_common%
+
+set vtx_shader=%shader% -T vs_6_0 -E VS_Main -fvk-invert-y
+set pxl_shader=%shader% -T ps_6_0 -E PS_Main
+
+if not exist ..\..\bin\data\shaders mkdir ..\..\bin\data\shaders
+
+pushd ..\..\bin\data\shaders
+    %vtx_shader% /Fo shader_vs.shader ..\..\..\code\shaders\shader.hlsl
+    %pxl_shader% /Fo shader_ps.shader ..\..\..\code\shaders\shader.hlsl
 popd
