@@ -170,6 +170,10 @@ typedef struct {
     VK_FUNCTION(vkDestroyPipeline);
     VK_FUNCTION(vkDestroyBuffer);
     VK_FUNCTION(vkUnmapMemory);
+    VK_FUNCTION(vkDestroyDescriptorSetLayout);
+    VK_FUNCTION(vkDestroyDescriptorPool);
+    VK_FUNCTION(vkFreeDescriptorSets);
+    VK_FUNCTION(vkDestroyFence);
 
     vk_khr_swapchain SwapchainKHR;
 }  vk_device_funcs;

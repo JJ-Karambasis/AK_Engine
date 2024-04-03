@@ -10,12 +10,9 @@ struct vk_texture {
 };
 
 struct vk_texture_view {
-    gdi_handle<gdi_texture> TextureHandle;
-    VkImageView             ImageView;
+    async_handle<vk_texture> TextureHandle;
+    VkImageView              ImageView;
 };
-
-using texture_view_reader_lock = pool_reader_lock<vk_texture_view>;
-using texture_reader_lock = pool_reader_lock<vk_texture>; 
 
 internal void VK_Texture_Record_Frame(gdi_context* Context, async_handle<vk_texture> Handle);
 

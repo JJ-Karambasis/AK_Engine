@@ -1,7 +1,21 @@
 internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, const gdi_graphics_pipeline_create_info& CreateInfo) {
+    scratch Scratch = Scratch_Get();
+    fixed_array<VkDescriptorSetLayout> SetLayouts(&Scratch, CreateInfo.Layouts.Count);
+    for(uptr i = 0; i < CreateInfo.Layouts.Count; i++) {
+        async_handle<vk_bind_group_layout> LayoutHandle(CreateInfo.Layouts[i].ID);
+        vk_bind_group_layout* Layout = Async_Pool_Get(&Context->ResourceContext.BindGroupLayouts, LayoutHandle);
+        if(!Layout) {
+            Assert(false);
+            return false;
+        }
+
+        SetLayouts[i] = Layout->SetLayout;
+    }
 
     VkPipelineLayoutCreateInfo LayoutInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = Safe_U32(SetLayouts.Count),
+        .pSetLayouts = SetLayouts.Ptr
     };
 
     if(vkCreatePipelineLayout(Context->Device, &LayoutInfo, Context->VKAllocator, &Pipeline->Layout) != VK_SUCCESS) {
@@ -46,7 +60,6 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
         }
     };
 
-    scratch Scratch = Scratch_Get();
     array<VkVertexInputBindingDescription> VtxBindings(&Scratch, CreateInfo.GraphicsState.VtxBufferBindings.Count);
     array<VkVertexInputAttributeDescription> VtxAttributes(&Scratch, CreateInfo.GraphicsState.VtxBufferBindings.Count*3);
 
@@ -99,7 +112,8 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .lineWidth = 1.0f
     };
 
     VkPipelineMultisampleStateCreateInfo MultisampleState = {
@@ -114,7 +128,7 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
     array<VkPipelineColorBlendAttachmentState> Attachments(&Scratch);
     Array_Push(&Attachments, {
         .blendEnable = VK_FALSE,
-        .colorWriteMask = 0xFFFFFFFF
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
     });
 
     VkPipelineColorBlendStateCreateInfo ColorBlendState = {
@@ -140,13 +154,11 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
 #endif
 
     async_handle<vk_render_pass> RenderPassHandle(CreateInfo.RenderPass.ID);
-    pool_reader_lock RenderPassReader(&Context->ResourceContext.RenderPasses, RenderPassHandle);
-    if(!RenderPassReader.Ptr) {
+    vk_render_pass* RenderPass = Async_Pool_Get(&Context->ResourceContext.RenderPasses, RenderPassHandle);
+    if(!RenderPass) {
         //todo: Diagnostics
         return false;
     }
-
-    pool_scoped_lock RenderPassScoped(&RenderPassReader);
 
     VkGraphicsPipelineCreateInfo GraphicsPipelineInfo = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -162,7 +174,7 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
         .pColorBlendState = &ColorBlendState,
         .pDynamicState = &DynamicState,
         .layout = Pipeline->Layout,
-        .renderPass = RenderPassReader->RenderPass
+        .renderPass = RenderPass->RenderPass
     };
 
     if(vkCreateGraphicsPipelines(Context->Device, VK_NULL_HANDLE, 1, &GraphicsPipelineInfo, Context->VKAllocator, &Pipeline->Pipeline) != VK_SUCCESS) {
@@ -171,6 +183,8 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
         vkDestroyShaderModule(Context->Device, PxlShader, Context->VKAllocator);
         return false;
     }
+
+    Pipeline->BindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
     vkDestroyShaderModule(Context->Device, VtxShader, Context->VKAllocator);
     vkDestroyShaderModule(Context->Device, PxlShader, Context->VKAllocator);

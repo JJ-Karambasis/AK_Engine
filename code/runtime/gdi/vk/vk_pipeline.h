@@ -2,8 +2,9 @@
 #define VK_PIPELINE_H
 
 struct vk_pipeline {
-    VkPipelineLayout Layout;
-    VkPipeline       Pipeline;
+    VkPipelineBindPoint BindPoint;
+    VkPipelineLayout    Layout;
+    VkPipeline          Pipeline;
 };
 
 internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, const gdi_graphics_pipeline_create_info& CreateInfo);

@@ -21,21 +21,6 @@ enum gdi_format {
 
 bool GDI_Is_Depth_Format(gdi_format Format);
 
-enum {
-    GDI_TEXTURE_USAGE_FLAG_NONE,
-    GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT = (1 << 0),
-    GDI_TEXTURE_USAGE_FLAG_DEPTH_ATTACHMENT_BIT = (1 << 1),
-    GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT = (1 << 2)
-};
-typedef u32 gdi_texture_usage_flags;
-
-enum {
-    GDI_BUFFER_USAGE_FLAG_NONE,
-    GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT = (1 << 0),
-    GDI_BUFFER_USAGE_FLAG_IDX_BUFFER_BIT = (1 << 1)
-};
-typedef u32 gdi_buffer_usage_flags;
-
 template <typename type>
 struct gdi_handle {
     u64 ID = 0;
@@ -44,17 +29,184 @@ struct gdi_handle {
     inline bool Is_Null() { return ID == 0; }
 };
 
-struct gdi_render_pass;
-struct gdi_buffer;
-struct gdi_texture;
-struct gdi_texture_view;
-struct gdi_framebuffer;
-struct gdi_swapchain;
 struct gdi_pipeline;
+struct gdi_bind_group;
+struct gdi_bind_group_layout;
+struct gdi_framebuffer;
+struct gdi_render_pass;
+struct gdi_texture_view;
+struct gdi_texture;
+struct gdi_buffer;
+struct gdi_swapchain;
 struct gdi_cmd_list;
 
 struct gdi;
 struct gdi_context;
+
+struct gdi_shader {
+    const_buffer ByteCode;
+    string       EntryName;
+};
+
+struct gdi_vtx_attribute {
+    string     Semantic;
+    u32        SemanticIndex;
+    uptr       ByteOffset;
+    gdi_format Format;
+};
+
+struct gdi_vtx_buffer_binding {
+    uptr                    ByteStride;
+    span<gdi_vtx_attribute> Attributes;
+};
+
+struct gdi_graphics_pipeline_state {
+    span<gdi_vtx_buffer_binding> VtxBufferBindings;
+};
+
+struct gdi_graphics_pipeline_create_info {
+    gdi_shader                              VS;
+    gdi_shader                              PS;
+    span<gdi_handle<gdi_bind_group_layout>> Layouts;
+    gdi_graphics_pipeline_state             GraphicsState;
+    gdi_handle<gdi_render_pass>             RenderPass;
+};
+
+enum gdi_bind_group_type {
+    GDI_BIND_GROUP_TYPE_CONSTANT,
+    GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
+    GDI_BIND_GROUP_TYPE_COUNT
+};
+
+bool GDI_Is_Bind_Group_Buffer(gdi_bind_group_type Type);
+bool GDI_Is_Bind_Group_Dynamic(gdi_bind_group_type Type);
+
+enum {
+    GDI_SHADER_STAGE_NONE       = 0,
+    GDI_SHADER_STAGE_VERTEX_BIT = (1 << 0),
+    GDI_SHADER_STAGE_PIXEL_BIT  = (1 << 1),
+};
+typedef u32 gdi_shader_stage_flags;
+
+struct gdi_bind_group_layout_binding {
+    gdi_bind_group_type    Type;
+    gdi_shader_stage_flags StageFlags;
+};
+
+struct gdi_bind_group_layout_create_info {
+    span<gdi_bind_group_layout_binding> Bindings;
+};
+
+struct gdi_bind_group_buffer {
+    gdi_handle<gdi_buffer> Buffer;
+};
+
+struct gdi_bind_group_binding {
+    gdi_bind_group_type   Type;
+    gdi_bind_group_buffer BufferBinding;
+};
+
+struct gdi_bind_group_write_info {
+    span<gdi_bind_group_binding> Bindings;
+};
+
+struct gdi_bind_group_create_info {
+    gdi_handle<gdi_bind_group_layout> Layout;
+    gdi_bind_group_write_info         WriteInfo;
+};
+
+struct gdi_framebuffer_create_info {
+    span<gdi_handle<gdi_texture_view>> Attachments;
+    gdi_handle<gdi_render_pass> RenderPass;
+};
+
+enum class gdi_render_pass_attachment_type {
+    Color
+};
+
+enum gdi_load_op {
+    GDI_LOAD_OP_LOAD,
+    GDI_LOAD_OP_CLEAR,
+    GDI_LOAD_OP_COUNT
+};
+
+enum gdi_store_op {
+    GDI_STORE_OP_STORE,
+    GDI_STORE_OP_COUNT
+};
+
+struct gdi_render_pass_attachment {
+    gdi_render_pass_attachment_type Type;
+    gdi_format                      Format;
+    gdi_load_op                     LoadOp;
+    gdi_store_op                    StoreOp;
+    static gdi_render_pass_attachment Color(gdi_format Format, gdi_load_op LoadOp, gdi_store_op StoreOp);
+};
+
+struct gdi_render_pass_create_info {
+    span<gdi_render_pass_attachment> Attachments;
+};
+
+
+enum {
+    GDI_TEXTURE_USAGE_FLAG_NONE,
+    GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT = (1 << 0),
+    GDI_TEXTURE_USAGE_FLAG_DEPTH_ATTACHMENT_BIT = (1 << 1),
+    GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT = (1 << 2)
+};
+typedef u32 gdi_texture_usage_flags;
+
+struct gdi_texture_view_create_info {
+    gdi_handle<gdi_texture> Texture = {};
+    gdi_format              Format  = GDI_FORMAT_NONE;
+};
+
+enum {
+    GDI_BUFFER_USAGE_FLAG_NONE,
+    GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT       = (1 << 0),
+    GDI_BUFFER_USAGE_FLAG_IDX_BUFFER_BIT       = (1 << 1),
+    GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT  = (1 << 2),
+    GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT   = (1 << 3),
+    GDI_BUFFER_USAGE_FLAG_GPU_LOCAL_BUFFER_BIT = (1 << 4)
+};
+typedef u32 gdi_buffer_usage_flags;
+
+struct gdi_buffer_create_info {
+    uptr                   ByteSize;
+    gdi_buffer_usage_flags UsageFlags;
+    const_buffer           InitialData;
+};
+
+#if defined(OS_WIN32)
+struct gdi_win32_window_data {
+    HWND      Window;
+    HINSTANCE Instance;
+};
+#endif
+
+struct gdi_window_data {
+#if defined(OS_WIN32)
+    gdi_win32_window_data Win32;
+#elif defined(OS_ANDROID)
+#error "Not Implemented"
+#elif defined(OS_OSX)
+#error "Not Implemented"
+#else
+#error "Not Implemented"
+#endif
+};
+
+struct gdi_swapchain_create_info {
+    gdi_window_data         WindowData;
+    gdi_format              TargetFormat;
+    gdi_texture_usage_flags UsageFlags;
+};
+
+
+enum gdi_cmd_list_type {
+    Graphics,
+    Compute
+};
 
 struct gdi_device {
     string Name;
@@ -86,117 +238,22 @@ struct gdi_create_info {
     gdi_app_info          AppInfo;
 };
 
-#if defined(OS_WIN32)
-struct gdi_win32_window_data {
-    HWND      Window;
-    HINSTANCE Instance;
-};
-#endif
-
-struct gdi_window_data {
-#if defined(OS_WIN32)
-    gdi_win32_window_data Win32;
-#elif defined(OS_ANDROID)
-#error "Not Implemented"
-#elif defined(OS_OSX)
-#error "Not Implemented"
-#else
-#error "Not Implemented"
-#endif
-};
-
-enum class gdi_render_pass_attachment_type {
-    Color
-};
-
-enum gdi_load_op {
-    GDI_LOAD_OP_LOAD,
-    GDI_LOAD_OP_CLEAR,
-    GDI_LOAD_OP_COUNT
-};
-
-enum gdi_store_op {
-    GDI_STORE_OP_STORE,
-    GDI_STORE_OP_COUNT
-};
-
-enum gdi_cmd_list_type {
-    Graphics,
-    Compute
-};
-
-struct gdi_render_pass_attachment {
-    gdi_render_pass_attachment_type Type;
-    gdi_format                      Format;
-    gdi_load_op                     LoadOp;
-    gdi_store_op                    StoreOp;
-    static gdi_render_pass_attachment Color(gdi_format Format, gdi_load_op LoadOp, gdi_store_op StoreOp);
-};
-
-struct gdi_render_pass_create_info {
-    span<gdi_render_pass_attachment> Attachments;
-};
-
-struct gdi_buffer_create_info {
-    uptr                   ByteSize;
-    gdi_buffer_usage_flags UsageFlags;
-    const_buffer           InitialData;
-};
-
-struct gdi_texture_view_create_info {
-    gdi_handle<gdi_texture> Texture = {};
-    gdi_format              Format  = GDI_FORMAT_NONE;
-};
-
-struct gdi_framebuffer_create_info {
-    span<gdi_handle<gdi_texture_view>> Attachments;
-    gdi_handle<gdi_render_pass> RenderPass;
-};
-
-struct gdi_swapchain_create_info {
-    gdi_window_data         WindowData;
-    gdi_format              TargetFormat;
-    gdi_texture_usage_flags UsageFlags;
-};
-
-struct gdi_shader {
-    const_buffer ByteCode;
-    string       EntryName;
-};
-
-struct gdi_vtx_attribute {
-    string     Semantic;
-    u32        SemanticIndex;
-    uptr       ByteOffset;
-    gdi_format Format;
-};
-
-struct gdi_vtx_buffer_binding {
-    uptr                    ByteStride;
-    span<gdi_vtx_attribute> Attributes;
-};
-
-struct gdi_graphics_pipeline_state {
-    span<gdi_vtx_buffer_binding> VtxBufferBindings;
-};
-
-struct gdi_graphics_pipeline_create_info {
-    gdi_shader                  VS;
-    gdi_shader                  PS;
-    gdi_graphics_pipeline_state GraphicsState;
-    gdi_handle<gdi_render_pass> RenderPass;
+struct gdi_context_info {
+    uptr ConstantBufferAlignment;
 };
 
 struct gdi_context_create_info {
-    u32 DeviceIndex      = 0;
-    u32 BufferCount      = 1024;
-    u32 FrameCount       = 3;    
-    u32 RenderPassCount  = 128;
-    u32 TextureCount     = 1024;
-    u32 TextureViewCount = 1024;
-    u32 FramebufferCount = 128;
-    u32 SwapchainCount   = 32;
-    u32 PipelineCount    = 128;
+    u32 DeviceIndex          = 0;
+    u32 FrameCount           = 3;    
+    u32 PipelineCount        = 128;
+    u32 BindGroupCount       = 512;
+    u32 BindGroupLayoutCount = 512;
+    u32 FramebufferCount     = 128;
+    u32 RenderPassCount      = 128;
+    u32 TextureViewCount     = 1024;
+    u32 TextureCount         = 1024;
+    u32 BufferCount          = 1024;
+    u32 SwapchainCount       = 32;
 };
 
 gdi*              GDI_Create(const gdi_create_info& CreateInfo);
@@ -205,24 +262,39 @@ u32               GDI_Get_Device_Count(gdi* GDI);
 void              GDI_Get_Device(gdi* GDI, gdi_device* Device, u32 DeviceIndex);
 gdi_context*      GDI_Create_Context(gdi* GDI, const gdi_context_create_info& CreateInfo);
 
-void                          GDI_Context_Delete(gdi_context* Context);
-array<gdi_format>             GDI_Context_Supported_Window_Formats(gdi_context* Context, const gdi_window_data& WindowData, arena* Arena);
-gdi_handle<gdi_render_pass>   GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo);
-void                          GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle);
-gdi_handle<gdi_buffer>        GDI_Context_Create_Buffer(gdi_context* Context, const gdi_buffer_create_info& CreateInfo);
-void                          GDI_Context_Delete_Buffer(gdi_context* Context, gdi_handle<gdi_buffer> Buffer);
-gdi_handle<gdi_texture_view>  GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo);
-void                          GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle);
-gdi_handle<gdi_framebuffer>   GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo);
-void                          GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
-gdi_handle<gdi_swapchain>     GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo);
-void                          GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
-bool                          GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
-span<gdi_handle<gdi_texture>> GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
-gdi_handle<gdi_pipeline>      GDI_Context_Create_Graphics_Pipeline(gdi_context* Context, const gdi_graphics_pipeline_create_info& CreateInfo);
-void                          GDI_Context_Delete_Pipeline(gdi_context* Context, gdi_handle<gdi_pipeline> Handle);
-gdi_cmd_list*                 GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_swapchain> Swapchain = {});
-void                          GDI_Context_Execute(gdi_context* Context);
+void                              GDI_Context_Delete(gdi_context* Context);
+array<gdi_format>                 GDI_Context_Supported_Window_Formats(gdi_context* Context, const gdi_window_data& WindowData, arena* Arena);
+const gdi_context_info*           GDI_Context_Get_Info(gdi_context* Context);
+
+gdi_handle<gdi_pipeline>          GDI_Context_Create_Graphics_Pipeline(gdi_context* Context, const gdi_graphics_pipeline_create_info& CreateInfo);
+void                              GDI_Context_Delete_Pipeline(gdi_context* Context, gdi_handle<gdi_pipeline> Handle);
+
+gdi_handle<gdi_bind_group>        GDI_Context_Create_Bind_Group(gdi_context* Context, const gdi_bind_group_create_info& CreateInfo);
+void                              GDI_Context_Delete_Bind_Group(gdi_context* Context, gdi_handle<gdi_bind_group> BindGroup);
+bool                              GDI_Context_Write_Bind_Group(gdi_context* Context, gdi_handle<gdi_bind_group> BindGroup, const gdi_bind_group_write_info& WriteInfo);
+gdi_handle<gdi_bind_group_layout> GDI_Context_Create_Bind_Group_Layout(gdi_context* Context, const gdi_bind_group_layout_create_info& CreateInfo);
+void                              GDI_Context_Delete_Bind_Group_Layout(gdi_context* Context, gdi_handle<gdi_bind_group_layout> Handle);
+
+gdi_handle<gdi_framebuffer>       GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo);
+void                              GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
+gdi_handle<gdi_render_pass>       GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo);
+void                              GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle);
+
+gdi_handle<gdi_texture_view>      GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo);
+void                              GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle);
+
+gdi_handle<gdi_buffer>            GDI_Context_Create_Buffer(gdi_context* Context, const gdi_buffer_create_info& CreateInfo);
+u8*                               GDI_Context_Buffer_Map(gdi_context* Context, gdi_handle<gdi_buffer> Handle);
+void                              GDI_Context_Buffer_Unmap(gdi_context* Context, gdi_handle<gdi_buffer> Handle);
+void                              GDI_Context_Delete_Buffer(gdi_context* Context, gdi_handle<gdi_buffer> Buffer);
+
+gdi_handle<gdi_swapchain>         GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo);
+void                              GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
+bool                              GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
+span<gdi_handle<gdi_texture>>     GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
+
+gdi_cmd_list*                     GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_swapchain> Swapchain = {});
+void                              GDI_Context_Execute(gdi_context* Context);
 
 enum gdi_resource_state {
     GDI_RESOURCE_STATE_NONE,
@@ -292,6 +364,8 @@ void GDI_Cmd_List_End_Render_Pass(gdi_cmd_list* CmdList);
 void GDI_Cmd_List_Set_Vtx_Buffers(gdi_cmd_list* CmdList, span<gdi_handle<gdi_buffer>> VtxBuffers);
 void GDI_Cmd_List_Set_Idx_Buffer(gdi_cmd_list* CmdList, gdi_handle<gdi_buffer> IdxBuffer, gdi_format Format);
 void GDI_Cmd_List_Set_Pipeline(gdi_cmd_list* CmdList, gdi_handle<gdi_pipeline> Pipeline);
+void GDI_Cmd_List_Set_Bind_Groups(gdi_cmd_list* CmdList, u32 StartingIndex, span<gdi_handle<gdi_bind_group>> BindGroups);
+void GDI_Cmd_List_Set_Dynamic_Bind_Groups(gdi_cmd_list* CmdList, u32 StartingIndex, span<gdi_handle<gdi_bind_group>> BindGroups, span<uptr> Offsets);
 void GDI_Cmd_List_Draw_Indexed_Instance(gdi_cmd_list* CmdList, u32 IdxCount, u32 IdxOffset, u32 VtxOffset, u32 InstanceCount, u32 InstanceOffset);
 
 #endif

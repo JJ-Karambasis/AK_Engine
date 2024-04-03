@@ -20,6 +20,26 @@ bool GDI_Is_Depth_Format(gdi_format Format) {
     return Flags[Format];
 }
 
+bool GDI_Is_Bind_Group_Buffer(gdi_bind_group_type Type) {
+    local_persist const bool IsBindGroupBuffer[] = {
+        true,
+        true
+    };
+    static_assert(Array_Count(IsBindGroupBuffer) == GDI_BIND_GROUP_TYPE_COUNT);
+    Assert(Type < GDI_BIND_GROUP_TYPE_COUNT);
+    return IsBindGroupBuffer[Type];
+}
+
+bool GDI_Is_Bind_Group_Dynamic(gdi_bind_group_type Type) {
+    local_persist const bool IsBindGroupDynamic[] = {
+        false,
+        true
+    };
+    static_assert(Array_Count(IsBindGroupDynamic) == GDI_BIND_GROUP_TYPE_COUNT);
+    Assert(Type < GDI_BIND_GROUP_TYPE_COUNT);
+    return IsBindGroupDynamic[Type];
+}
+
 gdi_render_pass_attachment gdi_render_pass_attachment::Color(gdi_format Format, gdi_load_op LoadOp, gdi_store_op StoreOp) {
     return {
         .Type = gdi_render_pass_attachment_type::Color,

@@ -15,16 +15,19 @@
 
 #include <gdi/gdi_shared.h>
 
+struct vk_texture_view;
+
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 #include "loader/vk_loader.h"
 #include "vk_functions.h"
 #include "vk_memory.h"
-#include "vk_render_pass.h"
-#include "vk_buffer.h"
-#include "vk_texture.h"
-#include "vk_swapchain.h"
 #include "vk_pipeline.h"
+#include "vk_bind_groups.h"
+#include "vk_render_pass.h"
+#include "vk_texture.h"
+#include "vk_buffer.h"
+#include "vk_swapchain.h"
 
 template <typename type>
 struct vk_delete_list_entry {
@@ -38,12 +41,6 @@ struct vk_delete_list {
 
     vk_delete_list_entry<type>* begin() { return List.begin(); }
     vk_delete_list_entry<type>* end() { return List.end(); }
-};
-
-struct vk_upload {
-    VkBuffer     Buffer;
-    VkDeviceSize Offset;
-    VkDeviceSize Size;
 };
 
 #define VK_UPLOAD_BUFFER_MINIMUM_BLOCK_SIZE MB(4)
@@ -68,6 +65,7 @@ struct vk_upload_buffer {
 struct vk_copy_upload_to_buffer {
     vk_upload               Upload;
     async_handle<vk_buffer> Buffer;
+    VkDeviceSize            Offset;
 };
 
 struct vk_copy_context {
@@ -77,14 +75,16 @@ struct vk_copy_context {
 };
 
 struct vk_delete_context {
-    ak_rw_lock                      RWLock;
-    u32                             CurrentListIndex;
-    vk_delete_list<vk_render_pass>  RenderPassList[2];
-    vk_delete_list<vk_buffer>       BufferList[2];
-    vk_delete_list<vk_texture_view> TextureViewList[2];
-    vk_delete_list<vk_framebuffer>  FramebufferList[2];
-    vk_delete_list<vk_swapchain>    SwapchainList[2];
-    vk_delete_list<vk_pipeline>     PipelineList[2];
+    ak_rw_lock                           RWLock;
+    u32                                  CurrentListIndex;
+    vk_delete_list<vk_pipeline>          PipelineList[2];
+    vk_delete_list<vk_bind_group>        BindGroupList[2];
+    vk_delete_list<vk_bind_group_layout> BindGroupLayoutList[2];
+    vk_delete_list<vk_framebuffer>       FramebufferList[2];
+    vk_delete_list<vk_render_pass>       RenderPassList[2];
+    vk_delete_list<vk_texture_view>      TextureViewList[2];
+    vk_delete_list<vk_buffer>            BufferList[2];
+    vk_delete_list<vk_swapchain>         SwapchainList[2];
 };
 
 struct vk_thread_context {
@@ -95,31 +95,37 @@ struct vk_thread_context {
 };
 
 struct vk_resource_context {
-    async_pool<vk_render_pass>  RenderPasses;
-    async_pool<vk_buffer>       Buffers;
-    async_pool<vk_texture>      Textures;
-    async_pool<vk_texture_view> TextureViews;
-    async_pool<vk_framebuffer>  Framebuffers;
-    async_pool<vk_swapchain>    Swapchains;
-    async_pool<vk_pipeline>     Pipelines;
+    async_pool<vk_pipeline>          Pipelines;
+    async_pool<vk_bind_group>        BindGroups;
+    async_pool<vk_bind_group_layout> BindGroupLayouts;
+    async_pool<vk_framebuffer>       Framebuffers;
+    async_pool<vk_render_pass>       RenderPasses;
+    async_pool<vk_texture_view>      TextureViews;
+    async_pool<vk_texture>           Textures;
+    async_pool<vk_buffer>            Buffers;
+    async_pool<vk_swapchain>         Swapchains;
 
     //TODO: These probably should be atomic u8 but ak atomic 
     //doesn't support those (yet)
-    ak_atomic_u32* RenderPassesInUse;
-    ak_atomic_u32* BuffersInUse;
-    ak_atomic_u32* TexturesInUse;
-    ak_atomic_u32* TextureViewsInUse;
-    ak_atomic_u32* FramebuffersInUse;
-    ak_atomic_u32* SwapchainsInUse;
     ak_atomic_u32* PipelinesInUse;
+    ak_atomic_u32* BindGroupsInUse;
+    ak_atomic_u32* BindGroupLayoutsInUse;
+    ak_atomic_u32* FramebuffersInUse;
+    ak_atomic_u32* RenderPassesInUse;
+    ak_atomic_u32* TextureViewsInUse;
+    ak_atomic_u32* TexturesInUse;
+    ak_atomic_u32* BuffersInUse;
+    ak_atomic_u32* SwapchainsInUse;
 
-    u64* RenderPassLastFrameIndices;
-    u64* BufferLastFrameIndices;
-    u64* TextureLastFrameIndices;
-    u64* TextureViewLastFrameIndices;
-    u64* FramebufferLastFrameIndices;
-    u64* SwapchainLastFrameIndices;
     u64* PipelineLastFrameIndices;
+    u64* BindGroupLastFrameIndices;
+    u64* BindGroupLayoutLastFrameIndices;
+    u64* FramebufferLastFrameIndices;
+    u64* RenderPassLastFrameIndices;
+    u64* TextureViewLastFrameIndices;
+    u64* TextureLastFrameIndices;
+    u64* BufferLastFrameIndices;
+    u64* SwapchainLastFrameIndices;
 };
 
 struct vk_device {
@@ -134,16 +140,17 @@ struct vk_device {
 };
 
 struct vk_cmd_list {
-    gdi_context*               Context;
-    VkCommandPool              CmdPool;
-    VkCommandBuffer            CmdBuffer;
-    VkPipelineStageFlags       ExecuteLockWaitStage;
-    VkSemaphore                SubmitLock;
-    VkSemaphore                PresentLock;
-    async_handle<vk_swapchain> SwapchainHandle;
-    u32                        SwapchainTextureIndex;
-    vk_cmd_list*               Next;
-    vk_cmd_list*               Prev;
+    gdi_context*         Context;
+    VkCommandPool        CmdPool;
+    VkCommandBuffer      CmdBuffer;
+    VkPipelineStageFlags ExecuteLockWaitStage;
+    VkSemaphore          SubmitLock;
+    VkSemaphore          PresentLock;
+    VkSwapchainKHR       Swapchain;
+    u32                  SwapchainTextureIndex;
+    vk_pipeline*         Pipeline;
+    vk_cmd_list*         Next;
+    vk_cmd_list*         Prev;
 };
 
 struct vk_cmd_pool {
@@ -168,9 +175,11 @@ struct gdi_context {
     VkAllocationCallbacks*  VKAllocator;
     VkDevice                Device;
     const vk_device_funcs*  DeviceFuncs;
+    gdi_context_info        Info;
     VkQueue                 GraphicsQueue;
     VkQueue                 PresentQueue;
     vk_memory_manager       MemoryManager;
+    vk_descriptor_pool      DescriptorPool;
     u64                     TotalFramesRendered;
     array<vk_frame_context> Frames;
 

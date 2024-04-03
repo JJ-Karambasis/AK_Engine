@@ -13,6 +13,8 @@
 #define matrix4_affine float4x3
 #define PI 3.14159265359f
 #define INV_PI 0.31830988618f
+#define SPACE_(value) space ## value
+#define SPACE(value) SPACE_(value)
 #endif
 
 #endif

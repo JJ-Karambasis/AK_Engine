@@ -10,10 +10,10 @@ void VK_Delete_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass);
 internal void VK_Render_Pass_Record_Frame(gdi_context* Context, async_handle<vk_render_pass> Handle);
 
 struct vk_framebuffer {
-    fixed_array<gdi_handle<gdi_texture_view>> Attachments;
-    VkFramebuffer                             Framebuffer;
-    u32                                       Width;
-    u32                                       Height;
+    VkFramebuffer                              Framebuffer;
+    u32                                        Width;
+    u32                                        Height;
+    fixed_array<async_handle<vk_texture_view>> Attachments;
 };
 
 bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, const gdi_framebuffer_create_info& CreateInfo);

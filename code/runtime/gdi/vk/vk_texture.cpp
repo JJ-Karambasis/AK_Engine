@@ -5,15 +5,14 @@ void VK_Texture_Record_Frame(gdi_context* Context, async_handle<vk_texture> Hand
 bool VK_Create_Texture_View(gdi_context* Context, vk_texture_view* TextureView, const gdi_texture_view_create_info& CreateInfo) {
 
     async_handle<vk_texture> TextureHandle(CreateInfo.Texture.ID);
-    pool_reader_lock TextureReader(&Context->ResourceContext.Textures, TextureHandle);
-    if(!TextureReader.Ptr) {
+    vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, TextureHandle);
+    if(!Texture) {
         return false;
     }
-    pool_scoped_lock TextureReaderScoped(&TextureReader);
 
     gdi_format Format = CreateInfo.Format;
     if(Format == GDI_FORMAT_NONE) {
-        Format = TextureReader->Format;
+        Format = Texture->Format;
     }
 
     VkImageAspectFlags ImageAspect = GDI_Is_Depth_Format(Format) ? 
@@ -21,7 +20,7 @@ bool VK_Create_Texture_View(gdi_context* Context, vk_texture_view* TextureView, 
                                      VK_IMAGE_ASPECT_COLOR_BIT;
     VkImageViewCreateInfo ImageViewCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = TextureReader->Image,
+        .image = Texture->Image,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = VK_Get_Format(Format),
         .subresourceRange = {ImageAspect, 0, 1, 0, 1}
@@ -32,7 +31,7 @@ bool VK_Create_Texture_View(gdi_context* Context, vk_texture_view* TextureView, 
         return false;
     }
 
-    TextureView->TextureHandle = CreateInfo.Texture;
+    TextureView->TextureHandle = TextureHandle;
 
     return true;
 }
@@ -46,7 +45,10 @@ void VK_Delete_Texture_View(gdi_context* Context, vk_texture_view* TextureView) 
 
 void VK_Texture_View_Record_Frame(gdi_context* Context, async_handle<vk_texture_view> Handle) {
     AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TextureViewsInUse[Handle.Index()], true);
-    pool_reader_lock TextureViewReader(&Context->ResourceContext.TextureViews, Handle);
-    VK_Texture_Record_Frame(Context, async_handle<vk_texture>(TextureViewReader->TextureHandle.ID));
-    TextureViewReader.Unlock();
+    vk_texture_view* TextureView = Async_Pool_Get(&Context->ResourceContext.TextureViews, Handle);
+    if(!TextureView) {
+        Assert(false);
+        return;
+    }
+    VK_Texture_Record_Frame(Context, TextureView->TextureHandle);
 }

@@ -171,6 +171,10 @@ void VK_Shared_Loader_Load_Device_Default_Funcs(vk_shared_loader* Loader, VkInst
         VK_Load_Device_Func(DeviceFuncs, vkDestroyPipeline);
         VK_Load_Device_Func(DeviceFuncs, vkDestroyBuffer);
         VK_Load_Device_Func(DeviceFuncs, vkUnmapMemory);
+        VK_Load_Device_Func(DeviceFuncs, vkDestroyDescriptorSetLayout);
+        VK_Load_Device_Func(DeviceFuncs, vkDestroyDescriptorPool);
+        VK_Load_Device_Func(DeviceFuncs, vkFreeDescriptorSets);
+        VK_Load_Device_Func(DeviceFuncs, vkDestroyFence);
         Loader->HasLoadedDevices = true;
     }
 }

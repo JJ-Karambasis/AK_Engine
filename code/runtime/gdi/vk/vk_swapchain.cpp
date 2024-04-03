@@ -174,12 +174,11 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
             return false;
         }
 
-        pool_writer_lock TextureWriter(&Context->ResourceContext.Textures, TextureHandle);
-        TextureWriter->Image  = Images[i];
-        TextureWriter->Width  = Swapchain->Width;
-        TextureWriter->Height = Swapchain->Height;
-        TextureWriter->Format = Swapchain->Format;
-        TextureWriter.Unlock();
+        vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, TextureHandle);
+        Texture->Image  = Images[i];
+        Texture->Width  = Swapchain->Width;
+        Texture->Height = Swapchain->Height;
+        Texture->Format = Swapchain->Format;
 
         Swapchain->Textures[i] = gdi_handle<gdi_texture>(TextureHandle.ID);
     }

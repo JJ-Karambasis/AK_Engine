@@ -3,6 +3,9 @@
 #include <os/os_event.h>
 #include "os/os.h"
 
+#include <shader_common.h>
+#include <shader.h>
+
 void Fatal_Error_Message() {
     OS_Message_Box("A fatal error occurred during initialization!\nPlease view the error logs for more info.", "Error");
 }
@@ -63,6 +66,61 @@ bool Editor_Main() {
             gdi_render_pass_attachment::Color(SwapchainFormat, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_STORE)
         }
     });
+
+    gdi_handle<gdi_buffer> ViewBuffer = GDI_Context_Create_Buffer(GDIContext, {
+        .ByteSize = sizeof(view_data),
+        .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT
+    });
+
+    uptr ConstantBufferAlignment = GDI_Context_Get_Info(GDIContext)->ConstantBufferAlignment;
+    uptr DrawSize = Align_Pow2(sizeof(draw_data), ConstantBufferAlignment);
+
+    gdi_handle<gdi_buffer> DrawBuffer = GDI_Context_Create_Buffer(GDIContext, {
+        .ByteSize = DrawSize,
+        .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT
+    });
+
+    gdi_handle<gdi_bind_group_layout> ViewBindGroupLayout = GDI_Context_Create_Bind_Group_Layout(GDIContext, {
+        .Bindings = { {
+                .Type       = GDI_BIND_GROUP_TYPE_CONSTANT,
+                .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT
+            }
+        }
+    });
+
+    gdi_handle<gdi_bind_group_layout> DrawBindGroupLayout = GDI_Context_Create_Bind_Group_Layout(GDIContext, {
+        .Bindings = { {
+                .Type       = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
+                .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT
+            }
+        }
+    });
+
+    gdi_handle<gdi_bind_group> ViewBindGroup = GDI_Context_Create_Bind_Group(GDIContext, {
+        .Layout = ViewBindGroupLayout,
+        .WriteInfo = {
+            .Bindings = { {
+                    .Type  = GDI_BIND_GROUP_TYPE_CONSTANT,
+                    .BufferBinding = {
+                        .Buffer = ViewBuffer,
+                    }
+                }
+            }
+        }
+    });
+
+    gdi_handle<gdi_bind_group> DrawBindGroup = GDI_Context_Create_Bind_Group(GDIContext, {
+        .Layout = DrawBindGroupLayout,
+        .WriteInfo = {
+            .Bindings = { {
+                    .Type  = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
+                    .BufferBinding = {
+                        .Buffer = DrawBuffer,
+                    }
+                }
+            }
+        }
+    });
     
     scratch Scratch = Scratch_Get();
     buffer VtxShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_vs.shader"));
@@ -71,6 +129,7 @@ bool Editor_Main() {
     gdi_handle<gdi_pipeline> Pipeline = GDI_Context_Create_Graphics_Pipeline(GDIContext, {
         .VS = {VtxShader, String_Lit("VS_Main")},
         .PS = {PxlShader, String_Lit("PS_Main")},
+        .Layouts = {ViewBindGroupLayout, DrawBindGroupLayout},
         .GraphicsState = {
             .VtxBufferBindings = { {
                     .ByteStride = sizeof(vec3),
@@ -137,6 +196,21 @@ bool Editor_Main() {
             uvec2 CurrentWindowSize;
             OS_Window_Get_Resolution(MainWindowID, &CurrentWindowSize.w, &CurrentWindowSize.h);
 
+            camera Camera; 
+
+            matrix4 Projection;
+            matrix4_affine View;
+
+            Camera_Get_Perspective(&Camera, &Projection, Safe_Ratio(CurrentWindowSize.w, CurrentWindowSize.h));
+            Camera_Get_View(&Camera, &View);
+
+            matrix4 ViewProjection; 
+            Matrix4_Transpose(&ViewProjection, View*Projection);
+            
+            u8* ViewBufferGPU = GDI_Context_Buffer_Map(GDIContext, ViewBuffer);
+            Memory_Copy(ViewBufferGPU, &ViewProjection, sizeof(matrix4));
+            GDI_Context_Buffer_Unmap(GDIContext, ViewBuffer);
+
             if(CurrentWindowSize != LastWindowSize) {
                 if(SwapchainFramebuffers.Count) {
                     for(gdi_handle<gdi_framebuffer> Framebuffer : SwapchainFramebuffers) {
@@ -146,8 +220,8 @@ bool Editor_Main() {
                 }
 
                 if(SwapchainViews.Count) {
-                    for(gdi_handle<gdi_texture_view> View : SwapchainViews) {
-                        GDI_Context_Delete_Texture_View(GDIContext, View);
+                    for(gdi_handle<gdi_texture_view> SwapchainView : SwapchainViews) {
+                        GDI_Context_Delete_Texture_View(GDIContext, SwapchainView);
                     }
                     Array_Clear(&SwapchainViews);
                 }
@@ -175,7 +249,7 @@ bool Editor_Main() {
             u32 TextureIndex = GDI_Cmd_List_Get_Swapchain_Texture_Index(CmdList, GDI_RESOURCE_STATE_COLOR);
 
             GDI_Cmd_List_Barrier(CmdList, {
-                {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_PRESENT, GDI_RESOURCE_STATE_COLOR}
+                {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_NONE, GDI_RESOURCE_STATE_COLOR}
             });
 
             GDI_Cmd_List_Begin_Render_Pass(CmdList, {
@@ -190,7 +264,18 @@ bool Editor_Main() {
             GDI_Cmd_List_Set_Idx_Buffer(CmdList, IdxBuffer, GDI_FORMAT_R16_UINT);
             GDI_Cmd_List_Set_Pipeline(CmdList, Pipeline);
 
+            draw_data DrawData = {};
+            Matrix4_Affine_Transpose(&DrawData.Model, matrix4_affine());
+
+            u8* Data = GDI_Context_Buffer_Map(GDIContext, DrawBuffer);
+            Memory_Copy(Data, &DrawData, sizeof(DrawData));
+
+            GDI_Cmd_List_Set_Bind_Groups(CmdList, 0, {ViewBindGroup});
+            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {0});
+
             GDI_Cmd_List_Draw_Indexed_Instance(CmdList, 3, 0, 0, 1, 0);
+
+            GDI_Context_Buffer_Unmap(GDIContext, DrawBuffer);
 
             GDI_Cmd_List_End_Render_Pass(CmdList);
 
@@ -223,6 +308,7 @@ int main() {
     return Result ? 0 : 1;
 }
 
+#include "engine_source.cpp"
 #include <core.cpp>
 
 #if defined(OS_WIN32)
