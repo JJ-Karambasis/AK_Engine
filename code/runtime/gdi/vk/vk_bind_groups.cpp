@@ -73,7 +73,8 @@ internal bool VK_Bind_Group_Write(gdi_context* Context, vk_bind_group* BindGroup
 
         if(GDI_Is_Bind_Group_Buffer(WriteInfo.Bindings[i].Type)) {
             BufferInfo = Scratch_Push_Struct(&Scratch, VkDescriptorBufferInfo);
-            async_handle<vk_buffer> BufferHandle(WriteInfo.Bindings[i].BufferBinding.Buffer.ID);
+            const gdi_bind_group_buffer* BufferBinding = &WriteInfo.Bindings[i].BufferBinding; 
+            async_handle<vk_buffer> BufferHandle(BufferBinding->Buffer.ID);
             vk_buffer* Buffer = Async_Pool_Get(&Context->ResourceContext.Buffers, BufferHandle);
             if(!Buffer) {
                 Assert(false);
@@ -82,12 +83,11 @@ internal bool VK_Bind_Group_Write(gdi_context* Context, vk_bind_group* BindGroup
 
             BufferInfo->buffer = Buffer->Buffer;
             BufferInfo->offset = 0;
-            BufferInfo->range = VK_WHOLE_SIZE;
+            BufferInfo->range  = BufferBinding->Size == (uptr)-1 ? VK_WHOLE_SIZE : BufferBinding->Size;
 
             if(Buffer->UsageFlags & GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT) {
                 Assert(GDI_Is_Bind_Group_Dynamic(WriteInfo.Bindings[i].Type));
                 Array_Push(&BindGroup->DynamicOffsets, Buffer->Size);
-                BufferInfo->range = Buffer->Size;
             }
         } else {
             Assert(false);

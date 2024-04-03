@@ -104,7 +104,7 @@ bool Editor_Main() {
     uptr DrawSize = Align_Pow2(sizeof(draw_data), ConstantBufferAlignment);
 
     gdi_handle<gdi_buffer> DrawBuffer = GDI_Context_Create_Buffer(GDIContext, {
-        .ByteSize = DrawSize,
+        .ByteSize = DrawSize*2,
         .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT
     });
 
@@ -144,6 +144,7 @@ bool Editor_Main() {
                     .Type  = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
                     .BufferBinding = {
                         .Buffer = DrawBuffer,
+                        .Size   = DrawSize
                     }
                 }
             }
@@ -293,14 +294,25 @@ bool Editor_Main() {
             GDI_Cmd_List_Set_Pipeline(CmdList, Pipeline);
 
             draw_data DrawData = {};
-            Matrix4_Affine_Transpose(&DrawData.Model, matrix4_affine());
+
+            matrix4_affine Model;
+            Matrix4_Affine_Translation(&Model, vec3(-1.0f, 0.0f, 0.0f));
+            Matrix4_Affine_Transpose(&DrawData.Model, Model);
 
             u8* Data = GDI_Context_Buffer_Map(GDIContext, DrawBuffer);
             Memory_Copy(Data, &DrawData, sizeof(DrawData));
 
-            GDI_Cmd_List_Set_Bind_Groups(CmdList, 0, {ViewBindGroup});
-            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {0});
+            Matrix4_Affine_Translation(&Model, vec3(1.0f, 0.0f, 0.0f));
+            Matrix4_Affine_Transpose(&DrawData.Model, Model);
 
+            Memory_Copy(Data+DrawSize, &DrawData, sizeof(DrawData));
+
+            GDI_Cmd_List_Set_Bind_Groups(CmdList, 0, {ViewBindGroup});
+
+            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {0});
+            GDI_Cmd_List_Draw_Indexed_Instance(CmdList, 3, 0, 0, 1, 0);
+
+            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {DrawSize});
             GDI_Cmd_List_Draw_Indexed_Instance(CmdList, 3, 0, 0, 1, 0);
 
             GDI_Context_Buffer_Unmap(GDIContext, DrawBuffer);

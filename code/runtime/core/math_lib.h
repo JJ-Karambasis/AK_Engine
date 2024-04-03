@@ -99,7 +99,8 @@ union matrix4_affine {
     matrix4_affine(std::initializer_list<f32> List);
 };
 
-void Matrix4_Affine_Transpose(matrix4_affine* Result, const matrix4_affine M);
+void Matrix4_Affine_Translation(matrix4_affine* Result, vec3 Translation);
+void Matrix4_Affine_Transpose(matrix4_affine* Result, const matrix4_affine& M);
 void Matrix4_Affine_Inverse_No_Scale(matrix4_affine* Result, vec3 P, const matrix3& M);
 
 union matrix4 {

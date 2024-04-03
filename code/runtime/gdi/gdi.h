@@ -99,6 +99,7 @@ struct gdi_bind_group_layout_create_info {
 
 struct gdi_bind_group_buffer {
     gdi_handle<gdi_buffer> Buffer;
+    uptr                   Size = (uptr)-1;
 };
 
 struct gdi_bind_group_binding {
