@@ -3,8 +3,7 @@
 #endif
 
 #include <engine.h>
-#include <os/os_event.h>
-
+#include <os/os.h>
 
 #include "utest.h"
 #include "os_event_tests.cpp"

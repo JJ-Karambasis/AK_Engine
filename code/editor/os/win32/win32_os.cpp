@@ -421,5 +421,5 @@ void OS_Set(os* OS) {
     G_OS = OS;
 }
 
-#include <os/os_event.cpp>
+#include <os_event.cpp>
 #include <os/win32/win32_shared.cpp>

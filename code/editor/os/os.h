@@ -3,6 +3,8 @@
 
 struct os;
 
+#include "os_event.h"
+
 void   OS_Message_Box(string Message, string Title);
 buffer OS_Read_Entire_File(allocator* Allocator, string Filepath);
 

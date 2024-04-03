@@ -72,7 +72,7 @@ pushd ..\..\bin
     %compile% %inc%%vk_include% %only_compile% %cpp% %runtime_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
     %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj || exit /b 1
     %compile% %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
-    %compile% %def%TEST_BUILD %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1
+    %compile% %def%TEST_BUILD %inc%%code_path%\editor %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1
     del /s *.ilk >nul 2>&1
     del /s *.obj >nul 2>&1
     del /s *.exp >nul 2>&1

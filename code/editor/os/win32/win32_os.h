@@ -2,7 +2,6 @@
 #define WIN32_OS_H
 
 #include <engine.h>
-#include <os/os_event.h>
 #include <os.h>
 #include <os/win32/win32_shared.h>
 
