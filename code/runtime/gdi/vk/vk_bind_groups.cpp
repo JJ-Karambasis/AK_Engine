@@ -111,12 +111,6 @@ internal bool VK_Bind_Group_Write(gdi_context* Context, vk_bind_group* BindGroup
 
 internal void VK_Bind_Group_Record_Frame(gdi_context* Context, async_handle<vk_bind_group> Handle) {
     AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.BindGroupsInUse[Handle.Index()], true);
-    vk_bind_group* BindGroup = Async_Pool_Get(&Context->ResourceContext.BindGroups, Handle);
-    if(!BindGroup) {
-        Assert(false);
-        return;
-    }
-    VK_Bind_Group_Layout_Record_Frame(Context, BindGroup->BindGroupLayout);
 }
 
 internal bool VK_Descriptor_Pool_Create(gdi_context* Context, vk_descriptor_pool* Pool) {

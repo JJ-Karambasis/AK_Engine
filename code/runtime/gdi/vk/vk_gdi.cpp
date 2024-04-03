@@ -1578,6 +1578,8 @@ void GDI_Context_Delete_Bind_Group(gdi_context* Context, gdi_handle<gdi_bind_gro
     vk_bind_group* BindGroup = Async_Pool_Get(&ResourceContext->BindGroups, BindGroupHandle);
     if(BindGroup) {
         u64 LastUsedFrameIndex = ResourceContext->BindGroupLastFrameIndices[BindGroupHandle.Index()];
+        ResourceContext->BindGroupLayoutLastFrameIndices[BindGroup->BindGroupLayout.Index()] = LastUsedFrameIndex;
+
         u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
         if(LastUsedFrameIndex == (u64)-1 || 
            (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->BindGroupsInUse[BindGroupHandle.Index()]) &&
