@@ -4,6 +4,16 @@
 internal VkBool32 VKAPI_PTR VK_Debug_Util_Callback(VkDebugUtilsMessageSeverityFlagBitsEXT MessageSeverity, VkDebugUtilsMessageTypeFlagsEXT MessageTypes, 
                                                    const VkDebugUtilsMessengerCallbackDataEXT* CallbackData, void* UserData) {
     gdi* GDI = (gdi*)UserData;
+    if(MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT ) {
+        if(GDI->LogCallbacks.LogDebug)
+            GDI->LogCallbacks.LogDebug(GDI, string(CallbackData->pMessage));
+    }
+
+    if(MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT ) {
+        if(GDI->LogCallbacks.LogInfo)
+            GDI->LogCallbacks.LogInfo(GDI, string(CallbackData->pMessage));
+    }
+
     if(MessageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
         if(GDI->LogCallbacks.LogWarning)
             GDI->LogCallbacks.LogWarning(GDI, string(CallbackData->pMessage));
@@ -20,6 +30,17 @@ internal VkBool32 VKAPI_PTR VK_Debug_Util_Callback(VkDebugUtilsMessageSeverityFl
 internal VkBool32 VKAPI_PTR VK_Debug_Report_Callback(VkDebugReportFlagsEXT Flags, VkDebugReportObjectTypeEXT ObjectType, uint64_t Object, size_t Location,
                                                    int32_t MessageCode, const char* LayerPrefix, const char* Message, void* UserData) {
     gdi* GDI = (gdi*)UserData;
+    
+    if(Flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT) {
+        if(GDI->LogCallbacks.LogDebug)
+            GDI->LogCallbacks.LogDebug(GDI, string(Message));
+    }
+
+    if(Flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT) {
+        if(GDI->LogCallbacks.LogInfo)
+            GDI->LogCallbacks.LogInfo(GDI, string(Message));
+    }
+
     if((Flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) || (Flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)) {
         if(GDI->LogCallbacks.LogWarning)
             GDI->LogCallbacks.LogWarning(GDI, string(Message));
@@ -835,6 +856,7 @@ internal bool VK_Create__Internal(gdi* GDI, const gdi_create_info& CreateInfo) {
         .pfnReallocation = VK__Realloc,
         .pfnFree = VK__Free
     };
+    GDI->LogCallbacks = CreateInfo.LoggingCallbacks;
     GDI->Loader = VK_Get_Loader();
     VK_Load_Global_Funcs(GDI);
 
@@ -932,10 +954,17 @@ internal bool VK_Create__Internal(gdi* GDI, const gdi_create_info& CreateInfo) {
         const vk_ext_debug_utils* DebugUtilsEXT = &GDI->InstanceFuncs->DebugUtilsEXT;
         VkDebugUtilsMessengerCreateInfoEXT DebugUtilsInfo = {};
         DebugUtilsInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        DebugUtilsInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        DebugUtilsInfo.messageSeverity =
+                                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT    |  
+                                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                                      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT; 
-        DebugUtilsInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
+
+        DebugUtilsInfo.messageType = 
+                                 VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
                                  VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT; 
+        
         DebugUtilsInfo.pfnUserCallback = VK_Debug_Util_Callback; 
         DebugUtilsInfo.pUserData = GDI;
 
@@ -946,7 +975,11 @@ internal bool VK_Create__Internal(gdi* GDI, const gdi_create_info& CreateInfo) {
         const vk_ext_debug_report* DebugReportEXT = &GDI->InstanceFuncs->DebugReportEXT;
         VkDebugReportCallbackCreateInfoEXT DebugReportInfo = {};
         DebugReportInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-        DebugReportInfo.flags = VK_DEBUG_REPORT_WARNING_BIT_EXT | 
+        DebugReportInfo.flags = 
+                                VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
+                                VK_DEBUG_REPORT_DEBUG_BIT_EXT |
+                                VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
+                                VK_DEBUG_REPORT_WARNING_BIT_EXT | 
                                 VK_DEBUG_REPORT_ERROR_BIT_EXT;
         DebugReportInfo.pfnCallback = VK_Debug_Report_Callback;  
         DebugReportInfo.pUserData = GDI;
@@ -1629,6 +1662,10 @@ void GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebu
     vk_framebuffer* Framebuffer = Async_Pool_Get(&ResourceContext->Framebuffers, FramebufferHandle);
     if(Framebuffer) {
         u64 LastUsedFrameIndex = ResourceContext->FramebufferLastFrameIndices[FramebufferHandle.Index()];
+        for(async_handle<vk_texture_view> Attachment : Framebuffer->Attachments) {
+            ResourceContext->TextureViewLastFrameIndices[Attachment.Index()] = LastUsedFrameIndex;
+        }
+
         u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
         if(LastUsedFrameIndex == (u64)-1 ||
            (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->FramebuffersInUse[FramebufferHandle.Index()]) &&
@@ -1704,6 +1741,8 @@ void GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_textur
     vk_texture_view* TextureView = Async_Pool_Get(&ResourceContext->TextureViews, TextureViewHandle);
     if(TextureView) {
         u64 LastUsedFrameIndex = ResourceContext->TextureViewLastFrameIndices[TextureViewHandle.Index()];
+        ResourceContext->TextureLastFrameIndices[TextureView->TextureHandle.Index()] = LastUsedFrameIndex;
+
         u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
         if(LastUsedFrameIndex == (u64)-1 || 
            (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->TextureViewsInUse[TextureViewHandle.Index()]) && 

@@ -154,13 +154,4 @@ void VK_Delete_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer) {
 
 internal void VK_Framebuffer_Record_Frame(gdi_context* Context, async_handle<vk_framebuffer> Handle) {
     AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.FramebuffersInUse[Handle.Index()], true);
-    vk_framebuffer* Framebuffer = Async_Pool_Get(&Context->ResourceContext.Framebuffers, Handle);
-    if(!Framebuffer) {
-        Assert(false);
-        return;
-    }
-
-    for(async_handle<vk_texture_view> Attachment : Framebuffer->Attachments) {
-        VK_Texture_View_Record_Frame(Context, Attachment);
-    }
 }

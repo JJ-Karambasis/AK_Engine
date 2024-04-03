@@ -10,8 +10,37 @@ void Fatal_Error_Message() {
     OS_Message_Box("A fatal error occurred during initialization!\nPlease view the error logs for more info.", "Error");
 }
 
+GDI_LOG_DEFINE(GDI_Log_Debug) {
+    Log_Debug(modules::GDI, "%.*s", Message.Size, Message.Str);
+}
+
+GDI_LOG_DEFINE(GDI_Log_Info) {
+    Log_Info(modules::GDI, "%.*s", Message.Size, Message.Str);
+}
+
+GDI_LOG_DEFINE(GDI_Log_Warning) {
+    Log_Warning(modules::GDI, "%.*s", Message.Size, Message.Str);
+    Assert(false);
+}
+
+GDI_LOG_DEFINE(GDI_Log_Error) {
+    Log_Error(modules::GDI, "%.*s", Message.Size, Message.Str);
+    Assert(false);
+}
+
+
 bool Editor_Main() {
-    gdi* GDI = GDI_Create({});
+    gdi* GDI = GDI_Create({
+        .LoggingCallbacks = {
+            .LogDebug   = GDI_Log_Debug,
+            .LogInfo    = GDI_Log_Info,
+            .LogWarning = GDI_Log_Warning,
+            .LogError   = GDI_Log_Error
+        },
+        .AppInfo = {
+            .Name = String_Lit("AK Engine"),
+        }
+    });
     if(!GDI) {
         Fatal_Error_Message();
         return false;

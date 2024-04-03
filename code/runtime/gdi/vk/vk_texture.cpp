@@ -45,10 +45,4 @@ void VK_Delete_Texture_View(gdi_context* Context, vk_texture_view* TextureView) 
 
 void VK_Texture_View_Record_Frame(gdi_context* Context, async_handle<vk_texture_view> Handle) {
     AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TextureViewsInUse[Handle.Index()], true);
-    vk_texture_view* TextureView = Async_Pool_Get(&Context->ResourceContext.TextureViews, Handle);
-    if(!TextureView) {
-        Assert(false);
-        return;
-    }
-    VK_Texture_Record_Frame(Context, TextureView->TextureHandle);
 }
