@@ -14,6 +14,12 @@ union uvec2 {
 
 bool operator!=(uvec2 A, uvec2 B);
 
+struct vec2 {
+    f32 Data[2] = {};
+    struct { f32 x, y; };
+    vec2() = default;
+};
+
 union vec3 {
     f32 Data[3] = {};
     struct { f32 x, y, z; };
@@ -21,6 +27,13 @@ union vec3 {
     struct { f32 r, g, b; };
     vec3() = default;
     vec3(f32 _x, f32 _y, f32 _z);
+
+    inline vec3(span<f64> Span) {
+        Assert(Span.Count == 3);
+        Data[0] = (f32)Span[0];
+        Data[1] = (f32)Span[1];
+        Data[2] = (f32)Span[2];
+    }
 };
 
 f32  Vec3_Dot(vec3 A, vec3 B);
@@ -35,6 +48,15 @@ union vec4 {
     struct { vec3 xyz; f32 Unused__0; };
     vec4() = default;
     vec4(f32 _x, f32 _y, f32 _z, f32 _w);
+
+    static vec4 Red(f32 Alpha=1.0f);
+    static vec4 Green(f32 Alpha=1.0f);
+};
+
+struct uvec4 {
+    u32 Data[4] = {};
+    struct { u32 x, y, z, w; };
+    uvec4() = default;
 };
 
 union quat {
@@ -99,7 +121,9 @@ union matrix4_affine {
     matrix4_affine(std::initializer_list<f32> List);
 };
 
+void Matrix4_Affine_Init(matrix4_affine* Result, span<double> Data);
 void Matrix4_Affine_Translation(matrix4_affine* Result, vec3 Translation);
+void Matrix4_Affine_Transform(matrix4_affine* Result, vec3 Translation, vec3 Scale);
 void Matrix4_Affine_Transpose(matrix4_affine* Result, const matrix4_affine& M);
 void Matrix4_Affine_Inverse_No_Scale(matrix4_affine* Result, vec3 P, const matrix3& M);
 

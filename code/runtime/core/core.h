@@ -254,8 +254,11 @@ typedef intptr_t  sptr;
 #include "math_lib.h"
 #include "async_pool.h"
 #include "async_queue.h"
+#include "hashmap.h"
 
+#include "memory.inl"
 #include "fixed_array.inl"
+#include "array.inl"
 
 struct allocator_tracker_manager {
 	ak_mutex 		   TrackAllocLock;

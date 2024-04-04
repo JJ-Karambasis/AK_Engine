@@ -5,6 +5,10 @@ buffer::buffer(allocator* Allocator, uptr BufferSize) {
     Size = BufferSize;
 }
 
+bool buffer::Is_Empty() const {
+    return !Ptr || !Size;
+}
+
 const_buffer::const_buffer(const void* Data, uptr BufferSize) : Ptr((const u8*)Data), Size(BufferSize) { }
 
 const_buffer::const_buffer(const buffer& Buffer) : Ptr(Buffer.Ptr), Size(Buffer.Size) { }

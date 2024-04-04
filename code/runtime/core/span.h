@@ -10,6 +10,10 @@ struct span {
     span(const type* First, const type* Last);
     span(std::initializer_list<type> List);
     span(array<type> Array);
+    span(fixed_array<type> Array);
+     
+    template <typename type, uptr N>
+    inline span(const type (&Array)[N]) : Ptr(Array), Count(N) { }
 
     inline const type& operator[](uptr Index) const {
         Assert(Index < Count);
@@ -49,6 +53,12 @@ inline void Span_Init(span<type>* Span, array<type> Array) {
 }
 
 template <typename type>
+inline void Span_Init(span<type>* Span, fixed_array<type> Array) {
+    Span->Ptr = Array.Ptr;
+    Span->Count = Array.Count;
+}
+
+template <typename type>
 inline span<type>::span(const type* _Ptr, uptr _Count) {
     Span_Init(this, _Ptr, _Count);
 }
@@ -67,5 +77,11 @@ template <typename type>
 inline span<type>::span(array<type> Array) {
     Span_Init(this, Array);
 }
+
+template <typename type>
+inline span<type>::span(fixed_array<type> Array) {
+    Span_Init(this, Array);
+}
+
 
 #endif

@@ -18,6 +18,9 @@ struct array {
 
     inline type* begin() { return Ptr; }
     inline type* end() { return Ptr+Count; }
+
+    inline const type* begin() const { return Ptr; }
+    inline const type* end() const { return Ptr+Count; }
 };
 
 template <typename type>
@@ -97,7 +100,22 @@ inline void Array_Push(array<type>* Array, type&& Entry) {
 }
 
 template <typename type>
-void Array_Destruct(array<type>* Array) {
+inline void Array_Push_Range(array<type>* Array, const type* Ptr, uptr Count) {
+    if(Array->Count+Count > Array->Capacity) {
+        uptr NewCapacity = Max(Array->Capacity*2, Array->Count+Count);
+        Array_Reserve(Array, NewCapacity);
+    }
+    Memory_Copy(Array->Ptr+Array->Count, Ptr, Count*sizeof(type));
+    Array->Count += Count;
+}
+
+template <typename type>
+inline uptr Array_Byte_Size(array<type>* Array) {
+    return Array->Count*sizeof(type);
+} 
+
+template <typename type>
+inline void Array_Destruct(array<type>* Array) {
     if(Array->Ptr) {
         for(u32 i = 0; i < Array->Count; i++) {
             Array->Ptr[i].~type();

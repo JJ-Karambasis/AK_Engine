@@ -31,6 +31,14 @@ vec4::vec4(f32 _x, f32 _y, f32 _z, f32 _w) {
     w = _w;
 }
 
+vec4 vec4::Red(f32 Alpha) {
+    return vec4(1.0f, 0.0f, 0.0f, Alpha);
+}
+
+vec4 vec4::Green(f32 Alpha) {
+    return vec4(0.0f, 1.0f, 0.0f, Alpha);
+}
+
 quat::quat(f32 _x, f32 _y, f32 _z, f32 _w) {
     x = _x;
     y = _y;
@@ -106,9 +114,25 @@ matrix4_affine::matrix4_affine(std::initializer_list<f32> List) {
     Memory_Copy(Data, List.begin(), List.size()*sizeof(f32));
 }
 
+void Matrix4_Affine_Init(matrix4_affine* Result, span<double> Data) {
+    Assert(Data.Count == 12);
+    for(u32 i = 0; i < 12; i++) {
+        Result->Data[i] = (f32)Data[i];
+    }
+}
+
 void Matrix4_Affine_Translation(matrix4_affine* Result, vec3 Translation) {
     *Result = matrix4_affine();
     Result->t = Translation;
+}
+
+void Matrix4_Affine_Transform(matrix4_affine* Result, vec3 t, vec3 Scale) {
+    *Result = {
+        Scale.x, 0, 0,
+        0, Scale.y, 0,
+        0, 0, Scale.z, 
+        t.x, t.y, t.z
+    };
 }
 
 void Matrix4_Affine_Transpose(matrix4_affine* Result, const matrix4_affine& M) {

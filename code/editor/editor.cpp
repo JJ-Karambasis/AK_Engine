@@ -5,6 +5,9 @@
 #include <shader_common.h>
 #include <shader.h>
 
+#define FBX_PARSER_USE_AK_FBX
+#include "parsers/fbx/fbx_parser.h"
+
 void Fatal_Error_Message() {
     OS_Message_Box("A fatal error occurred during initialization!\nPlease view the error logs for more info.", "Error");
 }
@@ -27,7 +30,6 @@ GDI_LOG_DEFINE(GDI_Log_Error) {
     Assert(false);
 }
 
-
 bool Editor_Main() {
     gdi* GDI = GDI_Create({
         .LoggingCallbacks = {
@@ -40,6 +42,7 @@ bool Editor_Main() {
             .Name = String_Lit("AK Engine"),
         }
     });
+
     if(!GDI) {
         Fatal_Error_Message();
         return false;
@@ -119,7 +122,7 @@ bool Editor_Main() {
     gdi_handle<gdi_bind_group_layout> DrawBindGroupLayout = GDI_Context_Create_Bind_Group_Layout(GDIContext, {
         .Bindings = { {
                 .Type       = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
-                .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT
+                .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT|GDI_SHADER_STAGE_PIXEL_BIT
             }
         }
     });
@@ -176,24 +179,40 @@ bool Editor_Main() {
     array<gdi_handle<gdi_texture_view>> SwapchainViews(Arena);
     array<gdi_handle<gdi_framebuffer>>  SwapchainFramebuffers(Arena);
 
-    vec3 TestTriangle[3] = {
-        vec3(-0.5f, -0.5f, 0.0f),
-        vec3( 0.5f, -0.5f, 0.0f),
-        vec3( 0.0f,  0.5f, 0.0f)
-    };
+    fbx_scene* Scene = FBX_Create_Scene(Core_Get_Base_Allocator(), String_Lit("data/Box.fbx"));
+    Assert(Scene);
 
-    u16 TestIndices[3] = {0, 1, 2};
+    array<vec3> TestVertices(&Scratch);
+    array<u32>  TestIndices(&Scratch);
+
+    u32 IndexOffset = 0;
+    for(const fbx_object& Object : Scene->Objects) {
+        for(uptr MeshIndex : Object.MeshIndices) {
+            fbx_mesh* Mesh = &Scene->Meshes[MeshIndex];
+            Array_Push_Range(&TestVertices, span(Mesh->Positions));
+            
+            fixed_array<u32> Indices(&Scratch, Mesh->TriangleCount*3);
+            for(u32 i = 0; i < Mesh->TriangleCount; i++) {
+                Indices[i*3 + 0] = IndexOffset + Mesh->PositionVtxIndices[i*3 + 0];
+                Indices[i*3 + 1] = IndexOffset + Mesh->PositionVtxIndices[i*3 + 1];
+                Indices[i*3 + 2] = IndexOffset + Mesh->PositionVtxIndices[i*3 + 2];
+            }
+
+            Array_Push_Range(&TestIndices, span(Indices));
+            IndexOffset += Safe_U32(Mesh->Positions.Count);     
+        }
+    }
 
     gdi_handle<gdi_buffer> VtxBuffer = GDI_Context_Create_Buffer(GDIContext, {
-        .ByteSize = sizeof(TestTriangle),
+        .ByteSize = Array_Byte_Size(&TestVertices),
         .UsageFlags = GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT,
-        .InitialData = const_buffer(TestTriangle)
+        .InitialData = const_buffer(span(TestVertices))
     });
 
     gdi_handle<gdi_buffer> IdxBuffer = GDI_Context_Create_Buffer(GDIContext, {
-        .ByteSize = sizeof(TestIndices),
+        .ByteSize = Array_Byte_Size(&TestIndices),
         .UsageFlags = GDI_BUFFER_USAGE_FLAG_IDX_BUFFER_BIT,
-        .InitialData = const_buffer(TestIndices)
+        .InitialData = const_buffer(span(TestIndices))
     });
 
     while(MainWindowID) {
@@ -290,30 +309,32 @@ bool Editor_Main() {
             });
 
             GDI_Cmd_List_Set_Vtx_Buffers(CmdList, {VtxBuffer});
-            GDI_Cmd_List_Set_Idx_Buffer(CmdList, IdxBuffer, GDI_FORMAT_R16_UINT);
+            GDI_Cmd_List_Set_Idx_Buffer(CmdList, IdxBuffer, GDI_FORMAT_R32_UINT);
             GDI_Cmd_List_Set_Pipeline(CmdList, Pipeline);
 
             draw_data DrawData = {};
 
             matrix4_affine Model;
-            Matrix4_Affine_Translation(&Model, vec3(-1.0f, 0.0f, 0.0f));
+            Matrix4_Affine_Transform(&Model, vec3(-1.0f, 0.0f, 0.0f), vec3(0.5f, 0.5f, 0.5f));
             Matrix4_Affine_Transpose(&DrawData.Model, Model);
+            DrawData.Color = vec4::Red();
 
             u8* Data = GDI_Context_Buffer_Map(GDIContext, DrawBuffer);
             Memory_Copy(Data, &DrawData, sizeof(DrawData));
 
-            Matrix4_Affine_Translation(&Model, vec3(1.0f, 0.0f, 0.0f));
+            Matrix4_Affine_Transform(&Model, vec3(1.0f, 0.0f, 0.0f), vec3(0.5f, 0.5f, 0.5f));
             Matrix4_Affine_Transpose(&DrawData.Model, Model);
+            DrawData.Color = vec4::Green();
 
             Memory_Copy(Data+DrawSize, &DrawData, sizeof(DrawData));
 
             GDI_Cmd_List_Set_Bind_Groups(CmdList, 0, {ViewBindGroup});
 
             GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {0});
-            GDI_Cmd_List_Draw_Indexed_Instance(CmdList, 3, 0, 0, 1, 0);
+            GDI_Cmd_List_Draw_Indexed_Instance(CmdList, Safe_U32(TestIndices.Count), 0, 0, 1, 0);
 
             GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {DrawSize});
-            GDI_Cmd_List_Draw_Indexed_Instance(CmdList, 3, 0, 0, 1, 0);
+            GDI_Cmd_List_Draw_Indexed_Instance(CmdList, Safe_U32(TestIndices.Count), 0, 0, 1, 0);
 
             GDI_Context_Buffer_Unmap(GDIContext, DrawBuffer);
 
@@ -347,6 +368,8 @@ int main() {
     Core_Delete();
     return Result ? 0 : 1;
 }
+
+#include "parsers/fbx/fbx_parser.cpp"
 
 #include "engine_source.cpp"
 #include <core.cpp>

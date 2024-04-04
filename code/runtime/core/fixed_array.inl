@@ -18,6 +18,12 @@ inline void Array_Init(fixed_array<type>* Array, allocator* Allocator, uptr Coun
 }
 
 template <typename type>
+inline void Array_Init(fixed_array<type>* Array, allocator* Allocator, const array<type>& SrcArray) {
+    Array_Init(Array, Allocator, SrcArray.Count);
+    Array_Copy(Array->Ptr, SrcArray.Ptr, SrcArray.Count);
+}
+
+template <typename type>
 inline void Array_Free(fixed_array<type>* Array, allocator* Allocator) {
     if(Array->Ptr) {
         Allocator_Free_Memory(Allocator, Array->Ptr);
@@ -34,4 +40,9 @@ inline fixed_array<type>::fixed_array(type* _Ptr, uptr _Count) {
 template <typename type>
 inline fixed_array<type>::fixed_array(allocator* Allocator, uptr Count) {
     Array_Init(this, Allocator, Count);
+}
+
+template <typename type>
+inline fixed_array<type>::fixed_array(allocator* Allocator, const array<type>& Array) {
+    Array_Init(this, Allocator, Array);
 }

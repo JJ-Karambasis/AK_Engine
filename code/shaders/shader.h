@@ -10,6 +10,7 @@ struct view_data {
 
 struct draw_data {
     matrix4_affine Model;
+    vec4           Color;
 };
 
 #endif

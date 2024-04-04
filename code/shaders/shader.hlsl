@@ -20,5 +20,5 @@ vtx_output VS_Main(vtx_input Vtx) {
 }
 
 vec4 PS_Main(vtx_output Pxl) : SV_Target0 {
-    return vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    return DrawData.Color;
 }

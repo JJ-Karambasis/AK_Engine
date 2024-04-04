@@ -2,6 +2,9 @@
 #define FIXED_ARRAY_H
 
 template <typename type>
+struct array;
+
+template <typename type>
 struct fixed_array {
     type*      Ptr = nullptr;
     uptr       Count = 0;
@@ -9,6 +12,7 @@ struct fixed_array {
     fixed_array() = default;
     fixed_array(type* Ptr, uptr Count);
     fixed_array(allocator* Allocator, uptr Count);
+    fixed_array(allocator* Allocator, const array<type>& Array);
     inline type& operator[](uptr Index) {
         Assert(Index < Count);
         return Ptr[Index];

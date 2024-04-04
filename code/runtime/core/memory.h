@@ -1,6 +1,9 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
+template <typename type>
+struct span;
+
 struct buffer {
     u8*  Ptr  = nullptr;
     uptr Size = 0;
@@ -8,6 +11,8 @@ struct buffer {
     buffer() = default;
     buffer(void* Data, uptr BufferSize);
     buffer(allocator* Allocator, uptr BufferSize);
+
+	bool Is_Empty() const;
 };
 
 struct const_buffer {
@@ -17,6 +22,9 @@ struct const_buffer {
     const_buffer() = default;
     const_buffer(const void* Data, uptr BufferSize);
     const_buffer(const buffer& Buffer);
+	
+	template <typename type>
+	const_buffer(const span<type>& Span);
 
     template <typename type>
     inline const_buffer(const type* Entry) : Ptr((const u8*)Entry), Size(sizeof(type)) { }
