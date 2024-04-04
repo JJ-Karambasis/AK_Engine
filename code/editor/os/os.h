@@ -3,6 +3,7 @@
 
 struct os;
 
+#include "os_input.h"
 #include "os_event.h"
 
 void   OS_Message_Box(string Message, string Title);

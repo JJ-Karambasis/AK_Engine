@@ -1,3 +1,5 @@
+vec2::vec2(f32 _x, f32 _y) : x(_x), y(_y) { }
+
 bool operator!=(uvec2 A, uvec2 B) {
     return A.x != B.x || A.y != B.y;
 }
@@ -12,6 +14,10 @@ f32 Vec3_Dot(vec3 A, vec3 B) {
     return A.x*B.x + A.y*B.y + A.z*B.z;
 }
 
+f32 Vec3_Sq_Mag(vec3 V) {
+    return Vec3_Dot(V, V);
+}
+
 vec3 Vec3_Cross(vec3 A, vec3 B) {
     return vec3(A.y*B.z - A.z*B.y, A.z*B.x - A.x*B.z, A.x*B.y - A.y*B.x);
 }
@@ -20,8 +26,17 @@ vec3 operator+(vec3 A, vec3 B) {
     return vec3(A.x+B.x, A.y+B.y, A.z+B.z);
 }
 
+vec3& operator+=(vec3& A, vec3 B) {
+    A = A+B;
+    return A;
+}
+
 vec3 operator*(vec3 A, f32 B) {
     return vec3(A.x*B, A.y*B, A.z*B);
+}
+
+vec3 operator*(f32 A, vec3 B) {
+    return vec3(A*B.x, A*B.y, A*B.z);
 }
 
 vec4::vec4(f32 _x, f32 _y, f32 _z, f32 _w) {
@@ -82,6 +97,13 @@ quat Quat_Normalize(quat Q) {
 
     f32 InvLength = 1.0f/Sqrt(SqLength);
     return Q * InvLength;
+}
+
+vec3 Quat_Rotate(quat Q, vec3 V) {
+    vec3 Result = (2.0f*Vec3_Dot(V, Q.v)*Q.v) + 
+                ((Q.s*Q.s - Vec3_Sq_Mag(Q.v))*V) + 
+                (2.0f*Q.s*Vec3_Cross(Q.v, V));
+    return Result;
 }
 
 quat operator*(quat A, f32 B) {

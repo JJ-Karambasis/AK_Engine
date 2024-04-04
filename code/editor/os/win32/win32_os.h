@@ -44,6 +44,10 @@ struct os {
     ak_thread           Thread;
     HWND                BaseWindow;
     WNDCLASSEXW         MainWindowClass;
+    bool                CurrentKeyboardState[OS_KEYBOARD_KEY_COUNT];
+    bool                LastFrameKeyboardState[OS_KEYBOARD_KEY_COUNT];
+    bool                CurrentMouseState[OS_MOUSE_KEY_COUNT];
+    bool                LastFrameMouseState[OS_MOUSE_KEY_COUNT];
     os_event_manager    EventManager;
     os_event_stream*    EventStream;
 };
@@ -52,5 +56,83 @@ enum win32_message {
     WIN32_CREATE_WINDOW_MSG,
     WIN32_DELETE_WINDOW_MSG
 };
+
+#define WIN32_MOUSE_USAGE 2
+#define WIN32_USAGE_PAGE 1
+
+global const DWORD G_MouseVKCodes[] = {
+    VK_LBUTTON,
+    VK_MBUTTON,
+    VK_RBUTTON
+};
+
+global const DWORD G_VKCodes[] = {
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'G',
+    'H',
+    'I', 
+    'J',
+    'K',
+    'L',
+    'M',
+    'N',
+    'O',
+    'P',
+    'Q',
+    'R',
+    'S',
+    'T',
+    'U',
+    'V',
+    'W',
+    'X',
+    'Y',
+    'Z',
+    '0',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    VK_SPACE,
+    VK_TAB,
+    VK_ESCAPE,
+    VK_PAUSE,
+    VK_UP,
+    VK_DOWN,
+    VK_LEFT,
+    VK_RIGHT,
+    VK_BACK,
+    VK_RETURN,
+    VK_DELETE,
+    VK_INSERT,
+    VK_SHIFT,
+    VK_CONTROL,
+    VK_MENU,
+    VK_F1,
+    VK_F2,
+    VK_F3,
+    VK_F4,
+    VK_F5,
+    VK_F6,
+    VK_F7,
+    VK_F8,
+    VK_F9,
+    VK_F10,
+    VK_F11,
+    VK_F12
+};
+
+static_assert(Array_Count(G_VKCodes) == OS_KEYBOARD_KEY_COUNT);
+static_assert(Array_Count(G_MouseVKCodes) == OS_MOUSE_KEY_COUNT);
 
 #endif

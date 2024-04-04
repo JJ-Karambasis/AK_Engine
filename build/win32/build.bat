@@ -11,6 +11,7 @@ if "%msvc%"=="1" if "%x64%"=="1" call init_compiler.bat x64
 set code_path=..\code
 set dependencies_path=%code_path%\dependencies
 set runtime_path=%code_path%\runtime
+set shared_path=%code_path%\shared
 set editor_path=%code_path%\editor
 set editor_os_path=%editor_path%\os
 set vk_include=%dependencies_path%\Vulkan-Headers\include
@@ -59,7 +60,7 @@ if "%clang%"=="1" set def=             -D
 if "%clang%"=="1" set cpp=             -std=c++20
 if "%clang%"=="1" set c=               -std=c17
 
-set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders
+set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
 
 if "%debug%"=="1"   set compile=%compile_debug% %include_common%
 if "%release%"=="1" set compile=%compile_release% %include_common%
@@ -68,8 +69,8 @@ if not exist ..\..\bin mkdir ..\..\bin
 
 set gdi_objs=vk_loader.obj gdi.obj
 pushd ..\..\bin    
-    %compile% %inc%%vk_include% %only_compile% %c% %runtime_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link% || exit /b 1
-    %compile% %inc%%vk_include% %only_compile% %cpp% %runtime_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
+    %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link% || exit /b 1
+    %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
     %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj || exit /b 1
     %compile% %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
     %compile% %def%TEST_BUILD %inc%%code_path%\editor %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1

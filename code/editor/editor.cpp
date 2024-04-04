@@ -1,6 +1,7 @@
 #include <engine.h>
 #include "editor_modules.h"
 #include "os/os.h"
+#include "editor_input.h"
 
 #include <shader_common.h>
 #include <shader.h>
@@ -215,7 +216,19 @@ bool Editor_Main() {
         .InitialData = const_buffer(span(TestIndices))
     });
 
+    editor_input_manager InputManager = {}; 
+    camera Camera; 
+
+    u64 Frequency = AK_Query_Performance_Frequency();
+    u64 LastCounter = AK_Query_Performance_Counter();
+
+
     while(MainWindowID) {
+        u64 StartCounter = AK_Query_Performance_Counter();
+        f64 dt = (double)(StartCounter-LastCounter)/(double)Frequency;
+        LastCounter = StartCounter;
+        Editor_Input_Manager_New_Frame(&InputManager, dt);
+
         while(const os_event* Event = OS_Next_Event()) {
             switch(Event->Type) {
                 case OS_EVENT_TYPE_WINDOW_CLOSED: {
@@ -237,14 +250,51 @@ bool Editor_Main() {
                         MainWindowID = 0;
                     }
                 } break;
+
+                case OS_EVENT_TYPE_KEY_PRESSED: 
+                case OS_EVENT_TYPE_KEY_RELEASED: {
+                    const os_event_keyboard* KeyEvent = (const os_event_keyboard*)Event;
+                    InputManager.KeyboardInput[KeyEvent->Key].IsDown = Event->Type == OS_EVENT_TYPE_KEY_PRESSED;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_PRESSED:
+                case OS_EVENT_TYPE_MOUSE_RELEASED: {
+                    const os_event_mouse* MouseEvent = (const os_event_mouse*)Event;
+                    InputManager.MouseInput[MouseEvent->Key].IsDown = Event->Type == OS_EVENT_TYPE_MOUSE_PRESSED;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_MOVED: {
+                    const os_event_mouse* MouseEvent = (const os_event_mouse*)Event;
+                    InputManager.MouseDelta = MouseEvent->Delta;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_SCROLLED: {
+                    const os_event_mouse* MouseEvent = (const os_event_mouse*)Event;
+                    InputManager.MouseScroll = MouseEvent->Scroll;
+                } break;
             }
         }    
 
         if(MainWindowID) {
+            if(InputManager.Is_Down(OS_MOUSE_KEY_MIDDLE)) {
+                if(InputManager.Is_Down(OS_KEYBOARD_KEY_SHIFT)) {
+                    quat Orientation = Camera_Get_Orientation(&Camera);
+                    vec3 XAxis = Quat_Rotate(Orientation, vec3(1.0f, 0.0f, 0.0f));
+                    vec3 YAxis = Quat_Rotate(Orientation, vec3(0.0f, 1.0f, 0.0f));
+                    Camera.Target += (XAxis*InputManager.Get_DeltaX() + YAxis*InputManager.Get_DeltaY());
+                } else if(InputManager.Is_Down(OS_KEYBOARD_KEY_CONTROL)) {
+                    Camera.Distance -= InputManager.Get_DeltaY();
+                    if(Camera.Distance < 1e-3f) {
+                        Camera.Distance = 1e-3f;
+                    }
+                } else {
+                    Camera.Roll -= InputManager.Get_DeltaX();
+                    Camera.Pitch -= InputManager.Get_DeltaY();
+                }
+            }
+
             uvec2 CurrentWindowSize;
             OS_Window_Get_Resolution(MainWindowID, &CurrentWindowSize.w, &CurrentWindowSize.h);
-
-            camera Camera; 
 
             matrix4 Projection;
             matrix4_affine View;
@@ -371,8 +421,9 @@ int main() {
 
 #include "parsers/fbx/fbx_parser.cpp"
 
-#include "engine_source.cpp"
-#include <core.cpp>
+#include "editor_input.cpp"
+#include <engine_source.cpp>
+#include <core/core.cpp>
 
 #if defined(OS_WIN32)
 #pragma comment(lib, "user32.lib")

@@ -193,6 +193,16 @@ internal LRESULT Win32__OS_Window_Proc(HWND Window, UINT Message, WPARAM WParam,
 internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
     os* OS = OS_Get();
 
+    RAWINPUTDEVICE RawInputDevice = {
+        .usUsagePage = WIN32_USAGE_PAGE,
+        .usUsage = WIN32_MOUSE_USAGE,
+    };
+
+    if(!RegisterRawInputDevices(&RawInputDevice, 1, sizeof(RAWINPUTDEVICE))) {
+        //TODO(JJ): logging
+        return 1;
+    }
+
     WNDCLASSEXW BaseWindowClass = {
         .cbSize = sizeof(WNDCLASSEXW),
         .lpfnWndProc = Win32__OS_Base_Window_Proc,
@@ -229,6 +239,16 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
             PostQuitMessage(0);
         }
 
+        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentKeyboardState); KeyIndex++) {
+            OS->LastFrameKeyboardState[KeyIndex] = OS->CurrentKeyboardState[KeyIndex];
+            OS->CurrentKeyboardState[KeyIndex] = false;
+        }
+
+        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentMouseState); KeyIndex++) {
+            OS->LastFrameMouseState[KeyIndex] = OS->CurrentMouseState[KeyIndex];
+            OS->CurrentMouseState[KeyIndex] = false;
+        }
+
         //If there are no messages. Use GetMessageW to block the thread until the
         //next message is available
         MSG Message;
@@ -246,10 +266,70 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
                 return 0;
             } break; 
 
+            case WM_INPUT: {
+                scratch Scratch = Scratch_Get();
+
+                UINT RawInputSize;
+                GetRawInputData((HRAWINPUT)Message.lParam, RID_INPUT, nullptr, &RawInputSize, sizeof(RAWINPUTHEADER));
+                RAWINPUT* RawInput = (RAWINPUT*)Scratch_Push(&Scratch, RawInputSize); 
+                GetRawInputData((HRAWINPUT)Message.lParam, RID_INPUT, RawInput, &RawInputSize, sizeof(RAWINPUTHEADER));
+
+                switch(RawInput->header.dwType) {
+                    case RIM_TYPEMOUSE: {
+                        RAWMOUSE* Mouse = &RawInput->data.mouse;
+                        if(Mouse->lLastX != 0 || Mouse->lLastY != 0) {
+                            os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_MOVED);
+                            MouseEvent->Delta = vec2((f32)Mouse->lLastX, -(f32)Mouse->lLastY);
+                        }
+
+                        if(Mouse->usButtonFlags & RI_MOUSE_WHEEL) {
+                            os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_SCROLLED);
+                            MouseEvent->Scroll = (f32)((SHORT)Mouse->usButtonData/WHEEL_DELTA);
+                        }
+                    } break;
+                }
+            } break;
+
             default: {
                 TranslateMessage(&Message);
                 DispatchMessageW(&Message);
             } break;
+        }
+
+        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentKeyboardState); KeyIndex++) {
+            if(GetAsyncKeyState((int)G_VKCodes[KeyIndex]) & 0x8000) {
+                OS->CurrentKeyboardState[KeyIndex] = true;
+            }
+        }
+
+        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentMouseState); KeyIndex++) {
+            if(GetAsyncKeyState((int)G_MouseVKCodes[KeyIndex]) & 0x8000) {
+                OS->CurrentMouseState[KeyIndex] = true;
+            }
+        }
+
+        for(u32 KeyIndex = 0; KeyIndex < OS_KEYBOARD_KEY_COUNT; KeyIndex++) {
+            if(OS->CurrentKeyboardState[KeyIndex] && !OS->LastFrameKeyboardState[KeyIndex]) {
+                os_event_keyboard* KeyboardEvent = (os_event_keyboard*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_KEY_PRESSED);
+                KeyboardEvent->Key = (os_keyboard_key)KeyIndex;
+            }
+
+            if(!OS->CurrentKeyboardState[KeyIndex] && OS->LastFrameKeyboardState[KeyIndex]) {   
+                os_event_keyboard* KeyboardEvent = (os_event_keyboard*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_KEY_RELEASED);
+                KeyboardEvent->Key = (os_keyboard_key)KeyIndex;
+            }
+        }
+
+        for(u32 KeyIndex = 0; KeyIndex < OS_MOUSE_KEY_COUNT; KeyIndex++) {
+            if(OS->CurrentMouseState[KeyIndex] && !OS->LastFrameMouseState[KeyIndex]) {
+                os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_PRESSED);
+                MouseEvent->Key = (os_mouse_key)KeyIndex;
+            }
+
+            if(!OS->CurrentMouseState[KeyIndex] && OS->LastFrameMouseState[KeyIndex]) {
+                os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_RELEASED);
+                MouseEvent->Key = (os_mouse_key)KeyIndex;
+            }
         }
     }
 }

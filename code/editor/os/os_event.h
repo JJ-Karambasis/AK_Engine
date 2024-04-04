@@ -9,6 +9,12 @@ enum os_event_type {
     OS_EVENT_TYPE_NONE,
     OS_EVENT_TYPE_WINDOW_CLOSED,
     OS_EVENT_TYPE_WINDOW_RESIZE,
+    OS_EVENT_TYPE_KEY_PRESSED,
+    OS_EVENT_TYPE_KEY_RELEASED,
+    OS_EVENT_TYPE_MOUSE_PRESSED,
+    OS_EVENT_TYPE_MOUSE_RELEASED,
+    OS_EVENT_TYPE_MOUSE_MOVED,
+    OS_EVENT_TYPE_MOUSE_SCROLLED,
 #ifdef TEST_BUILD
     OS_EVENT_TYPE_TEST,
 #endif
@@ -23,6 +29,16 @@ struct os_event {
 struct os_event_window_resize : public os_event {
     u32 Width;
     u32 Height;
+};
+
+struct os_event_keyboard : public os_event {
+    os_keyboard_key Key;
+};
+
+struct os_event_mouse : public os_event {
+    os_mouse_key Key;
+    vec2         Delta;
+    f32          Scroll;
 };
 
 #ifdef TEST_BUILD
@@ -93,6 +109,12 @@ static const uptr G_OSEventTypeSize[] = {
     0,
     sizeof(os_event),
     sizeof(os_event_window_resize),
+    sizeof(os_event_keyboard),
+    sizeof(os_event_keyboard),
+    sizeof(os_event_mouse),
+    sizeof(os_event_mouse),
+    sizeof(os_event_mouse),
+    sizeof(os_event_mouse),
 #ifdef TEST_BUILD
     sizeof(os_event_test),
 #endif

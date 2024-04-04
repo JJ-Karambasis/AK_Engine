@@ -18,6 +18,7 @@ struct vec2 {
     f32 Data[2] = {};
     struct { f32 x, y; };
     vec2() = default;
+    vec2(f32 _x, f32 _y);
 };
 
 union vec3 {
@@ -37,9 +38,12 @@ union vec3 {
 };
 
 f32  Vec3_Dot(vec3 A, vec3 B);
+f32  Vec3_Sq_Mag(vec3 V);
 vec3 Vec3_Cross(vec3 A, vec3 B);
 vec3 operator+(vec3 A, vec3 B);
+vec3& operator+=(vec3& A, vec3 B);
 vec3 operator*(vec3 A, f32 B);
+vec3 operator*(f32 A, vec3 B);
 
 union vec4 {
     f32 Data[4] = {};
@@ -75,6 +79,7 @@ quat Quat_RotZ(f32 Angle);
 f32  Quat_Dot(quat A, quat B);
 f32  Quat_Sq_Mag(quat Q);
 quat Quat_Normalize(quat Q);
+vec3 Quat_Rotate(quat Q, vec3 V);
 quat operator*(quat A, f32 B);
 quat operator*(quat A, quat B);
 

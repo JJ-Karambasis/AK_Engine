@@ -20,5 +20,5 @@ int main(int ArgCount, char* Args[]) {
     return Result;
 }
 
-#include <core.cpp>
+#include <core/core.cpp>
 #include <os/os_event.cpp>

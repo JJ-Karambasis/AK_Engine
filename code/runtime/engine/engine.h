@@ -4,6 +4,8 @@
 #include <core/core.h>
 #include <gdi/gdi.h>
 
+#include <input/input.h>
+
 #include "modules.h"
 #include "camera.h"
 
