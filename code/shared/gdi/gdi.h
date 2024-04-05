@@ -63,8 +63,20 @@ struct gdi_vtx_buffer_binding {
     span<gdi_vtx_attribute> Attributes;
 };
 
+enum gdi_comparison_func {
+    GDI_COMPARISON_FUNC_LESS,
+    GDI_COMPARISON_FUNC_COUNT
+};
+
+struct gdi_depth_state {
+    bool DepthTestEnabled;
+    bool DepthWriteEnabled;
+    gdi_comparison_func ComparisonFunc = GDI_COMPARISON_FUNC_LESS;
+};
+
 struct gdi_graphics_pipeline_state {
     span<gdi_vtx_buffer_binding> VtxBufferBindings;
+    gdi_depth_state              DepthState;
 };
 
 struct gdi_graphics_pipeline_create_info {
@@ -134,7 +146,8 @@ struct gdi_framebuffer_create_info {
 };
 
 enum class gdi_render_pass_attachment_type {
-    Color
+    Color,
+    Depth
 };
 
 enum gdi_load_op {
@@ -145,6 +158,7 @@ enum gdi_load_op {
 
 enum gdi_store_op {
     GDI_STORE_OP_STORE,
+    GDI_STORE_OP_DONT_CARE,
     GDI_STORE_OP_COUNT
 };
 
@@ -154,6 +168,7 @@ struct gdi_render_pass_attachment {
     gdi_load_op                     LoadOp;
     gdi_store_op                    StoreOp;
     static gdi_render_pass_attachment Color(gdi_format Format, gdi_load_op LoadOp, gdi_store_op StoreOp);
+    static gdi_render_pass_attachment Depth(gdi_format Format, gdi_load_op LoadOp, gdi_store_op StoreOp);
 };
 
 struct gdi_render_pass_create_info {
@@ -345,6 +360,7 @@ enum gdi_resource_state {
     GDI_RESOURCE_STATE_NONE,
     GDI_RESOURCE_STATE_PRESENT,
     GDI_RESOURCE_STATE_COLOR,
+    GDI_RESOURCE_STATE_DEPTH_WRITE,
     GDI_RESOURCE_STATE_COUNT
 };
 

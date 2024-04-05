@@ -231,13 +231,15 @@ enum class vk_pipeline_stage {
     None,
     Present,
     Color_Attachment,
+    Depth_Write_Attachment,
     Count
 };
 
 static const vk_pipeline_stage G_PipelineStages[] = {
     vk_pipeline_stage::None,
     vk_pipeline_stage::Present,
-    vk_pipeline_stage::Color_Attachment
+    vk_pipeline_stage::Color_Attachment,
+    vk_pipeline_stage::Depth_Write_Attachment
 };
 
 static_assert(Array_Count(G_PipelineStages) == GDI_RESOURCE_STATE_COUNT);
@@ -245,7 +247,8 @@ static_assert(Array_Count(G_PipelineStages) == GDI_RESOURCE_STATE_COUNT);
 static const VkPipelineStageFlags G_PipelineStageMasks[] = {
     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT|VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT
 };
 
 static_assert(Array_Count(G_PipelineStageMasks) == (u32)vk_pipeline_stage::Count);
@@ -253,7 +256,8 @@ static_assert(Array_Count(G_PipelineStageMasks) == (u32)vk_pipeline_stage::Count
 static const VkAccessFlags G_VKAccessMasks[] = {
     0,
     0,
-    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT|VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
 };
 
 static_assert(Array_Count(G_VKAccessMasks) == GDI_RESOURCE_STATE_COUNT);
@@ -261,7 +265,8 @@ static_assert(Array_Count(G_VKAccessMasks) == GDI_RESOURCE_STATE_COUNT);
 static const VkImageLayout G_VKImageLayouts[] = {
     VK_IMAGE_LAYOUT_UNDEFINED,
     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 };
 
 static_assert(Array_Count(G_VKImageLayouts) == GDI_RESOURCE_STATE_COUNT);

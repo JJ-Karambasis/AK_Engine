@@ -89,6 +89,15 @@ gdi_render_pass_attachment gdi_render_pass_attachment::Color(gdi_format Format, 
     };
 }
 
+gdi_render_pass_attachment gdi_render_pass_attachment::Depth(gdi_format Format, gdi_load_op LoadOp, gdi_store_op StoreOp) {
+    return {
+        .Type = gdi_render_pass_attachment_type::Depth,
+        .Format = Format,
+        .LoadOp = LoadOp,
+        .StoreOp = StoreOp
+    };
+}
+
 gdi_resource gdi_resource::Texture(gdi_handle<gdi_texture> Texture) {
     return {
         .Type = gdi_resource_type::Texture,

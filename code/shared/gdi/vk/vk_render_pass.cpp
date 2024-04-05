@@ -2,6 +2,7 @@ bool VK_Create_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass, con
     scratch Scratch = Scratch_Get();
     array<VkAttachmentDescription> Attachments(&Scratch, CreateInfo.Attachments.Count);
     array<VkAttachmentReference>   ColorAttachments(&Scratch, CreateInfo.Attachments.Count);
+    VkAttachmentReference* DepthAttachment = NULL;
 
     for(const gdi_render_pass_attachment& Attachment : CreateInfo.Attachments) {
         u32 AttachmentIndex = Safe_U32(Attachments.Count);
@@ -14,6 +15,14 @@ bool VK_Create_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass, con
                     .attachment = AttachmentIndex,
                     .layout = Layout
                 });
+            } break;
+
+            case gdi_render_pass_attachment_type::Depth: {
+                Layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+                Assert(!DepthAttachment);
+                DepthAttachment = Scratch_Push_Struct(&Scratch, VkAttachmentReference);
+                DepthAttachment->attachment = AttachmentIndex;
+                DepthAttachment->layout = Layout;
             } break;
 
             Invalid_Default_Case();
@@ -34,7 +43,8 @@ bool VK_Create_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass, con
     VkSubpassDescription Subpass = {
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount = Safe_U32(ColorAttachments.Count),
-        .pColorAttachments = ColorAttachments.Ptr
+        .pColorAttachments = ColorAttachments.Ptr,
+        .pDepthStencilAttachment = DepthAttachment
     };
 
     VkRenderPassCreateInfo RenderPassCreateInfo = {

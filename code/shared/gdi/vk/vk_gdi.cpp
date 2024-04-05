@@ -123,7 +123,8 @@ internal VkAttachmentLoadOp VK_Get_Load_Op(gdi_load_op LoadOp) {
 
 internal VkAttachmentStoreOp VK_Get_Store_Op(gdi_store_op StoreOp) {
     static VkAttachmentStoreOp VKStoreOps[] = {
-        VK_ATTACHMENT_STORE_OP_STORE
+        VK_ATTACHMENT_STORE_OP_STORE,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE
     };
     static_assert(Array_Count(VKStoreOps) == GDI_STORE_OP_COUNT);
     Assert(StoreOp < GDI_STORE_OP_COUNT);
@@ -250,6 +251,27 @@ static VkSamplerAddressMode VK_Get_Address_Mode(gdi_address_mode AddressMode) {
     static_assert(Array_Count(AddressModes) == GDI_ADDRESS_MODE_COUNT);
     Assert(AddressMode < GDI_ADDRESS_MODE_COUNT);
     return AddressModes[AddressMode];
+}
+
+static VkCompareOp VK_Get_Compare_Op(gdi_comparison_func ComparisonFunc) {
+    local_persist const VkCompareOp CompareOps[] = {
+        VK_COMPARE_OP_LESS
+    };
+    static_assert(Array_Count(CompareOps) == GDI_COMPARISON_FUNC_COUNT);
+    Assert(ComparisonFunc < GDI_COMPARISON_FUNC_COUNT);
+    return CompareOps[ComparisonFunc];
+}
+
+static bool VK_Is_Pipeline_Depth(vk_pipeline_stage Stage) {
+    local_persist const bool IsPipelineDepths[] = {
+        false,
+        false,
+        false,
+        true
+    };
+    static_assert(Array_Count(IsPipelineDepths) == (u32)vk_pipeline_stage::Count);
+    Assert((u32)Stage < (u32)vk_pipeline_stage::Count);
+    return IsPipelineDepths[(u32)Stage];
 }
 
 internal VkImageUsageFlags VK_Convert_To_Image_Usage_Flags(gdi_texture_usage_flags Flags) {
@@ -2539,6 +2561,11 @@ void GDI_Cmd_List_Barrier(gdi_cmd_list* _CmdList, span<gdi_barrier> Barriers) {
                 Assert(false);
                 return;
             }
+
+            VkImageAspectFlags ImageAspect = VK_IMAGE_ASPECT_COLOR_BIT;
+            if(VK_Is_Pipeline_Depth((vk_pipeline_stage)NewStage)) {
+                ImageAspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+            }
             
             Array_Push(&PipelineBarriers[OldStage][NewStage].ImageMemoryBarriers, {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -2549,7 +2576,7 @@ void GDI_Cmd_List_Barrier(gdi_cmd_list* _CmdList, span<gdi_barrier> Barriers) {
                 .srcQueueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex,
                 .dstQueueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex,
                 .image = Texture->Image,
-                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+                .subresourceRange = {ImageAspect, 0, 1, 0, 1}
             });
 
             VK_Texture_Record_Frame(Context, TextureHandle);

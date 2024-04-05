@@ -116,7 +116,8 @@ bool Editor_Main() {
     
     gdi_handle<gdi_render_pass> RenderPass = GDI_Context_Create_Render_Pass(GDIContext, {
         .Attachments = {
-            gdi_render_pass_attachment::Color(SwapchainFormat, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_STORE)
+            gdi_render_pass_attachment::Color(SwapchainFormat, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_STORE),
+            gdi_render_pass_attachment::Depth(GDI_FORMAT_D16_UNORM, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_DONT_CARE)
         }
     });
 
@@ -236,6 +237,10 @@ bool Editor_Main() {
                         { .Semantic = String_Lit("POSITION"), .Format = GDI_FORMAT_R32G32B32_FLOAT }, 
                     }
                 }
+            },
+            .DepthState = {
+                .DepthTestEnabled  = true,
+                .DepthWriteEnabled = true,
             }
         },
         .RenderPass = RenderPass
@@ -260,6 +265,10 @@ bool Editor_Main() {
                         { .Semantic = String_Lit("TEXCOORD"), .Format = GDI_FORMAT_R32G32_FLOAT }
                     }
                 }
+            },
+            .DepthState = {
+                .DepthTestEnabled  = true,
+                .DepthWriteEnabled = true
             }
         },
         .RenderPass = RenderPass
@@ -267,6 +276,8 @@ bool Editor_Main() {
 
     arena* Arena = Arena_Create(Core_Get_Base_Allocator());
 
+    gdi_handle<gdi_texture> DepthBuffer;
+    gdi_handle<gdi_texture_view> DepthBufferView;
     array<gdi_handle<gdi_texture_view>> SwapchainViews(Arena);
     array<gdi_handle<gdi_framebuffer>>  SwapchainFramebuffers(Arena);
 
@@ -430,7 +441,26 @@ bool Editor_Main() {
                     Array_Clear(&SwapchainViews);
                 }
 
+                if(!DepthBufferView.Is_Null()) {
+                    GDI_Context_Delete_Texture_View(GDIContext, DepthBufferView);
+                }
+
+                if(!DepthBuffer.Is_Null()) {
+                    GDI_Context_Delete_Texture(GDIContext, DepthBuffer);
+                }
+
                 GDI_Context_Resize_Swapchain(GDIContext, Swapchain);
+
+                DepthBuffer = GDI_Context_Create_Texture(GDIContext, {
+                    .Format = GDI_FORMAT_D16_UNORM,
+                    .Width = CurrentWindowSize.w,
+                    .Height = CurrentWindowSize.h,
+                    .UsageFlags = GDI_TEXTURE_USAGE_FLAG_DEPTH_ATTACHMENT_BIT
+                });
+
+                DepthBufferView = GDI_Context_Create_Texture_View(GDIContext, {
+                    .Texture = DepthBuffer
+                });
 
                 span<gdi_handle<gdi_texture>> Textures = GDI_Context_Get_Swapchain_Textures(GDIContext, Swapchain);
                 for(uptr i = 0; i < Textures.Count; i++) {
@@ -439,7 +469,7 @@ bool Editor_Main() {
                     }));
 
                     Array_Push(&SwapchainFramebuffers, GDI_Context_Create_Framebuffer(GDIContext, {
-                        .Attachments = {SwapchainViews[i]},
+                        .Attachments = {SwapchainViews[i], DepthBufferView},
                         .RenderPass = RenderPass
                     }));
                 }
@@ -453,14 +483,16 @@ bool Editor_Main() {
             u32 TextureIndex = GDI_Cmd_List_Get_Swapchain_Texture_Index(CmdList, GDI_RESOURCE_STATE_COLOR);
 
             GDI_Cmd_List_Barrier(CmdList, {
-                {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_NONE, GDI_RESOURCE_STATE_COLOR}
+                {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_NONE, GDI_RESOURCE_STATE_COLOR}, 
+                {gdi_resource::Texture(DepthBuffer), GDI_RESOURCE_STATE_NONE, GDI_RESOURCE_STATE_DEPTH_WRITE}
             });
 
             GDI_Cmd_List_Begin_Render_Pass(CmdList, {
                 .RenderPass = RenderPass,
                 .Framebuffer = SwapchainFramebuffers[TextureIndex],
                 .ClearValues = { 
-                    gdi_clear::Color(0.0f, 0.0f, 1.0f, 0.0f)
+                    gdi_clear::Color(0.0f, 0.0f, 1.0f, 0.0f),
+                    gdi_clear::Depth(1.0f)
                 }
             });
 

@@ -122,7 +122,10 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
     };
 
     VkPipelineDepthStencilStateCreateInfo DepthStencilState = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = CreateInfo.GraphicsState.DepthState.DepthTestEnabled,
+        .depthWriteEnable = CreateInfo.GraphicsState.DepthState.DepthWriteEnabled,
+        .depthCompareOp = VK_Get_Compare_Op(CreateInfo.GraphicsState.DepthState.ComparisonFunc)
     };
 
     array<VkPipelineColorBlendAttachmentState> Attachments(&Scratch);
