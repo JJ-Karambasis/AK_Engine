@@ -7,7 +7,7 @@ struct async_handle {
     async_handle() = default;
     inline async_handle(u64 _ID) : ID(_ID) { } 
     inline bool Is_Null() { return ID == 0; }
-    inline u32 Index() {
+    inline u32 Index() const {
         return AK_Slot64_Index(ID);
     }
 };

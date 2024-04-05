@@ -3,6 +3,7 @@
 
 enum gdi_format {
     GDI_FORMAT_NONE,
+    GDI_FORMAT_R8_UNORM,
     GDI_FORMAT_R8G8_UNORM,
     GDI_FORMAT_R8G8B8_UNORM,
     GDI_FORMAT_R8G8B8A8_UNORM,
@@ -20,6 +21,7 @@ enum gdi_format {
 };
 
 bool GDI_Is_Depth_Format(gdi_format Format);
+uptr GDI_Get_Bytes_Per_Pixel(gdi_format Format);
 
 template <typename type>
 struct gdi_handle {
@@ -34,6 +36,7 @@ struct gdi_bind_group;
 struct gdi_bind_group_layout;
 struct gdi_framebuffer;
 struct gdi_render_pass;
+struct gdi_sampler;
 struct gdi_texture_view;
 struct gdi_texture;
 struct gdi_buffer;
@@ -75,11 +78,14 @@ struct gdi_graphics_pipeline_create_info {
 enum gdi_bind_group_type {
     GDI_BIND_GROUP_TYPE_CONSTANT,
     GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
+    GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
+    GDI_BIND_GROUP_TYPE_SAMPLER,
     GDI_BIND_GROUP_TYPE_COUNT
 };
 
 bool GDI_Is_Bind_Group_Buffer(gdi_bind_group_type Type);
 bool GDI_Is_Bind_Group_Dynamic(gdi_bind_group_type Type);
+bool GDI_Is_Bind_Group_Texture(gdi_bind_group_type Type);
 
 enum {
     GDI_SHADER_STAGE_NONE       = 0,
@@ -89,8 +95,9 @@ enum {
 typedef u32 gdi_shader_stage_flags;
 
 struct gdi_bind_group_layout_binding {
-    gdi_bind_group_type    Type;
-    gdi_shader_stage_flags StageFlags;
+    gdi_bind_group_type           Type;
+    gdi_shader_stage_flags        StageFlags;
+    span<gdi_handle<gdi_sampler>> ImmutableSamplers;
 };
 
 struct gdi_bind_group_layout_create_info {
@@ -102,9 +109,14 @@ struct gdi_bind_group_buffer {
     uptr                   Size = (uptr)-1;
 };
 
+struct gdi_bind_group_texture {
+    gdi_handle<gdi_texture_view> TextureView;
+};
+
 struct gdi_bind_group_binding {
-    gdi_bind_group_type   Type;
-    gdi_bind_group_buffer BufferBinding;
+    gdi_bind_group_type    Type;
+    gdi_bind_group_buffer  BufferBinding;
+    gdi_bind_group_texture TextureBinding;
 };
 
 struct gdi_bind_group_write_info {
@@ -148,18 +160,45 @@ struct gdi_render_pass_create_info {
     span<gdi_render_pass_attachment> Attachments;
 };
 
+enum gdi_filter {
+    GDI_FILTER_NEAREST,
+    GDI_FILTER_LINEAR,
+    GDI_FILTER_COUNT
+};
+
+enum gdi_address_mode {
+    GDI_ADDRESS_MODE_CLAMP,
+    GDI_ADDRESS_MODE_REPEAT,
+    GDI_ADDRESS_MODE_COUNT
+};
+
+struct gdi_sampler_create_info {
+    gdi_filter       Filter       = GDI_FILTER_NEAREST;
+    gdi_address_mode AddressModeU = GDI_ADDRESS_MODE_CLAMP;
+    gdi_address_mode AddressModeV = GDI_ADDRESS_MODE_CLAMP;
+};
+
+struct gdi_texture_view_create_info {
+    gdi_handle<gdi_texture> Texture = {};
+    gdi_format              Format  = GDI_FORMAT_NONE;
+};
+
 
 enum {
     GDI_TEXTURE_USAGE_FLAG_NONE,
     GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT = (1 << 0),
     GDI_TEXTURE_USAGE_FLAG_DEPTH_ATTACHMENT_BIT = (1 << 1),
-    GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT = (1 << 2)
+    GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT = (1 << 2),
+    GDI_TEXTURE_USAGE_FLAG_COPIED_BIT = (1 << 3)
 };
 typedef u32 gdi_texture_usage_flags;
 
-struct gdi_texture_view_create_info {
-    gdi_handle<gdi_texture> Texture = {};
-    gdi_format              Format  = GDI_FORMAT_NONE;
+struct gdi_texture_create_info {
+    gdi_format              Format;
+    u32                     Width;
+    u32                     Height;
+    gdi_texture_usage_flags UsageFlags;
+    const_buffer            InitialData;
 };
 
 enum {
@@ -251,6 +290,7 @@ struct gdi_context_create_info {
     u32 BindGroupLayoutCount = 512;
     u32 FramebufferCount     = 128;
     u32 RenderPassCount      = 128;
+    u32 SamplerCount         = 128;
     u32 TextureViewCount     = 1024;
     u32 TextureCount         = 1024;
     u32 BufferCount          = 1024;
@@ -281,8 +321,12 @@ void                              GDI_Context_Delete_Framebuffer(gdi_context* Co
 gdi_handle<gdi_render_pass>       GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo);
 void                              GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle);
 
-gdi_handle<gdi_texture_view>      GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo);
-void                              GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle);
+gdi_handle<gdi_sampler>      GDI_Context_Create_Sampler(gdi_context* Context, const gdi_sampler_create_info& CreateInfo);
+void                         GDI_Context_Delete_Sampler(gdi_context* Context, gdi_handle<gdi_sampler> Sampler);
+gdi_handle<gdi_texture_view> GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo);
+void                         GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle);
+gdi_handle<gdi_texture>      GDI_Context_Create_Texture(gdi_context* Context, const gdi_texture_create_info& CreateInfo);
+void                         GDI_Context_Delete_Texture(gdi_context* Context, gdi_handle<gdi_texture> Handle);
 
 gdi_handle<gdi_buffer>            GDI_Context_Create_Buffer(gdi_context* Context, const gdi_buffer_create_info& CreateInfo);
 u8*                               GDI_Context_Buffer_Map(gdi_context* Context, gdi_handle<gdi_buffer> Handle);

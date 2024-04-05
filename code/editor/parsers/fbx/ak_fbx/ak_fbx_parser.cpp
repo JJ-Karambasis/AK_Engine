@@ -45,18 +45,30 @@ fbx_scene* FBX_Create_Scene(allocator* Allocator, string Path) {
                 ak_fbx_geometry* Geometry = AK_FBX_Node_Get_Geometry(Node);
                 ak_fbx_polygons* Polygons = &Geometry->Polygons;
                 ak_fbx_s32_array* MaterialIndices = &Polygons->MaterialIndices;
+                ak_fbx_uv_map* UVDataMap = Geometry->UVMaps.Count ? &Geometry->UVMaps.Ptr[0] : NULL;
 
                 hashmap<u32, u32> MaterialMeshMap(&Scratch, Safe_U32(Materials.Count));
+                
                 array<array<vec3>> MeshPositions(&Scratch, Materials.Count);
                 array<array<u32>> MeshPositionVtxIndices(&Scratch, Materials.Count);
                 array<hashmap<u32, u32>> MeshPositionMap(&Scratch, Materials.Count);
 
+                array<array<vec2>> MeshUVs(&Scratch, Materials.Count);
+                array<array<u32>> MeshUVVtxIndices(&Scratch, Materials.Count);
+                array<hashmap<u32, u32>> MeshUVMap(&Scratch, Materials.Count);
+
                 for(u32 j = 0; j < Safe_U32(Materials.Count); j++) {
                     Hashmap_Add(&MaterialMeshMap, j, Safe_U32(DstScene->Meshes.Count));
                     Array_Push(&Object.MeshIndices, DstScene->Meshes.Count);
+                    
                     Array_Push(&MeshPositions, array<vec3>(&Scratch, Geometry->Vertices.Count));
                     Array_Push(&MeshPositionVtxIndices, array<u32>(&Scratch, Polygons->VertexIndices.Count));
                     Array_Push(&MeshPositionMap, hashmap<u32, u32>(&Scratch, Safe_U32(Polygons->VertexIndices.Count)));
+                    
+                    Array_Push(&MeshUVs, array<vec2>(&Scratch, Geometry->Vertices.Count));
+                    Array_Push(&MeshUVVtxIndices, array<u32>(&Scratch, Polygons->VertexIndices.Count));
+                    Array_Push(&MeshUVMap, hashmap<u32, u32>(&Scratch, Safe_U32(Polygons->VertexIndices.Count)));
+
                     Array_Push(&DstScene->Meshes, {});
                 }
 
@@ -68,6 +80,11 @@ fbx_scene* FBX_Create_Scene(allocator* Allocator, string Path) {
                     array<vec3>& Positions = MeshPositions[MaterialIndex];
                     array<u32>& PositionVtxIndices = MeshPositionVtxIndices[MaterialIndex];
                     hashmap<u32, u32>& PositionMap = MeshPositionMap[MaterialIndex];
+                    
+                    array<vec2>& UVs = MeshUVs[MaterialIndex];
+                    array<u32>& UVVtxIndices = MeshUVVtxIndices[MaterialIndex];
+                    hashmap<u32, u32>& UVMap = MeshUVMap[MaterialIndex];
+                    
                     fbx_mesh* Mesh = &DstScene->Meshes[Object.MeshIndices[MaterialIndex]];
                     
                     while(PolygonIndex < Polygons->PolygonArray.Count) {
@@ -91,6 +108,22 @@ fbx_scene* FBX_Create_Scene(allocator* Allocator, string Path) {
                             }
                         }
 
+                        if(UVDataMap) {
+                            VtxIdx = Polygon->IndexArrayOffset;
+                            for(; VtxIdx < VtxCount; VtxIdx++) {
+                                u32 SrcVtxIdx = (u32)UVDataMap->UVIndices.Ptr[VtxIdx];
+                                if(Hashmap_Find(&UVMap, SrcVtxIdx)) {
+                                    u32 Idx = Hashmap_Get_Value(&UVMap);
+                                    Array_Push(&UVVtxIndices, Idx);
+                                } else {
+                                    u32 DstVtxIdx = Safe_U32(UVs.Count);
+                                    Hashmap_Add(&UVMap, SrcVtxIdx, DstVtxIdx);
+                                    Array_Push(&UVVtxIndices, DstVtxIdx);
+                                    Array_Push(&UVs, vec2(UVDataMap->UVs.Ptr[SrcVtxIdx].Data));
+                                }
+                            }
+                        }
+
                         Mesh->TriangleCount++;
                         PolygonIndex++;
                     }
@@ -100,6 +133,8 @@ fbx_scene* FBX_Create_Scene(allocator* Allocator, string Path) {
                     fbx_mesh* Mesh = &DstScene->Meshes[Object.MeshIndices[j]];
                     Mesh->Positions = fixed_array<vec3>(DstScene->Arena, MeshPositions[j]);
                     Mesh->PositionVtxIndices = fixed_array<u32>(DstScene->Arena, MeshPositionVtxIndices[j]);
+                    Mesh->UVs = fixed_array<vec2>(DstScene->Arena, MeshUVs[j]);
+                    Mesh->UVVtxIndices = fixed_array<u32>(DstScene->Arena, MeshUVVtxIndices[j]);
                 }
 
                 Array_Push(&DstScene->Objects, Object);

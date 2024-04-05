@@ -92,6 +92,9 @@ set pxl_shader=%shader% -T ps_6_0 -E PS_Main
 if not exist ..\..\bin\data\shaders mkdir ..\..\bin\data\shaders
 
 pushd ..\..\bin\data\shaders
-    %vtx_shader% /Fo shader_vs.shader ..\..\..\code\shaders\shader.hlsl
-    %pxl_shader% /Fo shader_ps.shader ..\..\..\code\shaders\shader.hlsl
+    %vtx_shader% /Fo shader_color_vs.shader ..\..\..\code\shaders\shader.hlsl
+    %pxl_shader% /Fo shader_color_ps.shader ..\..\..\code\shaders\shader.hlsl
+
+    %vtx_shader% /DUSE_TEXTURE /Fo shader_texture_vs.shader ..\..\..\code\shaders\shader.hlsl
+    %pxl_shader% /DUSE_TEXTURE /Fo shader_texture_ps.shader ..\..\..\code\shaders\shader.hlsl
 popd

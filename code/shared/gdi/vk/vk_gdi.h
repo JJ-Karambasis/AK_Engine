@@ -15,6 +15,7 @@
 
 #include <gdi/gdi_shared.h>
 
+struct vk_sampler;
 struct vk_texture_view;
 
 #define VK_NO_PROTOTYPES
@@ -68,10 +69,18 @@ struct vk_copy_upload_to_buffer {
     VkDeviceSize            Offset;
 };
 
+struct vk_copy_upload_to_texture {
+    vk_upload                Upload;
+    async_handle<vk_texture> Texture;
+    u32                      Width;
+    u32                      Height;
+};
+
 struct vk_copy_context {
-    ak_rw_lock                      RWLock;
-    u32                             CurrentListIndex;
-    array<vk_copy_upload_to_buffer> CopyUploadToBufferList[2];
+    ak_rw_lock                       RWLock;
+    u32                              CurrentListIndex;
+    array<vk_copy_upload_to_buffer>  CopyUploadToBufferList[2];
+    array<vk_copy_upload_to_texture> CopyUploadToTextureList[2];
 };
 
 struct vk_delete_context {
@@ -82,7 +91,9 @@ struct vk_delete_context {
     vk_delete_list<vk_bind_group_layout> BindGroupLayoutList[2];
     vk_delete_list<vk_framebuffer>       FramebufferList[2];
     vk_delete_list<vk_render_pass>       RenderPassList[2];
+    vk_delete_list<vk_sampler>           SamplerList[2];
     vk_delete_list<vk_texture_view>      TextureViewList[2];
+    vk_delete_list<vk_texture>           TextureList[2];
     vk_delete_list<vk_buffer>            BufferList[2];
     vk_delete_list<vk_swapchain>         SwapchainList[2];
 };
@@ -100,6 +111,7 @@ struct vk_resource_context {
     async_pool<vk_bind_group_layout> BindGroupLayouts;
     async_pool<vk_framebuffer>       Framebuffers;
     async_pool<vk_render_pass>       RenderPasses;
+    async_pool<vk_sampler>           Samplers;
     async_pool<vk_texture_view>      TextureViews;
     async_pool<vk_texture>           Textures;
     async_pool<vk_buffer>            Buffers;
@@ -112,6 +124,7 @@ struct vk_resource_context {
     ak_atomic_u32* BindGroupLayoutsInUse;
     ak_atomic_u32* FramebuffersInUse;
     ak_atomic_u32* RenderPassesInUse;
+    ak_atomic_u32* SamplersInUse;
     ak_atomic_u32* TextureViewsInUse;
     ak_atomic_u32* TexturesInUse;
     ak_atomic_u32* BuffersInUse;
@@ -122,6 +135,7 @@ struct vk_resource_context {
     u64* BindGroupLayoutLastFrameIndices;
     u64* FramebufferLastFrameIndices;
     u64* RenderPassLastFrameIndices;
+    u64* SamplerLastFrameIndices;
     u64* TextureViewLastFrameIndices;
     u64* TextureLastFrameIndices;
     u64* BufferLastFrameIndices;

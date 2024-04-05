@@ -2,7 +2,8 @@
 #define VK_BIND_GROUPS_H
 
 struct vk_bind_group_layout {
-    VkDescriptorSetLayout SetLayout;
+    array<async_handle<vk_sampler>> Samplers;
+    VkDescriptorSetLayout           SetLayout;
 };
 
 internal bool VK_Create_Bind_Group_Layout(gdi_context* Context, vk_bind_group_layout* Layout, const gdi_bind_group_layout_create_info& CreateInfo);

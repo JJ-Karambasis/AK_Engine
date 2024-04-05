@@ -133,6 +133,7 @@ internal VkAttachmentStoreOp VK_Get_Store_Op(gdi_store_op StoreOp) {
 internal VkFormat VK_Get_Format(gdi_format Format) {
     local_persist VkFormat VKFormats[] = {
         VK_FORMAT_UNDEFINED,
+        VK_FORMAT_R8_UNORM,
         VK_FORMAT_R8G8_UNORM,
         VK_FORMAT_R8G8B8_UNORM,
         VK_FORMAT_R8G8B8A8_UNORM,
@@ -222,11 +223,33 @@ internal VkIndexType VK_Get_Index_Type(gdi_format Format) {
 internal VkDescriptorType VK_Get_Descriptor_Type(gdi_bind_group_type Type) {
     const local_persist VkDescriptorType DescriptorTypes[] = {
         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+        VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        VK_DESCRIPTOR_TYPE_SAMPLER
     };
     static_assert(Array_Count(DescriptorTypes) == GDI_BIND_GROUP_TYPE_COUNT);
     Assert(Type < GDI_BIND_GROUP_TYPE_COUNT);
     return DescriptorTypes[Type];
+}
+
+static VkFilter VK_Get_Filter(gdi_filter Filter) {
+    local_persist const VkFilter Filters[] = {
+        VK_FILTER_NEAREST,
+        VK_FILTER_LINEAR
+    };
+    static_assert(Array_Count(Filters) == GDI_FILTER_COUNT);
+    Assert(Filter < GDI_FILTER_COUNT);
+    return Filters[Filter];
+}
+
+static VkSamplerAddressMode VK_Get_Address_Mode(gdi_address_mode AddressMode) {
+    local_persist const VkSamplerAddressMode AddressModes[] = {
+        VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        VK_SAMPLER_ADDRESS_MODE_REPEAT
+    };
+    static_assert(Array_Count(AddressModes) == GDI_ADDRESS_MODE_COUNT);
+    Assert(AddressMode < GDI_ADDRESS_MODE_COUNT);
+    return AddressModes[AddressMode];
 }
 
 internal VkImageUsageFlags VK_Convert_To_Image_Usage_Flags(gdi_texture_usage_flags Flags) {
@@ -242,6 +265,10 @@ internal VkImageUsageFlags VK_Convert_To_Image_Usage_Flags(gdi_texture_usage_fla
 
     if(Flags & GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT) {
         Result |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+
+    if(Flags & GDI_TEXTURE_USAGE_FLAG_COPIED_BIT) {
+        Result |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     }
 
     return Result;
@@ -499,7 +526,9 @@ internal vk_thread_context* VK_Get_Thread_Context(gdi_context* Context) {
             VK_Delete_List_Init(&DeleteContext->BindGroupLayoutList[i], Context->GDI->MainAllocator);
             VK_Delete_List_Init(&DeleteContext->FramebufferList[i], Context->GDI->MainAllocator);
             VK_Delete_List_Init(&DeleteContext->RenderPassList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&DeleteContext->SamplerList[i], Context->GDI->MainAllocator);
             VK_Delete_List_Init(&DeleteContext->TextureViewList[i], Context->GDI->MainAllocator);
+            VK_Delete_List_Init(&DeleteContext->TextureList[i], Context->GDI->MainAllocator);
             VK_Delete_List_Init(&DeleteContext->BufferList[i], Context->GDI->MainAllocator);
             VK_Delete_List_Init(&DeleteContext->SwapchainList[i], Context->GDI->MainAllocator);
         }
@@ -508,6 +537,7 @@ internal vk_thread_context* VK_Get_Thread_Context(gdi_context* Context) {
         AK_RW_Lock_Create(&CopyContext->RWLock);
         for(u32 i = 0; i < 2; i++) {
             Array_Init(&CopyContext->CopyUploadToBufferList[i], Context->GDI->MainAllocator);
+            Array_Init(&CopyContext->CopyUploadToTextureList[i], Context->GDI->MainAllocator);
         }
 
         for(vk_upload_buffer& UploadBuffer : Result->UploadBuffers) {
@@ -531,6 +561,13 @@ internal void VK_Copy_Context_Add_Upload_To_Buffer_Copy(vk_copy_context* CopyCon
     AK_RW_Lock_Reader(&CopyContext->RWLock);
     u32 ListIndex = CopyContext->CurrentListIndex;
     Array_Push(&CopyContext->CopyUploadToBufferList[ListIndex], CopyUploadToBuffer);
+    AK_RW_Unlock_Reader(&CopyContext->RWLock);
+}
+
+internal void VK_Copy_Context_Add_Upload_To_Texture_Copy(vk_copy_context* CopyContext, const vk_copy_upload_to_texture& CopyUploadToTexture) {
+    AK_RW_Lock_Reader(&CopyContext->RWLock);
+    u32 ListIndex = CopyContext->CurrentListIndex;
+    Array_Push(&CopyContext->CopyUploadToTextureList[ListIndex], CopyUploadToTexture);
     AK_RW_Unlock_Reader(&CopyContext->RWLock);
 }
 
@@ -581,10 +618,24 @@ inline internal void VK_Delete_Context_Add_Render_Pass(vk_delete_context* Delete
     AK_RW_Unlock_Reader(&DeleteContext->RWLock);
 }
 
+inline internal void VK_Delete_Context_Add_Sampler(vk_delete_context* DeleteContext, vk_sampler* Sampler, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->SamplerList[ListIndex], Sampler, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
 inline internal void VK_Delete_Context_Add_Texture_View(vk_delete_context* DeleteContext, vk_texture_view* TextureView, u64 LastUsedFrameIndex) {
     AK_RW_Lock_Reader(&DeleteContext->RWLock);
     u32 ListIndex = DeleteContext->CurrentListIndex;
     VK_Delete_List_Add(&DeleteContext->TextureViewList[ListIndex], TextureView, LastUsedFrameIndex);
+    AK_RW_Unlock_Reader(&DeleteContext->RWLock);
+}
+
+inline internal void VK_Delete_Context_Add_Texture(vk_delete_context* DeleteContext, vk_texture* Texture, u64 LastUsedFrameIndex) {
+    AK_RW_Lock_Reader(&DeleteContext->RWLock);
+    u32 ListIndex = DeleteContext->CurrentListIndex;
+    VK_Delete_List_Add(&DeleteContext->TextureList[ListIndex], Texture, LastUsedFrameIndex);
     AK_RW_Unlock_Reader(&DeleteContext->RWLock);
 }
 
@@ -650,6 +701,16 @@ inline internal async_handle<vk_render_pass> VK_Context_Allocate_Render_Pass(gdi
     Assert(Context->ResourceContext.RenderPassLastFrameIndices[RenderPassHandle.Index()] == (u64)-1);
     Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[RenderPassHandle.Index()]) == false);
     return RenderPassHandle;
+}
+
+inline internal async_handle<vk_sampler> VK_Context_Allocate_Sampler(gdi_context* Context) {
+    async_handle<vk_sampler> SamplerHandle = Async_Pool_Allocate(&Context->ResourceContext.Samplers);
+    if(SamplerHandle.Is_Null()) {
+        return {};
+    }
+    Assert(Context->ResourceContext.SamplerLastFrameIndices[SamplerHandle.Index()] == (u64)-1);
+    Assert(AK_Atomic_Load_U32_Relaxed(&Context->ResourceContext.SamplersInUse[SamplerHandle.Index()]) == false);
+    return SamplerHandle;
 }
 
 inline internal async_handle<vk_texture_view> VK_Context_Allocate_Texture_View(gdi_context* Context) {
@@ -720,6 +781,12 @@ inline internal void VK_Context_Free_Render_Pass(gdi_context* Context, async_han
     Context->ResourceContext.RenderPassLastFrameIndices[RenderPassHandle.Index()] = (u64)-1;
     AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[RenderPassHandle.Index()], false);
     Async_Pool_Free(&Context->ResourceContext.RenderPasses, RenderPassHandle);
+}
+
+inline internal void VK_Context_Free_Sampler(gdi_context* Context, async_handle<vk_sampler> SamplerHandle) {
+    Context->ResourceContext.SamplerLastFrameIndices[SamplerHandle.Index()] = (u64)-1;
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.SamplersInUse[SamplerHandle.Index()], false);
+    Async_Pool_Free(&Context->ResourceContext.Samplers, SamplerHandle);
 }
 
 inline internal void VK_Context_Free_Texture_View(gdi_context* Context, async_handle<vk_texture_view> TextureViewHandle) {
@@ -1224,6 +1291,7 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
     Async_Pool_Create(&ResourceContext->BindGroupLayouts, Context->Arena, CreateInfo.BindGroupLayoutCount);
     Async_Pool_Create(&ResourceContext->Framebuffers, Context->Arena, CreateInfo.FramebufferCount);
     Async_Pool_Create(&ResourceContext->RenderPasses, Context->Arena, CreateInfo.RenderPassCount);
+    Async_Pool_Create(&ResourceContext->Samplers, Context->Arena, CreateInfo.SamplerCount);
     Async_Pool_Create(&ResourceContext->TextureViews, Context->Arena, CreateInfo.TextureViewCount);
     Async_Pool_Create(&ResourceContext->Textures, Context->Arena, CreateInfo.TextureCount);
     Async_Pool_Create(&ResourceContext->Buffers, Context->Arena, CreateInfo.BufferCount);
@@ -1234,6 +1302,7 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
     ResourceContext->BindGroupLayoutsInUse = Arena_Push_Array(Context->Arena, CreateInfo.BindGroupLayoutCount, ak_atomic_u32);
     ResourceContext->FramebuffersInUse = Arena_Push_Array(Context->Arena, CreateInfo.FramebufferCount, ak_atomic_u32);
     ResourceContext->RenderPassesInUse = Arena_Push_Array(Context->Arena, CreateInfo.RenderPassCount, ak_atomic_u32);
+    ResourceContext->SamplersInUse = Arena_Push_Array(Context->Arena, CreateInfo.SamplerCount, ak_atomic_u32);
     ResourceContext->TextureViewsInUse = Arena_Push_Array(Context->Arena, CreateInfo.TextureViewCount, ak_atomic_u32);
     ResourceContext->TexturesInUse = Arena_Push_Array(Context->Arena, CreateInfo.TextureCount, ak_atomic_u32);
     ResourceContext->BuffersInUse = Arena_Push_Array(Context->Arena, CreateInfo.BufferCount, ak_atomic_u32);
@@ -1244,6 +1313,7 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
     ResourceContext->BindGroupLayoutLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.BindGroupLayoutCount, u64);
     ResourceContext->FramebufferLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.FramebufferCount, u64);
     ResourceContext->RenderPassLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.RenderPassCount, u64);
+    ResourceContext->SamplerLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.SamplerCount, u64);
     ResourceContext->TextureViewLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.TextureViewCount, u64);
     ResourceContext->TextureLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.TextureCount, u64);
     ResourceContext->BufferLastFrameIndices = Arena_Push_Array(Context->Arena, CreateInfo.BufferCount, u64);
@@ -1254,6 +1324,7 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
     for(u32 i = 0; i < CreateInfo.BindGroupLayoutCount; i++) { ResourceContext->BindGroupLayoutLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.FramebufferCount; i++) { ResourceContext->FramebufferLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.RenderPassCount; i++) { ResourceContext->RenderPassLastFrameIndices[i] = (u64)-1; }
+    for(u32 i = 0; i < CreateInfo.SamplerCount; i++) { ResourceContext->SamplerLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.TextureViewCount; i++) { ResourceContext->TextureViewLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.TextureCount; i++) { ResourceContext->TextureLastFrameIndices[i] = (u64)-1; }
     for(u32 i = 0; i < CreateInfo.BufferCount; i++) { ResourceContext->BufferLastFrameIndices[i] = (u64)-1; }
@@ -1369,8 +1440,16 @@ void GDI_Context_Delete(gdi_context* Context) {
                     VK_Delete_Render_Pass(Context, &RenderPassEntry.Resource);
                 }
 
+                for(vk_delete_list_entry<vk_sampler>& SamplerEntry : DeleteContext->SamplerList[i]) {
+                    VK_Delete_Sampler(Context, &SamplerEntry.Resource);
+                }
+
                 for(vk_delete_list_entry<vk_texture_view>& TextureViewEntry : DeleteContext->TextureViewList[i]) {
                     VK_Delete_Texture_View(Context, &TextureViewEntry.Resource);
+                }
+
+                for(vk_delete_list_entry<vk_texture>& TextureEntry : DeleteContext->TextureList[i]) {
+                    VK_Delete_Texture(Context, &TextureEntry.Resource);
                 }
 
                 for(vk_delete_list_entry<vk_buffer>& BufferEntry : DeleteContext->BufferList[i]) {
@@ -1386,9 +1465,17 @@ void GDI_Context_Delete(gdi_context* Context) {
                 VK_Delete_List_Free(&DeleteContext->BindGroupLayoutList[i]);
                 VK_Delete_List_Free(&DeleteContext->FramebufferList[i]);
                 VK_Delete_List_Free(&DeleteContext->RenderPassList[i]);
+                VK_Delete_List_Free(&DeleteContext->SamplerList[i]);
                 VK_Delete_List_Free(&DeleteContext->TextureViewList[i]);
+                VK_Delete_List_Free(&DeleteContext->TextureList[i]);
                 VK_Delete_List_Free(&DeleteContext->BufferList[i]);
                 VK_Delete_List_Free(&DeleteContext->SwapchainList[i]);
+            }
+
+            vk_copy_context* CopyContext = &ThreadContext->CopyContext;
+            for(uptr i = 0; i < 2; i++) {
+                Array_Free(&CopyContext->CopyUploadToBufferList[i]);
+                Array_Free(&CopyContext->CopyUploadToTextureList[i]);
             }
 
             for(vk_upload_buffer& UploadBuffer : ThreadContext->UploadBuffers) {
@@ -1433,11 +1520,25 @@ void GDI_Context_Delete(gdi_context* Context) {
                 VK_Delete_Render_Pass(Context, RenderPass);
             }
         }
+        
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->Samplers); i++) {
+            vk_sampler* Sampler = ResourceContext->Samplers.Ptr + i; 
+            if(Sampler->Sampler) {
+                VK_Delete_Sampler(Context, Sampler);
+            }
+        }
 
         for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->TextureViews); i++) {
             vk_texture_view* TextureView = ResourceContext->TextureViews.Ptr + i; 
             if(TextureView->ImageView) {
                 VK_Delete_Texture_View(Context, TextureView);
+            }
+        }
+
+        for(u32 i = 0; i < Async_Pool_Capacity(&ResourceContext->Textures); i++) {
+            vk_texture* Texture = ResourceContext->Textures.Ptr + i; 
+            if(Texture->Image) {
+                VK_Delete_Texture(Context, Texture);
             }
         }
 
@@ -1627,6 +1728,10 @@ void GDI_Context_Delete_Bind_Group_Layout(gdi_context* Context, gdi_handle<gdi_b
     vk_bind_group_layout* BindGroupLayout = Async_Pool_Get(&ResourceContext->BindGroupLayouts, BindGroupLayoutHandle);
     if(BindGroupLayout) {
         u64 LastUsedFrameIndex = ResourceContext->BindGroupLayoutLastFrameIndices[BindGroupLayoutHandle.Index()];
+        for(async_handle<vk_sampler> Sampler : BindGroupLayout->Samplers) {
+            ResourceContext->SamplerLastFrameIndices[Sampler.Index()] = LastUsedFrameIndex;
+        }
+
         u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
         if(LastUsedFrameIndex == (u64)-1 || 
            (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->BindGroupLayoutsInUse[BindGroupLayoutHandle.Index()]) &&
@@ -1719,6 +1824,42 @@ void GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_
     }
 }
 
+gdi_handle<gdi_sampler> GDI_Context_Create_Sampler(gdi_context* Context, const gdi_sampler_create_info& CreateInfo) {
+    async_handle<vk_sampler> SamplerHandle = VK_Context_Allocate_Sampler(Context);
+    if(SamplerHandle.Is_Null()) {
+        //todo: Diagnostics
+        return {};
+    }
+
+    vk_sampler* Sampler = Async_Pool_Get(&Context->ResourceContext.Samplers, SamplerHandle);
+    if(!VK_Create_Sampler(Context, Sampler, CreateInfo)) {
+        //todo: Diagnostics
+        VK_Delete_Sampler(Context, Sampler);
+        VK_Context_Free_Sampler(Context, SamplerHandle);
+        return {};
+    }
+    return gdi_handle<gdi_sampler>(SamplerHandle.ID);
+}
+
+void GDI_Context_Delete_Sampler(gdi_context* Context, gdi_handle<gdi_sampler> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    async_handle<vk_sampler> SamplerHandle(Handle.ID);
+    vk_sampler* Sampler = Async_Pool_Get(&ResourceContext->Samplers, SamplerHandle);
+    if(Sampler) {
+        u64 LastUsedFrameIndex = ResourceContext->SamplerLastFrameIndices[SamplerHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->SamplersInUse[SamplerHandle.Index()]) && 
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Sampler(Context, Sampler);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->SamplersInUse[SamplerHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Sampler(DeleteContext, Sampler, FrameIndex);
+        }
+        VK_Context_Free_Sampler(Context, SamplerHandle);
+    }
+}
 
 gdi_handle<gdi_texture_view> GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo) {
     async_handle<vk_texture_view> TextureViewHandle = VK_Context_Allocate_Texture_View(Context);
@@ -1756,6 +1897,60 @@ void GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_textur
             VK_Delete_Context_Add_Texture_View(DeleteContext, TextureView, FrameIndex);
         }
         VK_Context_Free_Texture_View(Context, TextureViewHandle);
+    }
+}
+
+gdi_handle<gdi_texture> GDI_Context_Create_Texture(gdi_context* Context, const gdi_texture_create_info& CreateInfo) {
+    async_handle<vk_texture> TextureHandle = VK_Context_Allocate_Texture(Context);
+    if(TextureHandle.Is_Null()) {
+        //todo: Diagnostics
+        return {};
+    }
+
+    vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, TextureHandle);
+    if(!VK_Create_Texture(Context, Texture, CreateInfo)) {
+        //todo: Diagnostics
+        VK_Delete_Texture(Context, Texture);
+        VK_Context_Free_Texture(Context, TextureHandle);
+        return {};
+    }
+    
+    if(CreateInfo.InitialData.Size && CreateInfo.InitialData.Ptr) {
+        vk_thread_context* ThreadContext = VK_Get_Thread_Context(Context);
+        vk_upload_buffer* UploadBuffer = VK_Get_Current_Upload_Buffer(Context, ThreadContext);
+        
+        vk_upload Upload;
+        u8* Ptr = VK_Upload_Buffer_Push(UploadBuffer, CreateInfo.InitialData.Size, &Upload);
+        Memory_Copy(Ptr, CreateInfo.InitialData.Ptr, CreateInfo.InitialData.Size);
+
+        VK_Copy_Context_Add_Upload_To_Texture_Copy(&ThreadContext->CopyContext, {
+            .Upload = Upload,
+            .Texture = TextureHandle,
+            .Width = CreateInfo.Width,
+            .Height = CreateInfo.Height
+        });
+    }
+
+    return gdi_handle<gdi_texture>(TextureHandle.ID);
+}
+
+void GDI_Context_Delete_Texture(gdi_context* Context, gdi_handle<gdi_texture> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    async_handle<vk_texture> TextureHandle(Handle.ID);
+    vk_texture* Texture = Async_Pool_Get(&ResourceContext->Textures, TextureHandle);
+    if(Texture) {
+        u64 LastUsedFrameIndex = ResourceContext->TextureLastFrameIndices[TextureHandle.Index()];
+        u64 Difference = Context->TotalFramesRendered - LastUsedFrameIndex;
+        if(LastUsedFrameIndex == (u64)-1 || 
+           (!AK_Atomic_Load_U32_Relaxed(&ResourceContext->TexturesInUse[TextureHandle.Index()]) && 
+           (!Difference || Difference > Context->Frames.Count))) {
+            VK_Delete_Texture(Context, Texture);
+        } else {
+            u64 FrameIndex = AK_Atomic_Load_U32_Relaxed(&ResourceContext->TexturesInUse[TextureHandle.Index()]) ? Context->TotalFramesRendered : LastUsedFrameIndex;
+            vk_delete_context* DeleteContext = VK_Get_Delete_Context(Context);
+            VK_Delete_Context_Add_Texture(DeleteContext, Texture, FrameIndex);
+        }
+        VK_Context_Free_Texture(Context, TextureHandle);
     }
 }
 
@@ -2005,6 +2200,7 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
 void GDI_Context_Execute(gdi_context* Context) {
     scratch Scratch = Scratch_Get();
     vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
     array<VkCommandBuffer>      CmdBuffers(&Scratch);
     array<VkPipelineStageFlags> SubmitWaitStages(&Scratch);
     array<VkSemaphore>          SubmitSemaphores(&Scratch);
@@ -2031,6 +2227,69 @@ void GDI_Context_Execute(gdi_context* Context) {
         }
 
         Array_Clear(&CopyContext->CopyUploadToBufferList[CopyIndex]);
+        
+        uptr MaxImageCount = 0;
+        bool* TexturesInUse = Scratch_Push_Array(&Scratch, Async_Pool_Capacity(&ResourceContext->Textures), bool);
+        for(const vk_copy_upload_to_texture& CopyUploadToTexture : CopyContext->CopyUploadToTextureList[CopyIndex]) {
+            TexturesInUse[CopyUploadToTexture.Texture.Index()] = true;
+            MaxImageCount++;
+        }
+
+        array<VkImageMemoryBarrier> ImageMemoryBarriers(&Scratch, MaxImageCount);
+        for(uptr i = 0; i < Async_Pool_Capacity(&ResourceContext->Textures); i++) {
+            if(TexturesInUse[i]) {
+                vk_texture* Texture = ResourceContext->Textures.Ptr + i;
+                Array_Push(&ImageMemoryBarriers, {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                    .srcAccessMask = 0,
+                    .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    .image = Texture->Image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+                });
+            }
+        }
+
+        vkCmdPipelineBarrier(FrameContext->CopyCmdBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+                             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, Safe_U32(ImageMemoryBarriers.Count), ImageMemoryBarriers.Ptr);
+
+        for(const vk_copy_upload_to_texture& CopyUploadToTexture : CopyContext->CopyUploadToTextureList[CopyIndex]) {
+            vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, CopyUploadToTexture.Texture);
+            if(Texture) {
+                VkBufferImageCopy Region = {
+                    .bufferOffset = CopyUploadToTexture.Upload.Offset,
+                    .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                    .imageExtent = {CopyUploadToTexture.Width, CopyUploadToTexture.Height, 1}
+                };
+                vkCmdCopyBufferToImage(FrameContext->CopyCmdBuffer, CopyUploadToTexture.Upload.Buffer, Texture->Image, 
+                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &Region);
+                VK_Texture_Record_Frame(Context, CopyUploadToTexture.Texture);
+
+            }
+        }
+
+        Array_Clear(&ImageMemoryBarriers);
+        for(uptr i = 0; i < Async_Pool_Capacity(&ResourceContext->Textures); i++) {
+            if(TexturesInUse[i]) {
+                vk_texture* Texture = ResourceContext->Textures.Ptr + i;
+                Array_Push(&ImageMemoryBarriers, {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                    .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .image = Texture->Image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+                });
+            }
+        }
+
+        vkCmdPipelineBarrier(FrameContext->CopyCmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+                             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, Safe_U32(ImageMemoryBarriers.Count), ImageMemoryBarriers.Ptr);
+
+
+        Array_Clear(&CopyContext->CopyUploadToTextureList[CopyIndex]);
         ThreadContext = ThreadContext->Next;
     }
 
@@ -2092,12 +2351,12 @@ void GDI_Context_Execute(gdi_context* Context) {
         SLL_Push_Front(CmdPool->FreeCmdList, CmdListToDelete);
     }
 
-    vk_resource_context* ResourceContext = &Context->ResourceContext;
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->PipelineLastFrameIndices, ResourceContext->PipelinesInUse, Async_Pool_Capacity(&ResourceContext->Pipelines));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->BindGroupLastFrameIndices, ResourceContext->BindGroupsInUse, Async_Pool_Capacity(&ResourceContext->BindGroups));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->BindGroupLayoutLastFrameIndices, ResourceContext->BindGroupLayoutsInUse, Async_Pool_Capacity(&ResourceContext->BindGroupLayouts));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->FramebufferLastFrameIndices, ResourceContext->FramebuffersInUse, Async_Pool_Capacity(&ResourceContext->Framebuffers));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->RenderPassLastFrameIndices, ResourceContext->RenderPassesInUse, Async_Pool_Capacity(&ResourceContext->RenderPasses));
+    VK_Resource_Update_Frame_Indices(Context, ResourceContext->SamplerLastFrameIndices, ResourceContext->SamplersInUse, Async_Pool_Capacity(&ResourceContext->Samplers));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->TextureViewLastFrameIndices, ResourceContext->TextureViewsInUse, Async_Pool_Capacity(&ResourceContext->TextureViews));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->TextureLastFrameIndices, ResourceContext->TexturesInUse, Async_Pool_Capacity(&ResourceContext->Textures));
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->BufferLastFrameIndices, ResourceContext->BuffersInUse, Async_Pool_Capacity(&ResourceContext->Buffers));
@@ -2195,6 +2454,16 @@ void GDI_Context_Execute(gdi_context* Context) {
         }
         VK_Delete_List_Clear(&DeleteContext->RenderPassList[DeleteIndex]);
 
+        for(vk_delete_list_entry<vk_sampler>& SamplerEntry : DeleteContext->SamplerList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - SamplerEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Sampler(Context, &SamplerEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Sampler(DeleteContext, &SamplerEntry.Resource, SamplerEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->SamplerList[DeleteIndex]);
+
         for(vk_delete_list_entry<vk_texture_view>& TextureViewEntry : DeleteContext->TextureViewList[DeleteIndex]) {
             uptr Difference = Context->TotalFramesRendered - TextureViewEntry.LastUsedFrameIndex;
             if(Difference >= Context->Frames.Count) {
@@ -2204,6 +2473,16 @@ void GDI_Context_Execute(gdi_context* Context) {
             }
         }
         VK_Delete_List_Clear(&DeleteContext->TextureViewList[DeleteIndex]);
+
+        for(vk_delete_list_entry<vk_texture>& TextureEntry : DeleteContext->TextureList[DeleteIndex]) {
+            uptr Difference = Context->TotalFramesRendered - TextureEntry.LastUsedFrameIndex;
+            if(Difference >= Context->Frames.Count) {
+                VK_Delete_Texture(Context, &TextureEntry.Resource);
+            } else {
+                VK_Delete_Context_Add_Texture(DeleteContext, &TextureEntry.Resource, TextureEntry.LastUsedFrameIndex);
+            }
+        }
+        VK_Delete_List_Clear(&DeleteContext->TextureList[DeleteIndex]);
 
         for(vk_delete_list_entry<vk_buffer>& BufferEntry : DeleteContext->BufferList[DeleteIndex]) {
             uptr Difference = Context->TotalFramesRendered - BufferEntry.LastUsedFrameIndex;

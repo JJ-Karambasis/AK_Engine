@@ -64,6 +64,7 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
     array<VkVertexInputAttributeDescription> VtxAttributes(&Scratch, CreateInfo.GraphicsState.VtxBufferBindings.Count*3);
 
     u32 BindingIndex = 0;
+    u32 Location = 0;
     for(const gdi_vtx_buffer_binding& Binding : CreateInfo.GraphicsState.VtxBufferBindings) {
         Array_Push(&VtxBindings, {
             .binding = BindingIndex,
@@ -71,7 +72,6 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
         });
 
-        u32 Location = 0;
         for(const gdi_vtx_attribute& Attribute : Binding.Attributes) {
             Array_Push(&VtxAttributes, {
                 .location = Location,

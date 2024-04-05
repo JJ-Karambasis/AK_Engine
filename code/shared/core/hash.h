@@ -18,18 +18,18 @@ struct comparer {
     bool Equal(const type& A, const type& B) const;
 };
 
-inline void Hash_Combine(u32& seed) { }
+inline void Hash_Combine(u32* Seed) { }
 
 template <typename type, typename... rest, typename hasher=hasher<type>>
-inline void Hash_Combine(u32& Seed, const type& Value, rest... Rest) {
-    Seed ^= hasher{}.Hash(Value) + 0x9e3779b9 + (Seed << 6) + (Seed >> 2);
+inline void Hash_Combine(u32* Seed, const type& Value, rest... Rest) {
+    *Seed ^= hasher{}.Hash(Value) + 0x9e3779b9 + (*Seed << 6) + (*Seed >> 2);
     Hash_Combine(Seed, Rest...); 
 }
 
 template <typename type, typename... rest, typename hasher=hasher<type>>
 inline u32 Hash_Combine(const type& Value, rest... Rest) {
     u32 Result = hasher{}.Hash(Value);
-    Hash_Combine(Result, Rest...);
+    Hash_Combine(&Result, Rest...);
     return Result;
 }
 

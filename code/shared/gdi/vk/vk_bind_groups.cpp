@@ -1,13 +1,28 @@
 internal bool VK_Create_Bind_Group_Layout(gdi_context* Context, vk_bind_group_layout* Layout, const gdi_bind_group_layout_create_info& CreateInfo) {
     scratch Scratch = Scratch_Get(); 
     fixed_array<VkDescriptorSetLayoutBinding> Bindings(&Scratch, CreateInfo.Bindings.Count);
-    
+    Layout->Samplers = array<async_handle<vk_sampler>>(Context->GDI->MainAllocator);
+
     for(uptr i = 0; i < CreateInfo.Bindings.Count; i++) {
+        fixed_array<VkSampler> Samplers(&Scratch, CreateInfo.Bindings[i].ImmutableSamplers.Count);
+
+        for(uptr j = 0; j < Samplers.Count; j++) {
+            async_handle<vk_sampler> SamplerHandle(CreateInfo.Bindings[i].ImmutableSamplers[j].ID);
+            vk_sampler* Sampler = Async_Pool_Get(&Context->ResourceContext.Samplers, SamplerHandle);
+            if(!Sampler) {
+                Assert(false);
+                return false;
+            }
+            Samplers[j] = Sampler->Sampler;
+            Array_Push(&Layout->Samplers, SamplerHandle);
+        } 
+
         Bindings[i] = {
             .binding = Safe_U32(i),
             .descriptorType = VK_Get_Descriptor_Type(CreateInfo.Bindings[i].Type),
             .descriptorCount = 1,
-            .stageFlags = VK_Convert_To_Shader_Stage_Flags(CreateInfo.Bindings[i].StageFlags)
+            .stageFlags = VK_Convert_To_Shader_Stage_Flags(CreateInfo.Bindings[i].StageFlags),
+            .pImmutableSamplers = Samplers.Ptr
         };
     }
 
@@ -26,6 +41,7 @@ internal bool VK_Create_Bind_Group_Layout(gdi_context* Context, vk_bind_group_la
 }
 
 internal void VK_Delete_Bind_Group_Layout(gdi_context* Context, vk_bind_group_layout* Layout) {
+    Array_Free(&Layout->Samplers); 
     if(Layout->SetLayout) {
         vkDestroyDescriptorSetLayout(Context->Device, Layout->SetLayout, Context->VKAllocator);
         Layout->SetLayout = VK_NULL_HANDLE;
@@ -89,6 +105,18 @@ internal bool VK_Bind_Group_Write(gdi_context* Context, vk_bind_group* BindGroup
                 Assert(GDI_Is_Bind_Group_Dynamic(WriteInfo.Bindings[i].Type));
                 Array_Push(&BindGroup->DynamicOffsets, Buffer->Size);
             }
+        } else if(GDI_Is_Bind_Group_Texture(WriteInfo.Bindings[i].Type)) {
+            ImageInfo = Scratch_Push_Struct(&Scratch, VkDescriptorImageInfo);
+            const gdi_bind_group_texture* TextureBinding = &WriteInfo.Bindings[i].TextureBinding;
+            async_handle<vk_texture_view> TextureViewHandle(TextureBinding->TextureView.ID);
+            vk_texture_view* TextureView = Async_Pool_Get(&Context->ResourceContext.TextureViews, TextureViewHandle);
+            if(!TextureView) {
+                Assert(false);
+                return false;
+            }
+
+            ImageInfo->imageView = TextureView->ImageView;
+            ImageInfo->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         } else {
             Assert(false);
         }
@@ -119,6 +147,12 @@ internal bool VK_Descriptor_Pool_Create(gdi_context* Context, vk_descriptor_pool
             .descriptorCount = 9999
         }, {
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+            .descriptorCount = 9999
+        }, {
+            .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .descriptorCount = 9999
+        }, {
+            .type = VK_DESCRIPTOR_TYPE_SAMPLER,
             .descriptorCount = 9999
         }
     };

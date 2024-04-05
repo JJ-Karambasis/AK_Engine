@@ -1,5 +1,6 @@
 bool GDI_Is_Depth_Format(gdi_format Format) {
-    local_persist bool Flags[] = {
+    local_persist const bool Flags[] = {
+        false,
         false,
         false,
         false,
@@ -20,10 +21,35 @@ bool GDI_Is_Depth_Format(gdi_format Format) {
     return Flags[Format];
 }
 
+uptr GDI_Get_Bytes_Per_Pixel(gdi_format Format) {
+    local_persist const uptr BytesPerPixel[] = {
+        0, 
+        1, 
+        2, 
+        3, 
+        4, 
+        4, 
+        4, 
+        4, 
+        8, 
+        2, 
+        4, 
+        4, 
+        8, 
+        12, 
+        2
+    };
+    static_assert(Array_Count(BytesPerPixel) == GDI_FORMAT_COUNT);
+    Assert(Format < GDI_FORMAT_COUNT);
+    return BytesPerPixel[Format];
+}
+
 bool GDI_Is_Bind_Group_Buffer(gdi_bind_group_type Type) {
     local_persist const bool IsBindGroupBuffer[] = {
         true,
-        true
+        true,
+        false,
+        false
     };
     static_assert(Array_Count(IsBindGroupBuffer) == GDI_BIND_GROUP_TYPE_COUNT);
     Assert(Type < GDI_BIND_GROUP_TYPE_COUNT);
@@ -33,11 +59,25 @@ bool GDI_Is_Bind_Group_Buffer(gdi_bind_group_type Type) {
 bool GDI_Is_Bind_Group_Dynamic(gdi_bind_group_type Type) {
     local_persist const bool IsBindGroupDynamic[] = {
         false,
-        true
+        true,
+        false,
+        false
     };
     static_assert(Array_Count(IsBindGroupDynamic) == GDI_BIND_GROUP_TYPE_COUNT);
     Assert(Type < GDI_BIND_GROUP_TYPE_COUNT);
     return IsBindGroupDynamic[Type];
+}
+
+bool GDI_Is_Bind_Group_Texture(gdi_bind_group_type Type) {
+    local_persist const bool IsBindGroupTexture[] = {
+        false,
+        false,
+        true,
+        false
+    };
+    static_assert(Array_Count(IsBindGroupTexture) == GDI_BIND_GROUP_TYPE_COUNT);
+    Assert(Type < GDI_BIND_GROUP_TYPE_COUNT);
+    return IsBindGroupTexture[Type];
 }
 
 gdi_render_pass_attachment gdi_render_pass_attachment::Color(gdi_format Format, gdi_load_op LoadOp, gdi_store_op StoreOp) {

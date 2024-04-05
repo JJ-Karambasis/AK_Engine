@@ -7,7 +7,9 @@
 #include <shader.h>
 
 #define FBX_PARSER_USE_AK_FBX
+#define TEXTURE_PARSER_USE_STBI
 #include "parsers/fbx/fbx_parser.h"
+#include "parsers/texture/texture_parser.h"
 
 void Fatal_Error_Message() {
     OS_Message_Box("A fatal error occurred during initialization!\nPlease view the error logs for more info.", "Error");
@@ -30,6 +32,25 @@ GDI_LOG_DEFINE(GDI_Log_Error) {
     Log_Error(modules::GDI, "%.*s", Message.Size, Message.Str);
     Assert(false);
 }
+
+struct vtx_idx_p_uv {
+    u32 P;
+    u32 UV;
+};
+
+template <>
+struct hasher<vtx_idx_p_uv> {
+    inline u32 Hash(vtx_idx_p_uv V) {
+        return Hash_Combine(V.P, V.UV);
+    }
+};
+
+template <>
+struct comparer<vtx_idx_p_uv> {
+    inline bool Equal(vtx_idx_p_uv A, vtx_idx_p_uv B) {
+        return A.P == B.P && A.UV == B.UV;
+    }
+};
 
 bool Editor_Main() {
     gdi* GDI = GDI_Create({
@@ -99,6 +120,10 @@ bool Editor_Main() {
         }
     });
 
+    gdi_handle<gdi_sampler> Sampler = GDI_Context_Create_Sampler(GDIContext, {
+        .Filter = GDI_FILTER_LINEAR
+    });
+
     gdi_handle<gdi_buffer> ViewBuffer = GDI_Context_Create_Buffer(GDIContext, {
         .ByteSize = sizeof(view_data),
         .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT
@@ -124,6 +149,18 @@ bool Editor_Main() {
         .Bindings = { {
                 .Type       = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
                 .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT|GDI_SHADER_STAGE_PIXEL_BIT
+            }
+        }
+    });
+
+    gdi_handle<gdi_bind_group_layout> TextureBindGroupLayout = GDI_Context_Create_Bind_Group_Layout(GDIContext, {
+        .Bindings = { { 
+                .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
+                .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT
+            }, {
+                .Type = GDI_BIND_GROUP_TYPE_SAMPLER,
+                .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT,
+                .ImmutableSamplers = {Sampler}
             }
         }
     });
@@ -154,20 +191,73 @@ bool Editor_Main() {
             }
         }
     });
+
+    
+    texture* TestTexture = Texture_Load_From_Path(Core_Get_Base_Allocator(), String_Lit("data/Texture.png"));
+    Assert(TestTexture);
+
+    gdi_handle<gdi_texture> Texture = GDI_Context_Create_Texture(GDIContext, {
+        .Format = TestTexture->Format,
+        .Width = TestTexture->Width,
+        .Height = TestTexture->Height,
+        .UsageFlags = GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT|GDI_TEXTURE_USAGE_FLAG_COPIED_BIT,
+        .InitialData = const_buffer(TestTexture->Texels, Texture_Byte_Size(TestTexture))
+    });
+
+    gdi_handle<gdi_texture_view> TextureView = GDI_Context_Create_Texture_View(GDIContext, {
+        .Texture = Texture
+    });
+
+    gdi_handle<gdi_bind_group> TextureBindGroup = GDI_Context_Create_Bind_Group(GDIContext, {
+        .Layout = TextureBindGroupLayout,
+        .WriteInfo = {
+            .Bindings = { { 
+                    .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
+                    .TextureBinding = {
+                        .TextureView = TextureView
+                    }
+                }
+            }
+        }
+    });
     
     scratch Scratch = Scratch_Get();
-    buffer VtxShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_vs.shader"));
-    buffer PxlShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_ps.shader"));
+    buffer ColorVtxShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_color_vs.shader"));
+    buffer ColorPxlShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_color_ps.shader"));
     
-    gdi_handle<gdi_pipeline> Pipeline = GDI_Context_Create_Graphics_Pipeline(GDIContext, {
-        .VS = {VtxShader, String_Lit("VS_Main")},
-        .PS = {PxlShader, String_Lit("PS_Main")},
+    gdi_handle<gdi_pipeline> ColorPipeline = GDI_Context_Create_Graphics_Pipeline(GDIContext, {
+        .VS = {ColorVtxShader, String_Lit("VS_Main")},
+        .PS = {ColorPxlShader, String_Lit("PS_Main")},
         .Layouts = {ViewBindGroupLayout, DrawBindGroupLayout},
         .GraphicsState = {
             .VtxBufferBindings = { {
                     .ByteStride = sizeof(vec3),
                     .Attributes = {
-                        { .Semantic = String_Lit("POSITION"), .Format = GDI_FORMAT_R32G32B32_FLOAT }
+                        { .Semantic = String_Lit("POSITION"), .Format = GDI_FORMAT_R32G32B32_FLOAT }, 
+                    }
+                }
+            }
+        },
+        .RenderPass = RenderPass
+    });
+
+    buffer TextureVtxShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_texture_vs.shader"));
+    buffer TexturePxlShader = OS_Read_Entire_File(&Scratch, String_Lit("data/shaders/shader_texture_ps.shader"));
+
+    gdi_handle<gdi_pipeline> TexturePipeline = GDI_Context_Create_Graphics_Pipeline(GDIContext, {
+        .VS = {TextureVtxShader, String_Lit("VS_Main")},
+        .PS = {TexturePxlShader, String_Lit("PS_Main")},
+        .Layouts = {ViewBindGroupLayout, DrawBindGroupLayout, TextureBindGroupLayout},
+        .GraphicsState = {
+            .VtxBufferBindings = { {
+                    .ByteStride = sizeof(vec3),
+                    .Attributes = {
+                        { .Semantic = String_Lit("POSITION"), .Format = GDI_FORMAT_R32G32B32_FLOAT }, 
+                    }
+                }, {
+                    .ByteStride = sizeof(vec2),
+                    .Attributes = {
+                        { .Semantic = String_Lit("TEXCOORD"), .Format = GDI_FORMAT_R32G32_FLOAT }
                     }
                 }
             }
@@ -184,30 +274,46 @@ bool Editor_Main() {
     Assert(Scene);
 
     array<vec3> TestVertices(&Scratch);
+    array<vec2> TestUVs(&Scratch);
     array<u32>  TestIndices(&Scratch);
-
     u32 IndexOffset = 0;
     for(const fbx_object& Object : Scene->Objects) {
         for(uptr MeshIndex : Object.MeshIndices) {
             fbx_mesh* Mesh = &Scene->Meshes[MeshIndex];
-            Array_Push_Range(&TestVertices, span(Mesh->Positions));
-            
-            fixed_array<u32> Indices(&Scratch, Mesh->TriangleCount*3);
-            for(u32 i = 0; i < Mesh->TriangleCount; i++) {
-                Indices[i*3 + 0] = IndexOffset + Mesh->PositionVtxIndices[i*3 + 0];
-                Indices[i*3 + 1] = IndexOffset + Mesh->PositionVtxIndices[i*3 + 1];
-                Indices[i*3 + 2] = IndexOffset + Mesh->PositionVtxIndices[i*3 + 2];
+            hashmap<vtx_idx_p_uv, u32> VertexMap(&Scratch, Safe_U32(Mesh->PositionVtxIndices.Count));
+
+            for(u32 i = 0; i < Mesh->TriangleCount*3; i++) {
+                vtx_idx_p_uv Vtx = {
+                    Mesh->PositionVtxIndices[i],
+                    Mesh->UVVtxIndices[i]
+                };
+                
+                if(Hashmap_Find(&VertexMap, Vtx)) {
+                    u32 Idx = Hashmap_Get_Value(&VertexMap);
+                    Array_Push(&TestIndices, Idx);
+                } else {
+                    u32 Idx = Safe_U32(TestVertices.Count);
+                    Array_Push(&TestVertices, Mesh->Positions[Mesh->PositionVtxIndices[i]]);
+                    Array_Push(&TestUVs, Mesh->UVs[Mesh->UVVtxIndices[i]]);
+                    Array_Push(&TestIndices, Idx);
+                    Hashmap_Add(&VertexMap, Vtx, Idx);
+                }
             }
 
-            Array_Push_Range(&TestIndices, span(Indices));
-            IndexOffset += Safe_U32(Mesh->Positions.Count);     
+            IndexOffset += Mesh->TriangleCount*3; 
         }
     }
 
-    gdi_handle<gdi_buffer> VtxBuffer = GDI_Context_Create_Buffer(GDIContext, {
+    gdi_handle<gdi_buffer> PositionBuffer = GDI_Context_Create_Buffer(GDIContext, {
         .ByteSize = Array_Byte_Size(&TestVertices),
         .UsageFlags = GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT,
         .InitialData = const_buffer(span(TestVertices))
+    });
+
+    gdi_handle<gdi_buffer> TexcoordBuffer = GDI_Context_Create_Buffer(GDIContext, {
+        .ByteSize = Array_Byte_Size(&TestUVs),
+        .UsageFlags = GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT,
+        .InitialData = const_buffer(span(TestUVs))
     });
 
     gdi_handle<gdi_buffer> IdxBuffer = GDI_Context_Create_Buffer(GDIContext, {
@@ -358,9 +464,9 @@ bool Editor_Main() {
                 }
             });
 
-            GDI_Cmd_List_Set_Vtx_Buffers(CmdList, {VtxBuffer});
+            GDI_Cmd_List_Set_Vtx_Buffers(CmdList, {PositionBuffer, TexcoordBuffer});
             GDI_Cmd_List_Set_Idx_Buffer(CmdList, IdxBuffer, GDI_FORMAT_R32_UINT);
-            GDI_Cmd_List_Set_Pipeline(CmdList, Pipeline);
+            GDI_Cmd_List_Set_Pipeline(CmdList, ColorPipeline);
 
             draw_data DrawData = {};
 
@@ -379,11 +485,15 @@ bool Editor_Main() {
             Memory_Copy(Data+DrawSize, &DrawData, sizeof(DrawData));
 
             GDI_Cmd_List_Set_Bind_Groups(CmdList, 0, {ViewBindGroup});
-
             GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {0});
+
             GDI_Cmd_List_Draw_Indexed_Instance(CmdList, Safe_U32(TestIndices.Count), 0, 0, 1, 0);
 
+            GDI_Cmd_List_Set_Pipeline(CmdList, TexturePipeline);
+            GDI_Cmd_List_Set_Bind_Groups(CmdList, 0, {ViewBindGroup});
             GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, 1, {DrawBindGroup}, {DrawSize});
+            GDI_Cmd_List_Set_Bind_Groups(CmdList, 2, {TextureBindGroup});
+
             GDI_Cmd_List_Draw_Indexed_Instance(CmdList, Safe_U32(TestIndices.Count), 0, 0, 1, 0);
 
             GDI_Context_Buffer_Unmap(GDIContext, DrawBuffer);
@@ -419,6 +529,7 @@ int main() {
     return Result ? 0 : 1;
 }
 
+#include "parsers/texture/texture_parser.cpp"
 #include "parsers/fbx/fbx_parser.cpp"
 
 #include "editor_input.cpp"

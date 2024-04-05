@@ -85,5 +85,5 @@ internal void VK_Delete_Buffer(gdi_context* Context, vk_buffer* Buffer) {
 }
 
 internal void VK_Buffer_Record_Frame(gdi_context* Context, async_handle<vk_buffer> Handle) {
-
+    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.BuffersInUse[Handle.Index()], true);
 }

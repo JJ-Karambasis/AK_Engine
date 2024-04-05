@@ -179,6 +179,7 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
         Texture->Width  = Swapchain->Width;
         Texture->Height = Swapchain->Height;
         Texture->Format = Swapchain->Format;
+        Texture->IsSwapchain = true;
 
         Swapchain->Textures[i] = gdi_handle<gdi_texture>(TextureHandle.ID);
     }

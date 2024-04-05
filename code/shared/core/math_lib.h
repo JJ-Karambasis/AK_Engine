@@ -19,6 +19,12 @@ struct vec2 {
     struct { f32 x, y; };
     vec2() = default;
     vec2(f32 _x, f32 _y);
+
+    inline vec2(span<f64> Span) {
+        Assert(Span.Count == 2);
+        Data[0] = (f32)Span[0];
+        Data[1] = (f32)Span[1];
+    }
 };
 
 union vec3 {
