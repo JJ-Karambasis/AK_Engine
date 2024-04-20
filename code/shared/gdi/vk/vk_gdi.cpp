@@ -1010,14 +1010,15 @@ internal bool VK_Create__Internal(gdi* GDI, const gdi_create_info& CreateInfo) {
     }
 #endif
 
+    const gdi_app_info* EngineInfo = &CreateInfo.EngineInfo;
     const gdi_app_info* AppInfo = &CreateInfo.AppInfo; 
 
     VkApplicationInfo ApplicationInfo = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pApplicationName = AppInfo->Name.Str,
         .applicationVersion = VK_MAKE_API_VERSION(0, AppInfo->Version.Major, AppInfo->Version.Minor, AppInfo->Version.Patch),
-        .pEngineName = "AK_Engine",
-        .engineVersion = VK_MAKE_API_VERSION(0, AK_ENGINE_MAJOR_VERSION, AK_ENGINE_MINOR_VERSION, AK_ENGINE_PATCH_VERSION),
+        .pEngineName = EngineInfo->Name.Str,
+        .engineVersion = VK_MAKE_API_VERSION(0, EngineInfo->Version.Major, EngineInfo->Version.Minor, EngineInfo->Version.Patch),
         .apiVersion = VK_API_VERSION_1_0
     };
 

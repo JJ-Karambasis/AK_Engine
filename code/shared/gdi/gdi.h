@@ -290,6 +290,7 @@ struct gdi_logging_callbacks {
 
 struct gdi_create_info {
     gdi_logging_callbacks LoggingCallbacks;
+    gdi_app_info          EngineInfo;
     gdi_app_info          AppInfo;
 };
 

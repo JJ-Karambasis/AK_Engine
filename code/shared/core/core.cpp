@@ -170,17 +170,6 @@ void Core_Delete_Job_System(ak_job_system* JobSystem) {
     AK_Job_System_Delete(JobSystem);
 }
 
-ak_job_queue* Core_Create_Job_Queue(uint32_t MaxJobCount, uint32_t NumThreads, uint32_t NumDependencies) {
-    ak_job_thread_callbacks ThreadCallbacks = {0};
-    ThreadCallbacks.JobThreadUpdate = Core_Job_System_Thread_Update;
-    ThreadCallbacks.JobThreadEnd = Core_Job_System_Thread_End;
-    return AK_Job_Queue_Create(MaxJobCount, NumThreads, NumDependencies, &ThreadCallbacks, NULL);
-}
-
-void Core_Delete_Job_Queue(ak_job_queue* JobQueue) {
-    AK_Job_Queue_Delete(JobQueue);
-}
-
 global core* G_Core;
 core* Core_Get() {
     Assert(G_Core);

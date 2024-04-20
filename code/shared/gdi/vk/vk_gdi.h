@@ -1,7 +1,12 @@
 #ifndef VK_GDI_H
 #define VK_GDI_H
 
-#include <engine.h>
+#include <core/core.h>
+#include <gdi/gdi.h>
+
+namespace modules {
+    internal const string Vulkan = String_Lit("Vulkan");
+};
 
 #if defined(OS_WIN32)
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -216,10 +221,10 @@ struct gdi {
     const vk_instance_funcs* InstanceFuncs;
     array<vk_device>         Devices;
 
-    #ifdef DEBUG_BUILD
+#ifdef DEBUG_BUILD
     VkDebugReportCallbackEXT DebugReportCallback;
     VkDebugUtilsMessengerEXT DebugMessenger;
-    #endif
+#endif
 };
 
 struct vk_pipeline_barrier {

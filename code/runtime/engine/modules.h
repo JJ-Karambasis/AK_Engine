@@ -3,7 +3,6 @@
 
 namespace modules {
     internal const string GDI = String_Lit("GDI");
-    internal const string Vulkan = String_Lit("Vulkan");
 };
 
 #endif

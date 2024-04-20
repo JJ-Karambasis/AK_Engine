@@ -12,7 +12,6 @@
 #endif
 
 #else
-#error "Not Implemented"
 #endif
 
 void Texture_Delete(texture* Texture) {

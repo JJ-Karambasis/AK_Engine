@@ -120,6 +120,14 @@ static const uptr G_OSEventTypeSize[] = {
 #endif
 };
 
+#define OS_EVENT_SUBSCRIBER_CALLBACK_DEFINE(name) void name(const os_event* Event, void* UserData)
+typedef OS_EVENT_SUBSCRIBER_CALLBACK_DEFINE(os_event_subscriber_callback_func);
+
+struct os_event_subscriber {
+    os_event_subscriber_callback_func* EventCallback;
+    void*                              UserData;
+};
+
 static_assert(Array_Count(G_OSEventTypeSize) == OS_EVENT_TYPE_COUNT);
 
 void                 OS_Event_Manager_Create(os_event_manager* EventManager, u32 NumReaderThreads);
