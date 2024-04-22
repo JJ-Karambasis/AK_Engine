@@ -29,4 +29,5 @@ void Input_New_Frame(input* Input) {
         Input->RepeatingTime = 0.0f;
         Input->IsRepeating = false;
     }
+    Input->IsDown = false;
 }

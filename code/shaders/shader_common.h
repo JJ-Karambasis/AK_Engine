@@ -15,6 +15,12 @@
 #define INV_PI 0.31830988618f
 #define SPACE_(value) space ## value
 #define SPACE(value) SPACE_(value)
+#define BUFFER_(value) b ## value
+#define BUFFER(value) BUFFER_(value)
+#define TEXTURE_(value) t ## value
+#define TEXTURE(value) TEXTURE_(value)
+#define SAMPLER_(value) s ## value
+#define SAMPLER(value) SAMPLER_(value)
 #endif
 
 #endif

@@ -232,6 +232,71 @@ bool String_Equals(string A, string B, str_case Case) {
     return true;
 }
 
+string String_Concat(allocator* Allocator, string StringA, string StringB) {
+    uptr TotalSize = StringA.Size+StringB.Size;
+    char* Buffer = (char*)Allocator_Allocate_Memory(Allocator, (TotalSize+1)*sizeof(char));
+    Memory_Copy(Buffer, StringA.Str, StringA.Size*sizeof(char));
+    Memory_Copy(Buffer+StringA.Size, StringB.Str, StringB.Size*sizeof(char));
+    Buffer[TotalSize] = 0;
+    return string(Buffer, TotalSize);
+}
+
+string String_Concat(allocator* Allocator, const span<string>& Strings) {
+    uptr TotalSize = 0;
+    for(const string& Str : Strings) {
+        TotalSize += Str.Size;
+    }
+    char* Buffer = (char*)Allocator_Allocate_Memory(Allocator, (TotalSize+1)*sizeof(char));
+    char* BufferAt = Buffer;
+
+    for(const string& Str : Strings) {
+        Memory_Copy(BufferAt, Str.Str, Str.Size*sizeof(char));
+        BufferAt += Str.Size;
+    }
+    *BufferAt = 0;
+    return string(Buffer, TotalSize);
+}
+
+string String_Substr(string String, uptr FirstIndex, uptr LastIndex) {
+    Assert(FirstIndex <= LastIndex);
+    if(FirstIndex < String.Size && LastIndex <= String.Size) {
+        const char* StrAt = String.Str+FirstIndex;
+        uptr NewSize = LastIndex-FirstIndex;
+        return string(StrAt, NewSize);
+    }
+    return String;
+}
+
+uptr String_Find_Last(string String, char Character) {
+    if(String.Size == 0) return STR_INVALID_FIND;
+
+    const char* End = String.Str + (String.Size-1);
+    for(uptr i = String.Size; i != 0; i--) {
+        uptr Index = i-1;
+        if(String.Str[Index] == Character) {
+            return Index;
+        }
+    }
+
+    return STR_INVALID_FIND;
+}
+
+string String_Get_Path(string String) {
+    uptr LastIndexDoubleSlash = String_Find_Last(String, '\\')+1;
+    uptr LastIndexSlash = String_Find_Last(String, '/')+1;
+
+    uptr LastIndex = 0;
+    if(LastIndexDoubleSlash != STR_INVALID_FIND && LastIndexSlash != STR_INVALID_FIND) {
+        LastIndex = LastIndexDoubleSlash > LastIndexSlash ? LastIndexDoubleSlash : LastIndexSlash;
+    } else if(LastIndexDoubleSlash != STR_INVALID_FIND) {
+        LastIndex = LastIndexDoubleSlash;
+    } else if(LastIndexSlash != STR_INVALID_FIND) {
+        LastIndex = LastIndexSlash;
+    }
+
+    return String_Substr(String, 0, LastIndex);
+}
+
 inline string String_To_Date_Format(allocator* Allocator, u32 Value) {
     return Value < 10 ? string(Allocator, "0%d", Value) : string(Allocator, "%d", Value);
 }
@@ -294,4 +359,108 @@ wstring::wstring(allocator* Allocator, string String) {
 const wchar_t& wstring::operator[](uptr Index) const {
     Assert(Index < Size);
     return Str[Index];
+}
+
+bool operator==(wstring A, wstring B) {
+    return WString_Equals(A, B);
+}
+
+bool WString_Equals(wstring A, wstring B, str_case Case) {
+    if(A.Size != B.Size) return false;
+
+    if(Case == str_case::Sensitive) {
+        for(uptr i = 0; i < A.Size; i++) {
+            wchar_t CharA = A[i];
+            wchar_t CharB = B[i];
+            if(CharA != CharB) {
+                return false;
+            }
+        }
+    } else {
+        for(uptr i = 0; i < A.Size; i++) {
+            wchar_t CharA = To_Lower(A[i]);
+            wchar_t CharB = To_Lower(B[i]);
+            if(CharA != CharB) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+wstring WString_Concat(allocator* Allocator, wstring StringA, wstring StringB) {
+    uptr TotalSize = StringA.Size+StringB.Size;
+    wchar_t* Buffer = (wchar_t*)Allocator_Allocate_Memory(Allocator, (TotalSize+1)*sizeof(wchar_t));
+    Memory_Copy(Buffer, StringA.Str, StringA.Size*sizeof(wchar_t));
+    Memory_Copy(Buffer+StringA.Size, StringB.Str, StringB.Size*sizeof(wchar_t));
+    Buffer[TotalSize] = 0;
+    return wstring(Buffer, TotalSize);
+}
+
+wstring WString_Concat(allocator* Allocator, const span<wstring>& Strings) {
+    uptr TotalSize = 0;
+    for(const wstring& Str : Strings) {
+        TotalSize += Str.Size;
+    }
+    wchar_t* Buffer = (wchar_t*)Allocator_Allocate_Memory(Allocator, (TotalSize+1)*sizeof(wchar_t));
+    wchar_t* BufferAt = Buffer;
+
+    for(const wstring& Str : Strings) {
+        Memory_Copy(BufferAt, Str.Str, Str.Size*sizeof(wchar_t));
+        BufferAt += Str.Size;
+    }
+    *BufferAt = 0;
+    return wstring(Buffer, TotalSize);
+}
+
+wstring WString_Substr(wstring String, uptr FirstIndex, uptr LastIndex) {
+    Assert(FirstIndex <= LastIndex);
+    if(FirstIndex < String.Size && LastIndex <= String.Size) {
+        const wchar_t* StrAt = String.Str+FirstIndex;
+        uptr NewSize = LastIndex-FirstIndex;
+        return wstring(StrAt, NewSize);
+    }
+    return String;
+}
+
+uptr WString_Find_Last(wstring String, wchar_t Character) {
+    if(String.Size == 0) return STR_INVALID_FIND;
+
+    const wchar_t* End = String.Str + (String.Size-1);
+    for(uptr i = String.Size; i != 0; i--) {
+        uptr Index = i-1;
+        if(String.Str[Index] == Character) {
+            return Index;
+        }
+    }
+
+    return STR_INVALID_FIND;
+}
+
+wstring WString_Get_Filename_Without_Ext(wstring String) {
+    uptr LastIndexDoubleSlash = WString_Find_Last(String, '\\')+1;
+    uptr LastIndexSlash = WString_Find_Last(String, '/')+1;
+
+    uptr FirstIndex = 0;
+    if(LastIndexDoubleSlash != STR_INVALID_FIND && LastIndexSlash != STR_INVALID_FIND) {
+        FirstIndex = LastIndexDoubleSlash > LastIndexSlash ? LastIndexDoubleSlash : LastIndexSlash;
+    } else if(LastIndexDoubleSlash != STR_INVALID_FIND) {
+        FirstIndex = LastIndexDoubleSlash;
+    } else if(LastIndexSlash != STR_INVALID_FIND) {
+        FirstIndex = LastIndexSlash;
+    }
+
+    uptr LastIndex = WString_Find_Last(String, '.');
+    if(LastIndex == STR_INVALID_FIND) {
+        LastIndex = String.Size;
+    }
+
+    return WString_Substr(String, FirstIndex, LastIndex);
+}
+
+void WString_Free(allocator* Allocator, wstring String) {
+    if(String.Str) {
+        Allocator_Free_Memory(Allocator, (void*)String.Str);
+    }
 }

@@ -176,7 +176,7 @@ inline u32 Find_Free_Slot(hash_slot* Slots, u32 SlotMask, u32 BaseSlot) {
 }
 
 template <typename key, typename value, typename hasher, typename comparer>
-inline void Hashmap_Init(hashmap<key, value, hasher, comparer>* Hashmap, allocator* _Allocator, u32 ItemCount) {
+inline void Hashmap_Init(hashmap<key, value, hasher, comparer>* Hashmap, allocator* _Allocator, u32 ItemCount = DEFAULT_HASHMAP_ITEM_CAPACITY) {
     Zero_Struct(Hashmap);
     Hashmap->Allocator = _Allocator;
     Hashmap->ItemCapacity = Expand_Items(Hashmap->Allocator, &Hashmap->Keys, &Hashmap->Values, &Hashmap->ItemSlots, 0, ItemCount);
@@ -210,12 +210,12 @@ inline void Hashmap_Add_By_Hash(hashmap<key, value, hasher, comparer>* Hashmap, 
     Assert(Hashmap->Slots[Slot].ItemIndex == HASHMAP_INVALID && (Hash & SlotMask) == BaseSlot);
     
     Hashmap->Slots[Slot].Hash = Hash;
-    Hashmap->Slots[Slot].ItemIndex = Count;
+    Hashmap->Slots[Slot].ItemIndex = Hashmap->Count;
     Hashmap->Slots[BaseSlot].BaseCount++;
     
-    Hashmap->ItemSlots[Count] = Slot;
-    Hashmap->Keys[Count] = Key;
-    Hashmap->Values[Count] = Value;
+    Hashmap->ItemSlots[Hashmap->Count] = Slot;
+    Hashmap->Keys[Hashmap->Count] = Key;
+    Hashmap->Values[Hashmap->Count] = Value;
 
     Hashmap->Count++;
 }

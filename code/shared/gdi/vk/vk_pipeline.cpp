@@ -94,7 +94,7 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
 
     VkPipelineInputAssemblyStateCreateInfo InputAssemblyState = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+        .topology = VK_Get_Topology(CreateInfo.GraphicsState.Topology)
     };
 
     VkViewport Viewport = {};
@@ -128,11 +128,19 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
         .depthCompareOp = VK_Get_Compare_Op(CreateInfo.GraphicsState.DepthState.ComparisonFunc)
     };
 
-    array<VkPipelineColorBlendAttachmentState> Attachments(&Scratch);
-    Array_Push(&Attachments, {
-        .blendEnable = VK_FALSE,
-        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
-    });
+    fixed_array<VkPipelineColorBlendAttachmentState> Attachments(&Scratch, CreateInfo.GraphicsState.BlendStates.Count);
+    for(uptr i = 0; i < Attachments.Count; i++) {
+        const gdi_blend_state* BlendState = &CreateInfo.GraphicsState.BlendStates[i];
+        Attachments[i] = {
+            .blendEnable         = BlendState->BlendEnabled,
+            .srcColorBlendFactor = VK_Get_Blend_Factor(BlendState->SrcColor),
+            .dstColorBlendFactor = VK_Get_Blend_Factor(BlendState->DstColor),
+            .colorBlendOp        = VK_Get_Blend_Op(BlendState->ColorOp),
+            .srcAlphaBlendFactor = VK_Get_Blend_Factor(BlendState->SrcAlpha),
+            .dstAlphaBlendFactor = VK_Get_Blend_Factor(BlendState->DstAlpha),
+            .colorWriteMask      = VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT 
+        };
+    }
 
     VkPipelineColorBlendStateCreateInfo ColorBlendState = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,

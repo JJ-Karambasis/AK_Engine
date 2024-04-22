@@ -74,9 +74,50 @@ struct gdi_depth_state {
     gdi_comparison_func ComparisonFunc = GDI_COMPARISON_FUNC_LESS;
 };
 
+enum gdi_topology {
+    GDI_TOPOLOGY_TRIANGLE_LIST,
+    GDI_TOPOLOGY_TRIANGLE_STRIP,
+    GDI_TOPOLOGY_COUNT
+};
+
+enum gdi_blend {
+    GDI_BLEND_ZERO,
+    GDI_BLEND_ONE,
+    GDI_BLEND_SRC_COLOR,
+    GDI_BLEND_ONE_MINUS_SRC_COLOR,
+    GDI_BLEND_DST_COLOR,
+    GDI_BLEND_ONE_MINUS_DST_COLOR,
+    GDI_BLEND_SRC_ALPHA,
+    GDI_BLEND_ONE_MINUS_SRC_ALPHA,
+    GDI_BLEND_DST_ALPHA,
+    GDI_BLEND_ONE_MINUS_DST_ALPHA,
+    GDI_BLEND_COUNT
+};
+
+enum gdi_blend_op {
+    GDI_BLEND_OP_ADD,
+    GDI_BLEND_OP_SUBTRACT,
+    GDI_BLEND_OP_REVERSE_SUBTRACT,
+    GDI_BLEND_OP_MIN,
+    GDI_BLEND_OP_MAX,
+    GDI_BLEND_OP_COUNT
+};
+
+struct gdi_blend_state {
+    bool         BlendEnabled = false;
+    gdi_blend    SrcColor     = GDI_BLEND_ONE;
+    gdi_blend    DstColor     = GDI_BLEND_ZERO;
+    gdi_blend_op ColorOp      = GDI_BLEND_OP_ADD;
+    gdi_blend    SrcAlpha     = GDI_BLEND_ONE;
+    gdi_blend    DstAlpha     = GDI_BLEND_ZERO;
+    gdi_blend_op AlphaOp      = GDI_BLEND_OP_ADD;
+};
+
 struct gdi_graphics_pipeline_state {
     span<gdi_vtx_buffer_binding> VtxBufferBindings;
+    gdi_topology                 Topology = GDI_TOPOLOGY_TRIANGLE_LIST;
     gdi_depth_state              DepthState;
+    span<gdi_blend_state>        BlendStates = {{}};
 };
 
 struct gdi_graphics_pipeline_create_info {
@@ -298,6 +339,12 @@ struct gdi_context_info {
     uptr ConstantBufferAlignment;
 };
 
+enum gdi_execute_status {
+    GDI_EXECUTE_STATUS_NONE,
+    GDI_EXECUTE_STATUS_RESIZE,
+    GDI_EXECUTE_STATUS_ERROR
+};
+
 struct gdi_context_create_info {
     u32 DeviceIndex          = 0;
     u32 FrameCount           = 3;    
@@ -355,7 +402,7 @@ bool                              GDI_Context_Resize_Swapchain(gdi_context* Cont
 span<gdi_handle<gdi_texture>>     GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 
 gdi_cmd_list*                     GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_swapchain> Swapchain = {});
-void                              GDI_Context_Execute(gdi_context* Context);
+gdi_execute_status                GDI_Context_Execute(gdi_context* Context);
 
 enum gdi_resource_state {
     GDI_RESOURCE_STATE_NONE,
@@ -428,6 +475,7 @@ void GDI_Cmd_List_Set_Idx_Buffer(gdi_cmd_list* CmdList, gdi_handle<gdi_buffer> I
 void GDI_Cmd_List_Set_Pipeline(gdi_cmd_list* CmdList, gdi_handle<gdi_pipeline> Pipeline);
 void GDI_Cmd_List_Set_Bind_Groups(gdi_cmd_list* CmdList, u32 StartingIndex, span<gdi_handle<gdi_bind_group>> BindGroups);
 void GDI_Cmd_List_Set_Dynamic_Bind_Groups(gdi_cmd_list* CmdList, u32 StartingIndex, span<gdi_handle<gdi_bind_group>> BindGroups, span<uptr> Offsets);
+void GDI_Cmd_List_Draw_Instance(gdi_cmd_list* CmdList, u32 VtxCount, u32 InstanceCount, u32 VtxOffset, u32 InstanceOffset);
 void GDI_Cmd_List_Draw_Indexed_Instance(gdi_cmd_list* CmdList, u32 IdxCount, u32 IdxOffset, u32 VtxOffset, u32 InstanceCount, u32 InstanceOffset);
 
 #endif

@@ -116,6 +116,8 @@ logger* Log_Manager__Get_Logger() {
     return NULL;
 }
 
+#include <stdio.h>
+
 void Logger__Log(logger* Logger, log_level Level, string Module, const char* Format, va_list List) {
     scratch Scratch = Scratch_Get();
     

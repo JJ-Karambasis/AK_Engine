@@ -1,16 +1,3 @@
-internal void Level_Editor_Next_OS_Event(level_editor* LevelEditor, const os_event* Event) {
-    if(Event->WindowID == LevelEditor->WindowID) {
-        if(Event->Type == OS_EVENT_TYPE_WINDOW_CLOSED) {
-            LevelEditor->IsOpen = false;
-        }
-    }
-}
-
-internal OS_EVENT_SUBSCRIBER_CALLBACK_DEFINE(Level_Editor_OS_Event_Callback) {
-    level_editor* LevelEditor = (level_editor*)UserData;
-    Level_Editor_Next_OS_Event(LevelEditor, Event);
-}
-
 bool Level_Editor_Init(level_editor* LevelEditor, const level_editor_create_info& CreateInfo) {
     LevelEditor->Heap = Heap_Create(Core_Get_Base_Allocator());
     LevelEditor->Arena = Arena_Create(LevelEditor->Heap);

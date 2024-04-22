@@ -92,6 +92,25 @@ s32 Floor_S32(f32 V) {
     return (s32)floorf(V);
 }
 
+u32 F32_To_U32(f32 V) {
+    union {
+        f32 F;
+        u32 U;
+    } u;
+    u.F = V;
+    return u.U;
+}
+
+f32 U32_To_F32(u32 V) {
+    union {
+        f32 F;
+        u32 U;
+    } u;
+
+    u.U = V;
+    return u.F;
+}
+
 bool Equal_Zero_Approx(f32 Value, f32 Epsilon) {
     return Abs(Value) <= Epsilon;
 }

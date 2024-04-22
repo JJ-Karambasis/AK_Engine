@@ -1,8 +1,14 @@
-vec2::vec2(f32 _x, f32 _y) : x(_x), y(_y) { }
+svec2::svec2(s32 _x, s32 _y) : x(_x), y(_y) { }
+
+uvec2::uvec2(u32 _x, u32 _y) : x(_x), y(_y) { }
 
 bool operator!=(uvec2 A, uvec2 B) {
     return A.x != B.x || A.y != B.y;
 }
+
+vec2::vec2(f32 _x, f32 _y) : x(_x), y(_y) { }
+
+vec2::vec2(const svec2& V) : x((f32)V.x), y((f32)V.y) { }
 
 vec3::vec3(f32 _x, f32 _y, f32 _z) {
     x = _x;

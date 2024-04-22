@@ -3,12 +3,8 @@
 
 struct os_event_manager;
 
-typedef uint64_t os_window_id;
-
 enum os_event_type {
     OS_EVENT_TYPE_NONE,
-    OS_EVENT_TYPE_WINDOW_CLOSED,
-    OS_EVENT_TYPE_WINDOW_RESIZE,
     OS_EVENT_TYPE_KEY_PRESSED,
     OS_EVENT_TYPE_KEY_RELEASED,
     OS_EVENT_TYPE_MOUSE_PRESSED,

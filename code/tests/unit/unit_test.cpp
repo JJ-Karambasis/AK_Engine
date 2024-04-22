@@ -6,7 +6,6 @@
 #include <os/os.h>
 
 #include "utest.h"
-#include "os_event_tests.cpp"
 
 UTEST_STATE();
 int main(int ArgCount, char* Args[]) {
@@ -21,4 +20,3 @@ int main(int ArgCount, char* Args[]) {
 }
 
 #include <core/core.cpp>
-#include <os/os_event.cpp>

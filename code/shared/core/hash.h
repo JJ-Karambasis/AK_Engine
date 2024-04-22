@@ -7,6 +7,7 @@ u32 Hash_U64(uint64_t V);
 //FNV-1a hash algorithm
 u32 Hash_Bytes(const void* Data, uptr Size, u32 Seed=0x811c9dc5);
 
+u32 Hash_CRC(const void* Data, uptr Size, u32 Seed = 0);
 
 template <typename type>
 struct hasher {
@@ -43,6 +44,20 @@ struct hasher<u32> {
 template <>
 struct comparer<u32> {
     inline bool Equal(u32 A, u32 B) {
+        return A == B;
+    }
+};
+
+template <>
+struct hasher<string> {
+    inline u32 Hash(string Key) {
+        return Hash_CRC(Key.Str, Key.Size);
+    }
+};
+
+template <>
+struct comparer<string> {
+    inline bool Equal(string A, string B) {
         return A == B;
     }
 };

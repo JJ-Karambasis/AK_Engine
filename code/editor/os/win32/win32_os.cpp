@@ -38,41 +38,6 @@ internal void OS_Window_Storage__Free(os_window_storage* WindowStorage, os_windo
     AK_Async_Slot_Map64_Free_Slot(&WindowStorage->SlotMap, Slot);
 }
 
-internal void OS_Window_Title__Alloc(os_window_title* WindowTitle, string TitleStr) {
-    char* Data;
-    if(TitleStr.Size <= (sizeof(WindowTitle->TitleData)-1)) {
-        Data = WindowTitle->TitleData;
-        WindowTitle->Flags &= ~OS_WINDOW_TITLE_HEAP_ALLOCATED_BIT;
-    } else {
-        char* SlowData = (char*)Allocator_Allocate_Memory(Core_Get_Base_Allocator(), TitleStr.Size+1);
-        Assert(SlowData);
-
-        Memory_Copy(WindowTitle->TitleData, &SlowData, sizeof(char*));
-        Data = SlowData;
-        WindowTitle->Flags &= OS_WINDOW_TITLE_HEAP_ALLOCATED_BIT;
-    }
-    Memory_Copy(Data, TitleStr.Str, TitleStr.Size);
-    Data[TitleStr.Size] = 0;
-    WindowTitle->Size = TitleStr.Size;
-}
-
-#define AK_Window_Title__Get_Ptr(user_data) (void*)(*(uptr*)(user_data))
-internal void OS_Window_Title__Free(os_window_title* WindowTitle) {
-    if(WindowTitle->Flags & OS_WINDOW_TITLE_HEAP_ALLOCATED_BIT) {
-        void* Ptr = AK_Window_Title__Get_Ptr(WindowTitle->TitleData);
-        Allocator_Free_Memory(Core_Get_Base_Allocator(), Ptr);
-        WindowTitle->Flags &= ~OS_WINDOW_TITLE_HEAP_ALLOCATED_BIT;
-    }
-}
-
-internal string OS_Window_Title__Get(os_window_title* WindowTitle) {
-    const char* Str = (const char*)((WindowTitle->Flags & OS_WINDOW_TITLE_HEAP_ALLOCATED_BIT) ? 
-                                    AK_Window_Title__Get_Ptr(WindowTitle->TitleData) : 
-                                    WindowTitle->TitleData); 
-    AK_Window_Title__Get_Ptr(WindowTitle->TitleData);
-    return string(Str, WindowTitle->Size);
-}
-
 internal LRESULT Win32__OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARAM WParam, LPARAM LParam) {
         os* OS = OS_Get();
     Assert(OS);
@@ -89,8 +54,17 @@ internal LRESULT Win32__OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARA
                 Assert(Index < AK_Async_Slot_Map64_Capacity(&WindowStorage->SlotMap));
                 os_window* Window = WindowStorage->Windows + Index;
                 Assert(!Window->Window);
-                string Title = OS_Window_Title__Get(&Window->Title);
-                Window->Window = Win32_Create_Window(&OS->MainWindowClass, (LONG)Window->Width, (LONG)Window->Height, Title, true, Window);
+
+                MONITORINFO MonitorInfo = {
+                    .cbSize = sizeof(MONITORINFO)
+                };
+                HMONITOR Monitor = Window->Monitor;
+                GetMonitorInfoA(Monitor, &MonitorInfo);
+
+                s32 XOffset = MonitorInfo.rcMonitor.left+Window->XOffset;
+                s32 YOffset = MonitorInfo.rcMonitor.top+Window->YOffset;
+
+                Window->Window = Win32_Create_Window(&OS->MainWindowClass, WS_POPUP|WS_VISIBLE, XOffset, YOffset, (LONG)Window->Width, (LONG)Window->Height, "", Window);
                 gdi_window_data WindowData = {
                     .Win32 = {
                         .Window = Window->Window,
@@ -142,7 +116,6 @@ internal LRESULT Win32__OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARA
                 Assert(Window->Window && !Window->Swapchain.Is_Null());
                 GDI_Context_Delete_Swapchain(OS->GDIContext, Window->Swapchain);
                 DestroyWindow(Window->Window);
-                OS_Window_Title__Free(&Window->Title);
                 OS_Window_Storage__Free(WindowStorage, WindowID);
             }
         } break;
@@ -165,23 +138,46 @@ internal LRESULT Win32__OS_Window_Proc(HWND Window, UINT Message, WPARAM WParam,
             SetWindowLongPtrW(Window, GWLP_USERDATA, (LONG_PTR)CreateStruct->lpCreateParams);
         } break;
 
-        case WM_SIZE: {
-            os_window* OSWindow = (os_window*)GetWindowLongPtr(Window, GWLP_USERDATA);
-            if(OSWindow) {
-                os_event_window_resize* Event = (os_event_window_resize*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_WINDOW_RESIZE);
-                Event->WindowID = OSWindow->ID;
-                Event->Width = LOWORD(LParam);
-                Event->Height = HIWORD(LParam);
-            }
-        } break;
+        case WM_NCHITTEST: {
+            POINT Point;
+            RECT Rect;
+            GetClientRect(Window, &Rect);
 
-        case WM_CLOSE: {
             os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
-            if(OSWindow) {
-                os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_WINDOW_CLOSED);
-                Event->WindowID = OSWindow->ID;
+            
+            Point.x = LOWORD(LParam);
+            Point.y = HIWORD(LParam);
+            ScreenToClient(Window, &Point);
+            /*top-left, top and top-right*/
+            if (Point.y < OSWindow->BorderWidth) {
+                if (Point.x < OSWindow->BorderWidth) {
+                    return HTTOPLEFT;
+                } else if (Point.x > (Rect.right - OSWindow->BorderWidth)) {
+                    return HTTOPRIGHT;
+                }     
+                return HTTOP;
             }
-        } break;
+            /*bottom-left, bottom and bottom-right */
+            if (Point.y > (Rect.bottom - OSWindow->BorderWidth)) {
+                if (Point.x < OSWindow->BorderWidth) {
+                    return HTBOTTOMLEFT;
+                } else if (Point.x > (Rect.right - OSWindow->BorderWidth)) {
+                    return HTBOTTOMRIGHT;
+                }
+                
+                return HTBOTTOM;
+            }
+            
+            if (Point.x < OSWindow->BorderWidth) {
+                return HTLEFT;
+            }
+            
+            if (Point.x>(Rect.right - OSWindow->BorderWidth)) {
+                return HTRIGHT;
+            }
+            
+            return HTCAPTION;
+        };
 
         default: {
             Result = DefWindowProcW(Window, Message, WParam, LParam);
@@ -215,7 +211,7 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
         return -1;
     }
 
-    OS->BaseWindow = Win32_Create_Window(&BaseWindowClass, 0, 0, String_Lit(""), false, NULL);
+    OS->BaseWindow = Win32_Create_Window(&BaseWindowClass, 0, 0, 0, 0, 0, String_Lit(""), NULL);
 
     OS->MainWindowClass = {
         .cbSize = sizeof(WNDCLASSEXW),
@@ -232,21 +228,9 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
     AK_Atomic_Store_U32_Relaxed(&OS->IsRunning, true);
     AK_Auto_Reset_Event_Signal(&OS->ThreadInitEvent);
 
-    OS->EventStream = OS_Event_Manager_Allocate_Stream(&OS->EventManager);
-
     for(;;) {
         if(!AK_Atomic_Load_U32_Relaxed(&OS->IsRunning)) {
             PostQuitMessage(0);
-        }
-
-        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentKeyboardState); KeyIndex++) {
-            OS->LastFrameKeyboardState[KeyIndex] = OS->CurrentKeyboardState[KeyIndex];
-            OS->CurrentKeyboardState[KeyIndex] = false;
-        }
-
-        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentMouseState); KeyIndex++) {
-            OS->LastFrameMouseState[KeyIndex] = OS->CurrentMouseState[KeyIndex];
-            OS->CurrentMouseState[KeyIndex] = false;
         }
 
         //If there are no messages. Use GetMessageW to block the thread until the
@@ -256,9 +240,6 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
             GetMessageW(&Message, NULL, 0, 0);
 
             QSBR_Update();
-
-            OS_Event_Manager_Push_Back_Stream(&OS->EventManager, OS->EventStream);
-            OS->EventStream = OS_Event_Manager_Allocate_Stream(&OS->EventManager);
         }
         
         switch(Message.message) {
@@ -278,13 +259,15 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
                     case RIM_TYPEMOUSE: {
                         RAWMOUSE* Mouse = &RawInput->data.mouse;
                         if(Mouse->lLastX != 0 || Mouse->lLastY != 0) {
-                            os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_MOVED);
-                            MouseEvent->Delta = vec2((f32)Mouse->lLastX, -(f32)Mouse->lLastY);
+                            svec2 Delta = svec2(Mouse->lLastX, -Mouse->lLastY);
+                            s64 PackedDelta = ((s64)Delta.x) | (((s64)Delta.y) << 32);
+                            AK_Atomic_Store_U64_Relaxed(&OS->MouseDeltaPacked, (u64)PackedDelta);
                         }
 
                         if(Mouse->usButtonFlags & RI_MOUSE_WHEEL) {
-                            os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_SCROLLED);
-                            MouseEvent->Scroll = (f32)((SHORT)Mouse->usButtonData/WHEEL_DELTA);
+                            f32 Scroll = (f32)((SHORT)Mouse->usButtonData/WHEEL_DELTA);
+                            u32 ScrollU32 = F32_To_U32(Scroll);
+                            AK_Atomic_Store_U32_Relaxed(&OS->ScrollU32, ScrollU32);
                         }
                     } break;
                 }
@@ -295,47 +278,18 @@ internal AK_THREAD_CALLBACK_DEFINE(Win32__OS_Thread_Callback) {
                 DispatchMessageW(&Message);
             } break;
         }
-
-        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentKeyboardState); KeyIndex++) {
-            if(GetAsyncKeyState((int)G_VKCodes[KeyIndex]) & 0x8000) {
-                OS->CurrentKeyboardState[KeyIndex] = true;
-            }
-        }
-
-        for(u32 KeyIndex = 0; KeyIndex < Array_Count(OS->CurrentMouseState); KeyIndex++) {
-            if(GetAsyncKeyState((int)G_MouseVKCodes[KeyIndex]) & 0x8000) {
-                OS->CurrentMouseState[KeyIndex] = true;
-            }
-        }
-
-        for(u32 KeyIndex = 0; KeyIndex < OS_KEYBOARD_KEY_COUNT; KeyIndex++) {
-            if(OS->CurrentKeyboardState[KeyIndex] && !OS->LastFrameKeyboardState[KeyIndex]) {
-                os_event_keyboard* KeyboardEvent = (os_event_keyboard*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_KEY_PRESSED);
-                KeyboardEvent->Key = (os_keyboard_key)KeyIndex;
-            }
-
-            if(!OS->CurrentKeyboardState[KeyIndex] && OS->LastFrameKeyboardState[KeyIndex]) {   
-                os_event_keyboard* KeyboardEvent = (os_event_keyboard*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_KEY_RELEASED);
-                KeyboardEvent->Key = (os_keyboard_key)KeyIndex;
-            }
-        }
-
-        for(u32 KeyIndex = 0; KeyIndex < OS_MOUSE_KEY_COUNT; KeyIndex++) {
-            if(OS->CurrentMouseState[KeyIndex] && !OS->LastFrameMouseState[KeyIndex]) {
-                os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_PRESSED);
-                MouseEvent->Key = (os_mouse_key)KeyIndex;
-            }
-
-            if(!OS->CurrentMouseState[KeyIndex] && OS->LastFrameMouseState[KeyIndex]) {
-                os_event_mouse* MouseEvent = (os_event_mouse*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_RELEASED);
-                MouseEvent->Key = (os_mouse_key)KeyIndex;
-            }
-        }
     }
 }
 
 void OS_Message_Box(string Message, string Title) {
     Win32_Message_Box(Message, Title);
+}
+
+string OS_Get_Executable_Path(allocator* Allocator) {
+    scratch Scratch     = Scratch_Get();
+    string  ExeFilePath = Win32_Get_Exe_File_Path(&Scratch);
+    string  Result      = string(Allocator, String_Get_Path(ExeFilePath));   
+    return Result;
 }
 
 buffer OS_Read_Entire_File(allocator* Allocator, string Filepath) {
@@ -365,18 +319,39 @@ buffer OS_Read_Entire_File(allocator* Allocator, string Filepath) {
     return buffer(Memory, FileSize);
 }
 
+os_monitor_id OS_Get_Primary_Monitor() {
+    local_persist const POINT sZero = { 0, 0 };
+    return (os_monitor_id)MonitorFromPoint(sZero, MONITOR_DEFAULTTOPRIMARY);
+}
+
+uvec2 OS_Get_Monitor_Resolution(os_monitor_id MonitorID) {
+    uvec2 Result;
+    if(MonitorID) {
+        HMONITOR Monitor = (HMONITOR)MonitorID;
+        MONITORINFO MonitorInfo = {
+            .cbSize = sizeof(MONITORINFO)
+        };
+        GetMonitorInfoA(Monitor, &MonitorInfo);
+        Result = uvec2((u32)(MonitorInfo.rcWork.right-MonitorInfo.rcWork.left),
+                       (u32)(MonitorInfo.rcWork.bottom-MonitorInfo.rcWork.top));
+    }
+    return Result;
+}
+
 os_window_id OS_Create_Window(const os_window_create_info& CreateInfo) {
     os* OS = OS_Get();
     if(OS) {
         os_window_id WindowID = OS_Window_Storage__Alloc(&OS->WindowStorage);
         if(WindowID) {
             os_window* Window = OS_Window_Storage__Get(&OS->WindowStorage, WindowID);
-            OS_Window_Title__Alloc(&Window->Title, CreateInfo.Title);
+            Window->Monitor      = (HMONITOR)CreateInfo.MonitorID;
+            Window->XOffset      = CreateInfo.XOffset;
+            Window->YOffset      = CreateInfo.YOffset;
             Window->Width        = CreateInfo.Width;
             Window->Height       = CreateInfo.Height;
-            Window->Flags        = CreateInfo.Flags;
             Window->TargetFormat = CreateInfo.TargetFormat;
             Window->UsageFlags   = CreateInfo.UsageFlags;
+            Window->BorderWidth  = (s32)CreateInfo.Border;
             Window->ID = WindowID;
             AK_Event_Create(&Window->CreationEvent);
 
@@ -446,11 +421,55 @@ void OS_Window_Get_Resolution(os_window_id WindowID, u32* Width, u32* Height) {
     }
 }
 
-const os_event* OS_Next_Event() {
+bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
+    int VKCode = (int)G_VKCodes[Key];
+    return (GetAsyncKeyState(VKCode) & 0x8000) != 0;
+}
+
+bool OS_Mouse_Get_Key_State(os_mouse_key Key) {
+    int VKCode = (int)G_MouseVKCodes[Key];
+    return (GetAsyncKeyState(VKCode) & 0x8000) != 0;
+}
+
+svec2 OS_Mouse_Get_Position(os_window_id WindowID) {
+    svec2 Result;
     os* OS = OS_Get();
-    if(!OS) return NULL;
-    os_event_queue_iter* Iter = OS_Event_Manager_Get_Iter(&OS->EventManager);
-    return OS_Event_Queue_Iter_Next(Iter);
+    if(OS) {
+        POINT P;
+        GetCursorPos(&P);
+
+        os_window_storage* WindowStorage = &OS->WindowStorage;
+        ak_slot64 Slot = (ak_slot64)WindowID;
+        if(AK_Async_Slot_Map64_Is_Allocated(&WindowStorage->SlotMap, Slot)) {
+            os_window* Window = WindowStorage->Windows + AK_Slot64_Index(Slot);
+            AK_Event_Wait(&Window->CreationEvent);
+
+            ScreenToClient(Window->Window, &P);
+        }
+
+        Result = svec2(P.x, P.y);
+    }
+    return Result;
+}
+
+svec2 OS_Mouse_Get_Delta() {
+    svec2 Result;
+    os* OS = OS_Get();
+    if(OS) {
+        s64 MouseDeltaPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MouseDeltaPacked);
+        Result = svec2((s32)MouseDeltaPacked, (s32)(MouseDeltaPacked >> 32));
+    }
+    return Result;
+}
+
+f32 OS_Mouse_Get_Scroll() {
+    f32 Result = 0.0f;
+    os* OS = OS_Get();
+    if(OS) {
+        u32 ScrollU32 = AK_Atomic_Load_U32_Relaxed(&OS->ScrollU32);
+        Result = U32_To_F32(ScrollU32);
+    }
+    return Result;
 }
 
 os* OS_Create(gdi_context* GDIContext, const os_create_info& CreateInfo) {
@@ -464,7 +483,6 @@ os* OS_Create(gdi_context* GDIContext, const os_create_info& CreateInfo) {
     OS_Set(OS);
 
     OS_Window_Storage__Init(&OS->WindowStorage, OS->Arena, CreateInfo.MaxWindowCount);
-    OS_Event_Manager_Create(&OS->EventManager, 1);
 
     AK_Auto_Reset_Event_Create(&OS->ThreadInitEvent, 0);
     if(!AK_Thread_Create(&OS->Thread, Win32__OS_Thread_Callback, nullptr)) {
@@ -501,5 +519,4 @@ void OS_Set(os* OS) {
     G_OS = OS;
 }
 
-#include <os_event.cpp>
 #include <os/win32/win32_shared.cpp>

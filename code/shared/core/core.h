@@ -124,6 +124,14 @@
 # define Assert_False(c)
 #endif
 
+#ifdef OS_WIN32
+#define OS_FILE_DELIMITER '\\'
+#define OS_FILE_DELIMITER_STR "\\"
+#else
+#define OS_FILE_DELIMITER '/'
+#define OS_FILE_DELIMITER_STR "/"
+#endif
+
 #define Null_Check(ptr) Assert_With_Message((ptr) != nullptr, "Null pointer!")
 #define Not_Implemented() Assert_With_Message(false, "Not Implemented!")
 #define Invalid_Default_Case() default: { Not_Implemented(); } break

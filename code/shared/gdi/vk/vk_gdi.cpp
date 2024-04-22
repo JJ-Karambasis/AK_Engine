@@ -274,6 +274,47 @@ static bool VK_Is_Pipeline_Depth(vk_pipeline_stage Stage) {
     return IsPipelineDepths[(u32)Stage];
 }
 
+internal VkPrimitiveTopology VK_Get_Topology(gdi_topology Topology) {
+    local_persist const VkPrimitiveTopology Topologies[] = {
+        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+    };
+    static_assert(Array_Count(Topologies) == GDI_TOPOLOGY_COUNT);
+    Assert(Topology < GDI_TOPOLOGY_COUNT);
+    return Topologies[Topology];
+}
+
+internal VkBlendFactor VK_Get_Blend_Factor(gdi_blend Blend) {
+    local_persist const VkBlendFactor BlendFactors[] = {
+        VK_BLEND_FACTOR_ZERO,
+        VK_BLEND_FACTOR_ONE,
+        VK_BLEND_FACTOR_SRC_COLOR,
+        VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+        VK_BLEND_FACTOR_DST_COLOR,
+        VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+        VK_BLEND_FACTOR_SRC_ALPHA,
+        VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        VK_BLEND_FACTOR_DST_ALPHA,
+        VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA
+    };
+    static_assert(Array_Count(BlendFactors) == GDI_BLEND_COUNT);
+    Assert(Blend < GDI_BLEND_COUNT);
+    return BlendFactors[Blend];
+} 
+
+internal VkBlendOp VK_Get_Blend_Op(gdi_blend_op BlendOp) {
+    local_persist const VkBlendOp BlendOps[] = {
+        VK_BLEND_OP_ADD,
+        VK_BLEND_OP_SUBTRACT,
+        VK_BLEND_OP_REVERSE_SUBTRACT,
+        VK_BLEND_OP_MIN,
+        VK_BLEND_OP_MAX
+    };
+    static_assert(Array_Count(BlendOps) == GDI_BLEND_OP_COUNT);
+    Assert(BlendOp < GDI_BLEND_OP_COUNT);
+    return BlendOps[BlendOp];
+}
+
 internal VkImageUsageFlags VK_Convert_To_Image_Usage_Flags(gdi_texture_usage_flags Flags) {
     VkImageUsageFlags Result = 0;
 
@@ -2220,7 +2261,7 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
     return (gdi_cmd_list*)CmdList;
 }
 
-void GDI_Context_Execute(gdi_context* Context) {
+gdi_execute_status GDI_Context_Execute(gdi_context* Context) {
     scratch Scratch = Scratch_Get();
     vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
     vk_resource_context* ResourceContext = &Context->ResourceContext;
@@ -2331,34 +2372,43 @@ void GDI_Context_Execute(gdi_context* Context) {
         Array_Push(&Swapchains, CmdList->Swapchain);
     }
 
-    VkSubmitInfo SubmitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = Safe_U32(SubmitSemaphores.Count),
-        .pWaitSemaphores = SubmitSemaphores.Ptr,
-        .pWaitDstStageMask = SubmitWaitStages.Ptr,
-        .commandBufferCount = Safe_U32(CmdBuffers.Count),
-        .pCommandBuffers = CmdBuffers.Ptr,
-        .signalSemaphoreCount = Safe_U32(PresentSemaphores.Count),
-        .pSignalSemaphores = PresentSemaphores.Ptr
-    };
+    if(CmdBuffers.Count > 0) {
+        VkSubmitInfo SubmitInfo = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .waitSemaphoreCount = Safe_U32(SubmitSemaphores.Count),
+            .pWaitSemaphores = SubmitSemaphores.Ptr,
+            .pWaitDstStageMask = SubmitWaitStages.Ptr,
+            .commandBufferCount = Safe_U32(CmdBuffers.Count),
+            .pCommandBuffers = CmdBuffers.Ptr,
+            .signalSemaphoreCount = Safe_U32(PresentSemaphores.Count),
+            .pSignalSemaphores = PresentSemaphores.Ptr
+        };
 
-    if(vkQueueSubmit(Context->GraphicsQueue, 1, &SubmitInfo, FrameContext->Fence) != VK_SUCCESS) {
-        Assert(false);
-        return;
+        if(vkQueueSubmit(Context->GraphicsQueue, 1, &SubmitInfo, FrameContext->Fence) != VK_SUCCESS) {
+            Assert(false);
+            return GDI_EXECUTE_STATUS_ERROR;
+        }
     }
 
-    VkPresentInfoKHR PresentInfo = {
-        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = Safe_U32(PresentSemaphores.Count),
-        .pWaitSemaphores = PresentSemaphores.Ptr,
-        .swapchainCount = Safe_U32(Swapchains.Count),
-        .pSwapchains = Swapchains.Ptr,
-        .pImageIndices = SwapchainImageIndices.Ptr
-    };
+    gdi_execute_status Result = GDI_EXECUTE_STATUS_NONE;
+    if(Swapchains.Count > 0) {
+        VkPresentInfoKHR PresentInfo = {
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = Safe_U32(PresentSemaphores.Count),
+            .pWaitSemaphores = PresentSemaphores.Ptr,
+            .swapchainCount = Safe_U32(Swapchains.Count),
+            .pSwapchains = Swapchains.Ptr,
+            .pImageIndices = SwapchainImageIndices.Ptr
+        };
+        
 
-    if(vkQueuePresentKHR(Context->PresentQueue, &PresentInfo) != VK_SUCCESS) {
-        Assert(false);
-        return;
+        VkResult PresentStatus = vkQueuePresentKHR(Context->PresentQueue, &PresentInfo);
+        if(PresentStatus == VK_ERROR_OUT_OF_DATE_KHR) {
+            Result = GDI_EXECUTE_STATUS_RESIZE;
+        } else if(PresentStatus != VK_SUCCESS) {
+            Assert(false);
+            return GDI_EXECUTE_STATUS_ERROR;
+        }
     }
 
     while(CmdPool->CurrentCmdListHead) {
@@ -2391,21 +2441,21 @@ void GDI_Context_Execute(gdi_context* Context) {
     if(FenceStatus == VK_NOT_READY) {
         if(vkWaitForFences(Context->Device, 1, &FrameContext->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
             Assert(false);
-            return;
+            return GDI_EXECUTE_STATUS_ERROR;
         }
     } else if (FenceStatus != VK_SUCCESS) {
         Assert(false);
-        return;
+            return GDI_EXECUTE_STATUS_ERROR;
     }
     
     if(vkResetFences(Context->Device, 1, &FrameContext->Fence) != VK_SUCCESS) {
         Assert(false);
-        return;
+        return GDI_EXECUTE_STATUS_ERROR;
     }
 
     if(vkResetCommandPool(Context->Device, FrameContext->CopyCmdPool, 0) != VK_SUCCESS) {
         Assert(false);
-        return;
+        return GDI_EXECUTE_STATUS_ERROR;
     }
 
     VkCommandBufferBeginInfo BeginInfo = {
@@ -2416,7 +2466,7 @@ void GDI_Context_Execute(gdi_context* Context) {
     if(vkBeginCommandBuffer(FrameContext->CopyCmdBuffer, &BeginInfo) != VK_SUCCESS) {
         //todo: logging
         Assert(false);
-        return;
+        return GDI_EXECUTE_STATUS_ERROR;
     }
 
     ThreadContext = (vk_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->ThreadContextList);
@@ -2529,6 +2579,8 @@ void GDI_Context_Execute(gdi_context* Context) {
 
         ThreadContext = ThreadContext->Next;
     }
+
+    return Result;
 }
 
 u32 GDI_Cmd_List_Get_Swapchain_Texture_Index(gdi_cmd_list* _CmdList, gdi_resource_state ResourceState) {
@@ -2774,6 +2826,11 @@ void GDI_Cmd_List_Set_Dynamic_Bind_Groups(gdi_cmd_list* _CmdList, u32 StartingIn
     Assert(Pipeline);
     vkCmdBindDescriptorSets(CmdList->CmdBuffer, Pipeline->BindPoint, Pipeline->Layout, StartingIndex, 
                             Safe_U32(DescriptorSets.Count), DescriptorSets.Ptr, Safe_U32(DescriptorOffsets.Count), DescriptorOffsets.Ptr);
+}
+
+void GDI_Cmd_List_Draw_Instance(gdi_cmd_list* _CmdList, u32 VtxCount, u32 InstanceCount, u32 VtxOffset, u32 InstanceOffset) {
+    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
+    vkCmdDraw(CmdList->CmdBuffer, VtxCount, InstanceCount, VtxOffset, InstanceOffset);
 }
 
 void GDI_Cmd_List_Draw_Indexed_Instance(gdi_cmd_list* _CmdList, u32 IdxCount, u32 IdxOffset, u32 VtxOffset, u32 InstanceCount, u32 InstanceOffset) {

@@ -20,6 +20,8 @@ u32 Ceil_U32(f32 V);
 s32 Ceil_S32(f32 V);
 u32 Floor_U32(f32 V);
 s32 Floor_S32(f32 V);
+u32 F32_To_U32(f32 V);
+f32 U32_To_F32(u32 V);
 bool Equal_Zero_Approx(f32 Value, f32 Epsilon);
 bool Equal_Zero_Eps(f32 Value);
 bool Equal_Zero_Eps_Sq(f32 SqValue);

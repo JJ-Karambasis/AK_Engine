@@ -8,13 +8,16 @@ if not "%clang%"=="1" set msvc=1
 if "%msvc%"=="1" if "%x86%"=="1" call init_compiler.bat x86
 if "%msvc%"=="1" if "%x64%"=="1" call init_compiler.bat x64
 
-set code_path=..\code
+set base_path=%~dp0..\..
+set code_path=%base_path%\code
 set dependencies_path=%code_path%\dependencies
 set runtime_path=%code_path%\runtime
 set shared_path=%code_path%\shared
+set shader_path=%code_path%\shaders
 set editor_path=%code_path%\editor
 set editor_os_path=%editor_path%\os
 set vk_include=%dependencies_path%\Vulkan-Headers\include
+set packages_path=%base_path%\bin\packages
 
 set cl_warnings=/WX /Wall /wd4061 /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4582 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262
 set cl_common=  /nologo /FC /Z7 /Gs- /D_CRT_SECURE_NO_WARNINGS
@@ -62,17 +65,20 @@ if "%clang%"=="1" set c=               -std=c17
 
 set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
 
-if "%debug%"=="1"   set compile=%compile_debug% %include_common%
-if "%release%"=="1" set compile=%compile_release% %include_common%
+if "%debug%"=="1"   set compile=%compile_debug%
+if "%release%"=="1" set compile=%compile_release%
 
-if not exist ..\..\bin mkdir ..\..\bin
+set compile=%compile% %include_common%
+
+if not exist %base_path%\bin mkdir %base_path%\bin
 
 set gdi_objs=vk_loader.obj gdi.obj
-pushd ..\..\bin    
+pushd %base_path%\bin    
+    %compile% %only_compile% %cpp% %shared_path%\packages\win32\win32_packages.cpp %obj%packages.obj %compile_link% || exit /b 1
     %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link% || exit /b 1
     %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
     %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj || exit /b 1
-    %compile% %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
+    %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj packages.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
     %compile% %def%TEST_BUILD %inc%%code_path%\editor %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1
     del /s *.ilk >nul 2>&1
     del /s *.obj >nul 2>&1
@@ -89,12 +95,8 @@ if "%release%"=="1" set shader=%shader_release% %include_common%
 set vtx_shader=%shader% -T vs_6_0 -E VS_Main -fvk-invert-y
 set pxl_shader=%shader% -T ps_6_0 -E PS_Main
 
-if not exist ..\..\bin\data\shaders mkdir ..\..\bin\data\shaders
-
-pushd ..\..\bin\data\shaders
-    %vtx_shader% /Fo shader_color_vs.shader ..\..\..\code\shaders\shader.hlsl
-    %pxl_shader% /Fo shader_color_ps.shader ..\..\..\code\shaders\shader.hlsl
-
-    %vtx_shader% /DUSE_TEXTURE /Fo shader_texture_vs.shader ..\..\..\code\shaders\shader.hlsl
-    %pxl_shader% /DUSE_TEXTURE /Fo shader_texture_ps.shader ..\..\..\code\shaders\shader.hlsl
+mkdir %packages_path%\shaders\ui_box 2> NUL
+pushd %packages_path%\shaders\ui_box
+    %vtx_shader% /Fo vtx_shader.shader %shader_path%\ui_box.hlsl 
+    %pxl_shader% /Fo pxl_shader.shader %shader_path%\ui_box.hlsl
 popd

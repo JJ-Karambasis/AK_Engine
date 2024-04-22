@@ -5,20 +5,31 @@
 #define INV_PI 0.31830988618f
 #define To_Radians(degrees) ((degrees) * (PI/180.0f)) 
 
+union svec2 {
+    s32 Data[2] = {};
+    struct { s32 x, y; };
+    struct { s32 w, h; };
+    svec2() = default;
+    svec2(s32 x, s32 y);
+};
+
+
 union uvec2 {
     u32 Data[2] = {};
     struct { u32 x, y; };
     struct { u32 w, h; };
     uvec2() = default;
+    uvec2(u32 x, u32 y);
 };
 
 bool operator!=(uvec2 A, uvec2 B);
 
-struct vec2 {
+union vec2 {
     f32 Data[2] = {};
     struct { f32 x, y; };
     vec2() = default;
     vec2(f32 _x, f32 _y);
+    vec2(const svec2& V);
 
     inline vec2(span<f64> Span) {
         Assert(Span.Count == 2);
