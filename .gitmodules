@@ -7,3 +7,6 @@
 [submodule "code/dependencies/Vulkan-Headers"]
 	path = code/dependencies/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "code/dependencies/freetype"]
+	path = code/dependencies/freetype
+	url = https://github.com/freetype/freetype.git

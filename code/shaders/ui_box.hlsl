@@ -10,6 +10,9 @@ struct ps_input {
 ConstantBuffer<ui_box_shader_global>  GlobalData : register(BUFFER(0), SPACE(UI_BIND_GROUP_GLOBAL_INDEX));
 ConstantBuffer<ui_box_shader_dynamic> DynamicData : register(BUFFER(0), SPACE(UI_BIND_GROUP_DYNAMIC_INDEX));
 
+Texture2D<vec4> Texture : register(TEXTURE(UI_TEXTURE_BIND_GROUP_TEXTURE_BINDING), SPACE(UI_BIND_GROUP_TEXTURE_INDEX));
+sampler Sampler : register(s1, SPACE(UI_BIND_GROUP_TEXTURE_INDEX));
+
 ps_input VS_Main(u32 VertexID : SV_VertexID) {
     static vec2 Vertices[] = {
         {-1, +1},
@@ -44,5 +47,6 @@ ps_input VS_Main(u32 VertexID : SV_VertexID) {
 }
 
 vec4 PS_Main(ps_input Input) : SV_Target0 {
-    return Input.Color;
+    vec4 Result = Texture.Sample(Sampler, Input.UV)*Input.Color;
+    return Result;
 }

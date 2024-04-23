@@ -109,11 +109,16 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
         .Width = Size.x,
         .Height = Size.y,
         .Border = Border,
-        .TargetFormat = GDI_FORMAT_R8G8B8A8_UNORM,
+        .TargetFormat = GDI_FORMAT_R8G8B8A8_SRGB,
         .UsageFlags = GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT
     });
 
     Window->Swapchain = OS_Window_Get_Swapchain(Window->WindowID, &Window->SwapchainFormat);
+    
+    //Right now we must use a valid render target format that is srgb compatible, so
+    //we can create srgb views for the swapchain. Not all monitors support this though,
+    //so at some point we will need to implement a workaround for this
+    Assert(GDI_Get_SRGB_Format(Window->SwapchainFormat) != GDI_FORMAT_NONE); 
 
     window_handle Result = {
         .Window = Window,
@@ -454,23 +459,51 @@ void Window_Render(editor* Editor, window* Window) {
         Memory_Copy(ShaderGlobalGPU, &ShaderGlobal, sizeof(ui_box_shader_global));
         GDI_Context_Buffer_Unmap(Editor->GDIContext, Window->UIGlobalBuffer);
 
+        gdi_handle<gdi_bind_group> BindGroups[UI_BIND_GROUP_COUNT];
+
         //todo: Render common window properties here    
         GDI_Cmd_List_Set_Pipeline(CmdList, Editor->UIBoxPipeline);
         GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_GLOBAL_INDEX, {Window->UIGlobalBindGroup});
         
         u8* ShaderDynamicGPU = GDI_Context_Buffer_Map(Editor->GDIContext, Window->UIDynamicBuffer);
 
-        GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {0});
-        
-        ui_box_shader_dynamic Dynamic = {
-            .P1 = vec2(10.0f, 10.0f),
-            .P2 = vec2(50.0f, 50.0f),
-            .Color = vec4(1.0f, 0.0f, 0.0f, 1.0f)
-        };
-        Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
-        ShaderDynamicGPU += Window->UIDynamicBufferSize;
+        uptr Offset = 0;
+        {
+            GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_TEXTURE_INDEX, {Editor->DefaultTexture.BindGroup});
+            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {Offset});
+            
+            ui_box_shader_dynamic Dynamic = {
+                .P1 = vec2(10.0f, 10.0f),
+                .P2 = vec2(50.0f, 50.0f),
+                .Color = vec4(1.0f, 0.0f, 0.0f, 1.0f)
+            };
+            Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
+            ShaderDynamicGPU += Window->UIDynamicBufferSize;
+            Offset += Window->UIDynamicBufferSize;
 
-        GDI_Cmd_List_Draw_Instance(CmdList, 4, 1, 0, 0);
+            GDI_Cmd_List_Draw_Instance(CmdList, 4, 1, 0, 0);
+        }
+
+        {
+            font_bitmap Bitmap = Font_Get_Bitmap(Editor->MainFont, 'A', 20);
+
+            GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_TEXTURE_INDEX, {Bitmap.Texture.BindGroup});
+            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {Offset});
+            
+            ui_box_shader_dynamic Dynamic = {
+                .P1 = vec2(100.0f, 100.0f),
+                .P2 = vec2(100.0f, 100.0f)+vec2(Bitmap.Texture.Dim),
+                .Color = vec4(1.0f, 1.0f, 1.0f, 1.0f)
+            };
+
+            Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
+            ShaderDynamicGPU += Window->UIDynamicBufferSize;
+            Offset += Window->UIDynamicBufferSize;
+
+            GDI_Cmd_List_Draw_Instance(CmdList, 4, 1, 0, 0);
+        }
+
+
 
         GDI_Cmd_List_End_Render_Pass(CmdList);
         GDI_Cmd_List_Barrier(CmdList, {
@@ -548,6 +581,12 @@ bool Editor_Main() {
         return false;
     }
 
+    Editor.GlyphManager = Glyph_Manager_Create();
+    if(!Editor.GlyphManager) {
+        Fatal_Error_Message();
+        return false;
+    }
+
     if(!OS_Create(Editor.GDIContext)) {
         Fatal_Error_Message();
         return false;
@@ -619,6 +658,7 @@ bool Editor_Main() {
         
         gdi_handle<gdi_bind_group_layout> BindGroupLayouts[UI_BIND_GROUP_COUNT];
         BindGroupLayouts[UI_BIND_GROUP_GLOBAL_INDEX]  = Editor.GlobalBindGroupLayout;
+        BindGroupLayouts[UI_BIND_GROUP_TEXTURE_INDEX] = Editor.LinearSamplerBindGroupLayout;
         BindGroupLayouts[UI_BIND_GROUP_DYNAMIC_INDEX] = Editor.DynamicBindGroupLayout;
         
         Editor.UIBoxPipeline = GDI_Context_Create_Graphics_Pipeline(Editor.GDIContext, {
@@ -637,6 +677,33 @@ bool Editor_Main() {
             .RenderPass = Editor.UIRenderPass
         });
     }
+
+    //Default texture is pure white
+    u32 DefaultTextureTexels[4] = {
+        0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFFFFF, 0xFFFFFFFF
+    };
+
+    Editor.DefaultTexture = GPU_Texture_Create(Editor.GDIContext, {
+        .Format = GDI_FORMAT_R8G8B8A8_UNORM,
+        .Dim = uvec2(2, 2),
+        .Texels = const_buffer(DefaultTextureTexels),
+        .BindGroupLayout = Editor.LinearSamplerBindGroupLayout
+    });
+
+    domain* FontDomain = Packages_Get_Domain(Editor.Packages, String_Lit("fonts"));
+    {
+        scratch Scratch = Scratch_Get();
+        resource* MainFontResource = Packages_Get_Resource(Editor.Packages, FontDomain, String_Lit("liberation mono"), String_Lit("regular"));
+        const_buffer FontBuffer = Packages_Load_Entire_Resource(Editor.Packages, MainFontResource, &Scratch);
+        Editor.MainFont = Font_Create({
+            .GDIContext = Editor.GDIContext,
+            .BitmapBindGroupLayout = Editor.LinearSamplerBindGroupLayout,
+            .GlyphManager = Editor.GlyphManager,
+            .FontBuffer = FontBuffer
+        });
+    }
+
 
     u64 Frequency = AK_Query_Performance_Frequency();
     u64 LastCounter = AK_Query_Performance_Counter();
@@ -738,6 +805,8 @@ int main() {
 #include "editor_input.cpp"
 #include <engine_source.cpp>
 #include <core/core.cpp>
+
+#pragma comment(lib, "ftsystem.lib")
 
 #if defined(OS_WIN32)
 #pragma comment(lib, "user32.lib")

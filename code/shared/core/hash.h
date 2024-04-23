@@ -49,6 +49,20 @@ struct comparer<u32> {
 };
 
 template <>
+struct hasher<u64> {
+    inline u32 Hash(u64 Key) {
+        return Hash_U64(Key);
+    }
+};
+
+template <>
+struct comparer<u64> {
+    inline bool Equal(u64 A, u64 B) {
+        return A == B;
+    }
+};
+
+template <>
 struct hasher<string> {
     inline u32 Hash(string Key) {
         return Hash_CRC(Key.Str, Key.Size);

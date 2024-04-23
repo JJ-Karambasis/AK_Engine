@@ -1,7 +1,8 @@
 #ifndef WIN32_OS_H
 #define WIN32_OS_H
 
-#include <engine.h>
+#include <core/core.h>
+#include <gdi/gdi.h>
 #include <os.h>
 #include <os/win32/win32_shared.h>
 

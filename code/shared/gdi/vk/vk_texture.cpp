@@ -74,6 +74,7 @@ internal void VK_Texture_View_Record_Frame(gdi_context* Context, async_handle<vk
 internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const gdi_texture_create_info& CreateInfo) {
     VkImageCreateInfo ImageInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .flags = VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT,
         .imageType = VK_IMAGE_TYPE_2D,
         .format = VK_Get_Format(CreateInfo.Format),
         .extent = {CreateInfo.Width, CreateInfo.Height, 1},

@@ -30,6 +30,7 @@ union vec2 {
     vec2() = default;
     vec2(f32 _x, f32 _y);
     vec2(const svec2& V);
+    vec2(const uvec2& V);
 
     inline vec2(span<f64> Span) {
         Assert(Span.Count == 2);
@@ -37,6 +38,8 @@ union vec2 {
         Data[1] = (f32)Span[1];
     }
 };
+
+vec2 operator+(vec2 A, vec2 B);
 
 union vec3 {
     f32 Data[3] = {};

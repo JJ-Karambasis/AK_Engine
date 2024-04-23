@@ -109,39 +109,39 @@ void* Packages_Get_IO_Task(packages* Packages, package_io_task Task) {
 
 domain* Packages_Get_Domain(packages* Packages, string Domain) {
     u32 DomainHash = Hash_CRC(Domain.Str, Domain.Size);
-    if(!Hashmap_Find_By_Hash(&Packages->DomainMap, Domain, DomainHash)) {
-        return nullptr;
-    }
-
-    return Hashmap_Get_Value(&Packages->DomainMap);
+    domain** pDomain = Hashmap_Find_By_Hash(&Packages->DomainMap, Domain, DomainHash);
+    if(!pDomain) return nullptr;
+    return *pDomain;
 }
 
 package* Packages_Get_Package(packages* Packages, domain* Domain, string Package) {
     u32 PackageHash = Hash_CRC(Package.Str, Package.Size, Domain->Hash);
-    if(!Hashmap_Find_By_Hash(&Packages->PackageMap, Package, PackageHash)) {
-        return nullptr;
-    }
-
-    return Hashmap_Get_Value(&Packages->PackageMap);
+    package** pPackage = Hashmap_Find_By_Hash(&Packages->PackageMap, Package, PackageHash); 
+    if(!pPackage) return nullptr;
+    return *pPackage;
 }
 
 package* Packages_Get_Package(packages* Packages, string Domain, string Package) {
     u32 DomainHash = Hash_CRC(Domain.Str, Domain.Size);
     u32 PackageHash = Hash_CRC(Package.Str, Package.Size, DomainHash);
+    package** pPackage = Hashmap_Find_By_Hash(&Packages->PackageMap, Package, PackageHash); 
+    if(!pPackage) return nullptr;
+    return *pPackage;
+}
 
-    if(!Hashmap_Find_By_Hash(&Packages->PackageMap, Package, PackageHash)) {
-        return nullptr;
-    }
-
-    return Hashmap_Get_Value(&Packages->PackageMap);
+resource* Packages_Get_Resource(packages* Packages, domain* Domain, string PackageName, string ResourceName) {
+    u32 PackageHash = Hash_CRC(PackageName.Str, PackageName.Size, Domain->Hash);
+    u32 ResourceHash = Hash_CRC(ResourceName.Str, ResourceName.Size, PackageHash);
+    resource** pResource = Hashmap_Find_By_Hash(&Packages->ResourceMap, ResourceName, ResourceHash); 
+    if(!pResource) return nullptr;
+    return *pResource;
 }
 
 resource* Packages_Get_Resource(packages* Packages, package* Package, string ResourceName) {
     u32 ResourceHash = Hash_CRC(ResourceName.Str, ResourceName.Size, Package->Hash);
-    if(!Hashmap_Find_By_Hash(&Packages->ResourceMap, ResourceName, ResourceHash)) {
-        return nullptr;
-    }
-    return Hashmap_Get_Value(&Packages->ResourceMap);
+    resource** pResource = Hashmap_Find_By_Hash(&Packages->ResourceMap, ResourceName, ResourceHash); 
+    if(!pResource) return nullptr;
+    return *pResource;
 }
 
 void      Packages_Delete(packages* Packages);

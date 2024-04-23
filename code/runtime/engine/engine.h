@@ -4,7 +4,9 @@
 #include <core/core.h>
 #include <gdi/gdi.h>
 #include <input/input.h>
+#include <glyph_manager/glyph_manager.h>
 #include <packages/packages.h>
+#include <assets/assets.h>
 
 #include "modules.h"
 #include "camera.h"

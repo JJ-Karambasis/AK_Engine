@@ -14,6 +14,9 @@ bool GDI_Is_Depth_Format(gdi_format Format) {
         false,
         false,
         false,
+        false,
+        false,
+        false,
         true,
     };
     static_assert(Array_Count(Flags) == GDI_FORMAT_COUNT);
@@ -25,7 +28,10 @@ uptr GDI_Get_Bytes_Per_Pixel(gdi_format Format) {
     local_persist const uptr BytesPerPixel[] = {
         0, 
         1, 
+        1,
+        2,
         2, 
+        3,
         3, 
         4, 
         4, 
@@ -42,6 +48,32 @@ uptr GDI_Get_Bytes_Per_Pixel(gdi_format Format) {
     static_assert(Array_Count(BytesPerPixel) == GDI_FORMAT_COUNT);
     Assert(Format < GDI_FORMAT_COUNT);
     return BytesPerPixel[Format];
+}
+
+gdi_format GDI_Get_SRGB_Format(gdi_format Format) {
+    local_persist const gdi_format Formats[] = {
+        GDI_FORMAT_NONE, 
+        GDI_FORMAT_R8_SRGB, 
+        GDI_FORMAT_R8_SRGB, 
+        GDI_FORMAT_R8G8_SRGB, 
+        GDI_FORMAT_R8G8_SRGB, 
+        GDI_FORMAT_R8G8B8_SRGB, 
+        GDI_FORMAT_R8G8B8_SRGB, 
+        GDI_FORMAT_R8G8B8A8_SRGB, 
+        GDI_FORMAT_R8G8B8A8_SRGB, 
+        GDI_FORMAT_B8G8R8A8_SRGB, 
+        GDI_FORMAT_B8G8R8A8_SRGB, 
+        GDI_FORMAT_NONE, 
+        GDI_FORMAT_NONE, 
+        GDI_FORMAT_NONE, 
+        GDI_FORMAT_NONE,
+        GDI_FORMAT_NONE,
+        GDI_FORMAT_NONE,
+        GDI_FORMAT_NONE,
+    };
+    static_assert(Array_Count(Formats) == GDI_FORMAT_COUNT);
+    Assert(Format < GDI_FORMAT_COUNT);
+    return Formats[Format];
 }
 
 bool GDI_Is_Bind_Group_Buffer(gdi_bind_group_type Type) {

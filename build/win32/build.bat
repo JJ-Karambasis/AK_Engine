@@ -19,7 +19,7 @@ set editor_os_path=%editor_path%\os
 set vk_include=%dependencies_path%\Vulkan-Headers\include
 set packages_path=%base_path%\bin\packages
 
-set cl_warnings=/WX /Wall /wd4061 /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4582 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262
+set cl_warnings=/WX /Wall /wd4061 /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4582 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262 /wd4091
 set cl_common=  /nologo /FC /Z7 /Gs- /D_CRT_SECURE_NO_WARNINGS
 set cl_debug= 	call cl /Od /DDEBUG_BUILD /MTd %cl_common% %cl_warnings%
 set cl_release= call cl /O2 %cl_common% %cl_warnings%
@@ -40,16 +40,17 @@ set clang_release=  call clang -O2 %clang_common% %clang_warnings%
 set clang_link=     
 set clang_out=      -o
 
-if "%msvc%"=="1" set compile_debug=   %cl_debug%
-if "%msvc%"=="1" set compile_release= %cl_release%
-if "%msvc%"=="1" set compile_link=    %cl_link%
-if "%msvc%"=="1" set out=             %cl_out%
-if "%msvc%"=="1" set only_compile=    /c
-if "%msvc%"=="1" set inc=             /I   
-if "%msvc%"=="1" set obj=             /Fo:
-if "%msvc%"=="1" set def=             /D 
-if "%msvc%"=="1" set cpp=             /std:c++20
-if "%msvc%"=="1" set c=               /std:c17
+if "%msvc%"=="1" set compile_debug=    %cl_debug%
+if "%msvc%"=="1" set compile_release=  %cl_release%
+if "%msvc%"=="1" set compile_link=     %cl_link%
+if "%msvc%"=="1" set out=              %cl_out%
+if "%msvc%"=="1" set only_compile=     /c
+if "%msvc%"=="1" set inc=              /I   
+if "%msvc%"=="1" set obj=              /Fo:
+if "%msvc%"=="1" set def=              /D 
+if "%msvc%"=="1" set cpp=              /std:c++20
+if "%msvc%"=="1" set c=                /std:c17
+if "%msvc%"=="1" set freetype_warnings=/wd4242 /wd4244 /wd4267 /wd4706
 
 
 if "%clang%"=="1" set compile_debug=   %clang_debug%
@@ -63,7 +64,7 @@ if "%clang%"=="1" set def=             -D
 if "%clang%"=="1" set cpp=             -std=c++20
 if "%clang%"=="1" set c=               -std=c17
 
-set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
+set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
 
 if "%debug%"=="1"   set compile=%compile_debug%
 if "%release%"=="1" set compile=%compile_release%
@@ -72,13 +73,53 @@ set compile=%compile% %include_common%
 
 if not exist %base_path%\bin mkdir %base_path%\bin
 
+set ft_src=%dependencies_path%\freetype\src
+if not exist %base_path%\bin\ftsystem.lib (
+     
+    mkdir %base_path%\bin\ft_temp
+    pushd %base_path%\bin\ft_temp
+        %compile% %freetype_warnings% %only_compile% %def%FT2_BUILD_LIBRARY %c% ^
+            %ft_src%\base\ftsystem.c ^
+            %ft_src%\base\ftinit.c ^
+            %ft_src%\base\ftdebug.c ^
+            %ft_src%\base\ftbase.c ^
+            %ft_src%\base\ftbitmap.c ^
+            %ft_src%\base\ftmm.c ^
+            %ft_src%\sfnt\sfnt.c ^
+            %ft_src%\truetype\truetype.c ^
+            %ft_src%\autofit\autofit.c ^
+            %ft_src%\type1\type1.c ^
+            %ft_src%\cff\cff.c ^
+            %ft_src%\cid\type1cid.c ^
+            %ft_src%\pfr\pfr.c ^
+            %ft_src%\type42\type42.c ^
+            %ft_src%\winfonts\winfnt.c ^
+            %ft_src%\pcf\pcf.c ^
+            %ft_src%\bdf\bdf.c ^
+            %ft_src%\psaux\psaux.c ^
+            %ft_src%\psnames\psnames.c ^
+            %ft_src%\pshinter\pshinter.c ^
+            %ft_src%\smooth\smooth.c ^
+            %ft_src%\raster\raster.c ^
+            %ft_src%\sdf\sdf.c ^
+            %ft_src%\svg\svg.c ^
+            %ft_src%\gzip\ftgzip.c ^
+            %ft_src%\lzw\ftlzw.c ^
+        %compile_link% %obj%win32_os.obj || exit /b 1
+        
+        lib /nologo /OUT:%base_path%\bin\ftsystem.lib *.obj
+    popd
+    rmdir /s /q %base_path%\bin\ft_temp
+)
+
 set gdi_objs=vk_loader.obj gdi.obj
 pushd %base_path%\bin    
+    %compile% %only_compile% %cpp% %shared_path%\glyph_manager\freetype\freetype_manager.cpp %obj%glyph_rasterizer.obj %compile_link% || exit /b 1
     %compile% %only_compile% %cpp% %shared_path%\packages\win32\win32_packages.cpp %obj%packages.obj %compile_link% || exit /b 1
     %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link% || exit /b 1
     %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
     %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj || exit /b 1
-    %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj packages.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
+    %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj packages.obj glyph_rasterizer.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
     %compile% %def%TEST_BUILD %inc%%code_path%\editor %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1
     del /s *.ilk >nul 2>&1
     del /s *.obj >nul 2>&1

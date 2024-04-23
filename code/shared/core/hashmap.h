@@ -29,7 +29,6 @@ struct hashmap {
     u32        SlotCapacity = 0;
     u32        ItemCapacity = 0;
     u32        Count = 0;
-    u32        CurrentSlot = HASHMAP_INVALID; 
 
     hashmap() = default;
     hashmap(allocator* _Allocator);
@@ -218,34 +217,31 @@ inline void Hashmap_Add_By_Hash(hashmap<key, value, hasher, comparer>* Hashmap, 
     Hashmap->Values[Hashmap->Count] = Value;
 
     Hashmap->Count++;
+    
 }
 
 template <typename key, typename value, typename hasher, typename comparer>
-inline bool Hashmap_Find_By_Hash(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key, u32 Hash) {
-    Hashmap->CurrentSlot = Find_Slot<key, comparer>(Hashmap->Slots, Hashmap->SlotCapacity, Hashmap->Keys, Key, Hash);
-    return Hashmap->CurrentSlot != HASHMAP_INVALID;
+inline value* Hashmap_Find_By_Hash(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key, u32 Hash) {
+    u32 CurrentSlot = Find_Slot<key, comparer>(Hashmap->Slots, Hashmap->SlotCapacity, Hashmap->Keys, Key, Hash);
+    if(CurrentSlot == HASHMAP_INVALID) return nullptr;
+    return Hashmap->Values + Hashmap->Slots[CurrentSlot].ItemIndex;
 }
 
 template <typename key, typename value, typename hasher, typename comparer>
-inline bool Hashmap_Find(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key) {
+inline value* Hashmap_Find(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key) {
     u32 Hash = hasher{}.Hash(Key);
     return Hashmap_Find_By_Hash(Hashmap, Key, Hash);
 }
 
 template <typename key, typename value, typename hasher, typename comparer>
-inline void Hashmap_Find_Or_Create(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key) {
+inline value* Hashmap_Find_Or_Create(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key) {
     u32 Hash = hasher{}.Hash(Key);
-    if(!Hashmap_Find_By_Hash(Hashmap, Key, Hash)) {
+    value* Result = Hashmap_Find_By_Hash(Hashmap, Key, Hash);
+    if(!Result) {
         Hashmap_Add_By_Hash(Hashmap, Key, Hash, {});
-        bool Result = Hashmap_Find_By_Hash(Hashmap, Key, Hash);
-        Assert(Result);
-    }
-}
-
-template <typename key, typename value, typename hasher, typename comparer>
-inline value& Hashmap_Get_Value(hashmap<key, value, hasher, comparer>* Hashmap) {
-    Assert(Hashmap->CurrentSlot != HASHMAP_INVALID);
-    return Hashmap->Values[Hashmap->Slots[Hashmap->CurrentSlot].ItemIndex];
+        Result = Hashmap_Find_By_Hash(Hashmap, Key, Hash);
+    } 
+    return Result;
 }
 
 template <typename key, typename value, typename hasher, typename comparer>

@@ -10,6 +10,13 @@ vec2::vec2(f32 _x, f32 _y) : x(_x), y(_y) { }
 
 vec2::vec2(const svec2& V) : x((f32)V.x), y((f32)V.y) { }
 
+vec2::vec2(const uvec2& V) : x((f32)V.x), y((f32)V.y) { }
+
+vec2 operator+(vec2 A, vec2 B) {
+    return vec2(A.x+B.x, A.y+B.y);
+}
+
+
 vec3::vec3(f32 _x, f32 _y, f32 _z) {
     x = _x;
     y = _y;

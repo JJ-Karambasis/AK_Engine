@@ -135,8 +135,11 @@ internal VkFormat VK_Get_Format(gdi_format Format) {
     local_persist VkFormat VKFormats[] = {
         VK_FORMAT_UNDEFINED,
         VK_FORMAT_R8_UNORM,
+        VK_FORMAT_R8_SRGB,
         VK_FORMAT_R8G8_UNORM,
+        VK_FORMAT_R8G8_SRGB,
         VK_FORMAT_R8G8B8_UNORM,
+        VK_FORMAT_R8G8B8_SRGB,
         VK_FORMAT_R8G8B8A8_UNORM,
         VK_FORMAT_R8G8B8A8_SRGB,
         VK_FORMAT_B8G8R8A8_UNORM,

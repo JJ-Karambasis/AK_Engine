@@ -7,9 +7,13 @@
 
 ## Data files
 *.shader
+*.ttf
 
 ## vscode 
 .vscode/settings.json
 
 ## Remedybg
 *.rdbg
+
+## libs
+*.lib

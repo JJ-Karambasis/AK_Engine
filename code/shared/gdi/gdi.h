@@ -4,8 +4,11 @@
 enum gdi_format {
     GDI_FORMAT_NONE,
     GDI_FORMAT_R8_UNORM,
+    GDI_FORMAT_R8_SRGB,
     GDI_FORMAT_R8G8_UNORM,
+    GDI_FORMAT_R8G8_SRGB,
     GDI_FORMAT_R8G8B8_UNORM,
+    GDI_FORMAT_R8G8B8_SRGB,
     GDI_FORMAT_R8G8B8A8_UNORM,
     GDI_FORMAT_R8G8B8A8_SRGB,
     GDI_FORMAT_B8G8R8A8_UNORM,
@@ -20,8 +23,9 @@ enum gdi_format {
     GDI_FORMAT_COUNT
 };
 
-bool GDI_Is_Depth_Format(gdi_format Format);
-uptr GDI_Get_Bytes_Per_Pixel(gdi_format Format);
+bool       GDI_Is_Depth_Format(gdi_format Format);
+uptr       GDI_Get_Bytes_Per_Pixel(gdi_format Format);
+gdi_format GDI_Get_SRGB_Format(gdi_format Format);
 
 template <typename type>
 struct gdi_handle {

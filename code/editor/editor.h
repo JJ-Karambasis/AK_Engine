@@ -6,6 +6,7 @@
 #include "os/os.h"
 #include "editor_input.h"
 #include "ui/ui.h"
+
 // #include "level_editor/level_editor.h"
 
 struct view {
@@ -67,12 +68,15 @@ struct editor {
     ak_job_system*                    JobSystemLow;
     gdi_context*                      GDIContext;
     packages*                         Packages;
+    glyph_manager*                    GlyphManager;
     gdi_handle<gdi_render_pass>       UIRenderPass;    
     gdi_handle<gdi_pipeline>          UIBoxPipeline;
     gdi_handle<gdi_bind_group_layout> GlobalBindGroupLayout;
     gdi_handle<gdi_bind_group_layout> DynamicBindGroupLayout;
     gdi_handle<gdi_bind_group_layout> LinearSamplerBindGroupLayout;
     editor_input_manager              InputManager;
+    gpu_texture                       DefaultTexture;
+    font*                             MainFont;
     
     window* FirstWindow;
     window* LastWindow;
