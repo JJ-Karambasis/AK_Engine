@@ -10,3 +10,9 @@
 [submodule "code/dependencies/freetype"]
 	path = code/dependencies/freetype
 	url = https://github.com/freetype/freetype.git
+[submodule "code/dependencies/SheenBidi"]
+	path = code/dependencies/SheenBidi
+	url = https://github.com/JJ-Karambasis/SheenBidi.git
+[submodule "code/dependencies/harfbuzz"]
+	path = code/dependencies/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz.git

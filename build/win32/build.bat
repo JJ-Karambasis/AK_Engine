@@ -51,6 +51,8 @@ if "%msvc%"=="1" set def=              /D
 if "%msvc%"=="1" set cpp=              /std:c++20
 if "%msvc%"=="1" set c=                /std:c17
 if "%msvc%"=="1" set freetype_warnings=/wd4242 /wd4244 /wd4267 /wd4706
+if "%msvc%"=="1" set sheenbidi_warnings=/wd4706
+if "%msvc%"=="1" set harfbuzz_warnings=/wd4127 /wd4242 /wd4244 /wd4245 /wd4267 /wd4296 /wd4310 /wd4365 /wd4371 /wd4456 /wd4457 /wd4458 /wd4459 /wd4464 /wd4583 /wd4623 /wd4702 /wd4706 /wd4946 /wd5026 /wd5027 /wd5219
 
 
 if "%clang%"=="1" set compile_debug=   %clang_debug%
@@ -64,7 +66,7 @@ if "%clang%"=="1" set def=             -D
 if "%clang%"=="1" set cpp=             -std=c++20
 if "%clang%"=="1" set c=               -std=c17
 
-set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
+set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%shared_path%\uba\sheenbidi\config %inc%%dependencies_path%\SheenBidi\Headers %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
 
 if "%debug%"=="1"   set compile=%compile_debug%
 if "%release%"=="1" set compile=%compile_release%
@@ -73,9 +75,39 @@ set compile=%compile% %include_common%
 
 if not exist %base_path%\bin mkdir %base_path%\bin
 
+set harfbuzz_src=%dependencies_path%\harfbuzz\src
+if not exist %base_path%\bin\harfbuzz.lib (
+    mkdir %base_path%\bin\harfbuzz_temp
+    pushd %base_path%\bin\harfbuzz_temp
+        %compile% %harfbuzz_warnings% %only_compile% %def%HB_CUSTOM_MALLOC %cpp% ^
+            %harfbuzz_src%\harfbuzz.cc ^
+            %shared_path%\text_shaper\harfbuzz\config\harfbuzz_config.cpp ^
+        %compile_link% || exit /b 1
+
+        lib /nologo /OUT:%base_path%\bin\hb.lib *.obj
+    popd
+    rmdir /s /q %base_path%\bin\harfbuzz_temp
+)
+
+set sheenbidi_src=%dependencies_path%\SheenBidi\Source
+if not exist %base_path%\bin\sheenbidi.lib (
+    mkdir %base_path%\bin\sheenbidi_temp
+    pushd %base_path%\bin\sheenbidi_temp
+        %compile% %sheenbidi_warnings% %only_compile% %c% ^
+            %sheenbidi_src%\SheenBidi.c ^
+        %compile_link% || exit /b 1
+
+        %compile% %only_compile% %cpp% ^
+            %shared_path%\uba\sheenbidi\config\SBConfig.cpp ^
+        %compile_link% || exit /b 1
+
+        lib /nologo /OUT:%base_path%\bin\sheenbidi.lib *.obj
+    popd
+    rmdir /s /q %base_path%\bin\sheenbidi_temp
+)
+
 set ft_src=%dependencies_path%\freetype\src
 if not exist %base_path%\bin\ftsystem.lib (
-     
     mkdir %base_path%\bin\ft_temp
     pushd %base_path%\bin\ft_temp
         %compile% %freetype_warnings% %only_compile% %def%FT2_BUILD_LIBRARY %c% ^
@@ -105,7 +137,7 @@ if not exist %base_path%\bin\ftsystem.lib (
             %ft_src%\svg\svg.c ^
             %ft_src%\gzip\ftgzip.c ^
             %ft_src%\lzw\ftlzw.c ^
-        %compile_link% %obj%win32_os.obj || exit /b 1
+        %compile_link% || exit /b 1
         
         lib /nologo /OUT:%base_path%\bin\ftsystem.lib *.obj
     popd
