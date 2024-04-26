@@ -209,6 +209,11 @@ void Core_Set(core* Core) {
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
 
+
+#ifdef OS_WIN32
+#pragma comment(lib, "advapi32.lib")
+#endif
+
 #ifdef COMPILER_MSVC
 #pragma warning(pop)
 #endif

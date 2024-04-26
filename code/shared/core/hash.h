@@ -6,8 +6,10 @@ u32 Hash_U64(uint64_t V);
 
 //FNV-1a hash algorithm
 u32 Hash_Bytes(const void* Data, uptr Size, u32 Seed=0x811c9dc5);
-
 u32 Hash_CRC(const void* Data, uptr Size, u32 Seed = 0);
+
+//Good for seeding. Expensive crypto hash, try not to call to often
+void Hash_Random(void* Data, uptr Size);
 
 template <typename type>
 struct hasher {

@@ -169,6 +169,11 @@ s32 Random_Between(s32 Min, s32 Max) {
     return Min + x % n;
 }
 
+u32 Align_U32(u32 Alignment, u32 Value) {
+    u32 Remainder = Value % Alignment;
+    return Remainder ? Value + (Alignment-Remainder) : Value;
+}
+
 scoped_mutex::scoped_mutex(ak_mutex* _Mutex) : Mutex(_Mutex) { 
     AK_Mutex_Lock(Mutex);
 }

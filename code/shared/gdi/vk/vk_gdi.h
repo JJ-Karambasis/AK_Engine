@@ -81,11 +81,20 @@ struct vk_copy_upload_to_texture {
     u32                      Height;
 };
 
+struct vk_copy_uploads_to_texture {
+    vk_upload                Upload;
+    fixed_array<uptr>        Offsets;
+    fixed_array<vk_region>   Regions;
+    async_handle<vk_texture> Texture;
+};
+
 struct vk_copy_context {
-    ak_rw_lock                       RWLock;
-    u32                              CurrentListIndex;
-    array<vk_copy_upload_to_buffer>  CopyUploadToBufferList[2];
-    array<vk_copy_upload_to_texture> CopyUploadToTextureList[2];
+    ak_rw_lock                        RWLock;
+    u32                               CurrentListIndex;
+    arena*                            Arenas[2];
+    array<vk_copy_upload_to_buffer>   CopyUploadToBufferList[2];
+    array<vk_copy_upload_to_texture>  CopyUploadToTextureList[2];
+    array<vk_copy_uploads_to_texture> CopyUploadsToTextureList[2];
 };
 
 struct vk_delete_context {

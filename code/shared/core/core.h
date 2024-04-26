@@ -147,14 +147,14 @@
 
 #define SLL_Push_Front_Async(First, Node) \
     do { \
-        auto OldTop = AK_Atomic_Load_Ptr_Relaxed(&First); \
+        auto OldTop = AK_Atomic_Load_Ptr_Relaxed(First); \
         Node->Next = (decltype(Node))OldTop; \
-        if(AK_Atomic_Compare_Exchange_Bool_Ptr_Explicit(&First, OldTop, Node, AK_ATOMIC_MEMORY_ORDER_RELEASE, AK_ATOMIC_MEMORY_ORDER_RELAXED)) { \
+        if(AK_Atomic_Compare_Exchange_Bool_Ptr_Explicit(First, OldTop, Node, AK_ATOMIC_MEMORY_ORDER_RELEASE, AK_ATOMIC_MEMORY_ORDER_RELAXED)) { \
             break; \
         } \
     } while(1)
 
-#define DLL_Remove_Front(First, Last) \
+#define DLL_Remove_Front_NP(First, Last, Next, Prev) \
     do { \
         if(First == Last) \
             First = Last = NULL; \
@@ -164,6 +164,17 @@
         } \
     } while(0)
 
+#define DLL_Remove_Back_NP(First, Last, Next, Prev) \
+do { \
+    if(First == Last) \
+        First = Last = NULL; \
+    else { \
+        Last = Last->Prev; \
+        Last->Next = NULL; \
+    } \
+} while(0)
+
+#define DLL_Push_Front_NP(First, Last, Node, Next, Prev) (!(First) ? ((First) = (Last) = (Node)) : ((Node)->Next = (First), (First)->Prev = (Node), (First) = (Node)))
 #define DLL_Push_Back_NP(First, Last, Node, Next, Prev) (!(First) ? ((First) = (Last) = (Node)) : ((Node)->Prev = (Last), (Last)->Next = (Node), (Last) = (Node)))
 #define DLL_Remove_NP(First, Last, Node, Next, Prev) \
     do { \
@@ -209,8 +220,11 @@
         Target->Prev = Node; \
     } while(0)
 
+#define DLL_Remove_Front(First, Last) DLL_Remove_Front_NP(First, Last, Next, Prev)
+#define DLL_Push_Front(First, Last, Node) DLL_Push_Front_NP(First, Last, Node, Next, Prev)
 #define DLL_Push_Back(First, Last, Node) DLL_Push_Back_NP(First, Last, Node, Next, Prev)
 #define DLL_Remove(First, Last, Node) DLL_Remove_NP(First, Last, Node, Next, Prev)
+#define DLL_Push_Front_Only(First, Node) DLL_Push_Front_Only_NP(First, Node, Next, Prev)
 
 //Some generic macros
 #define Array_Count(arr) (sizeof((arr)) / sizeof((arr)[0]))
@@ -238,6 +252,7 @@ typedef int16_t   s16;
 typedef int32_t   s32;
 typedef int64_t   s64;
 
+typedef s16 b16;
 typedef s32 b32; 
 
 typedef float     f32;
@@ -267,6 +282,20 @@ typedef intptr_t  sptr;
 #include "memory.inl"
 #include "fixed_array.inl"
 #include "array.inl"
+
+struct scoped_lock {
+    ak_mutex* Mutex = nullptr;
+    inline scoped_lock(ak_mutex* _Mutex) : Mutex(_Mutex) { 
+        AK_Mutex_Lock(Mutex);
+    }
+    
+    inline ~scoped_lock() {
+        if(Mutex) {
+            AK_Mutex_Unlock(Mutex);
+            Mutex = nullptr;
+        }
+    }
+};
 
 struct allocator_tracker_manager {
 	ak_mutex 		   TrackAllocLock;

@@ -14,33 +14,39 @@ Texture2D<vec4> Texture : register(TEXTURE(UI_TEXTURE_BIND_GROUP_TEXTURE_BINDING
 sampler Sampler : register(s1, SPACE(UI_BIND_GROUP_TEXTURE_INDEX));
 
 ps_input VS_Main(u32 VertexID : SV_VertexID) {
-    static vec2 Vertices[] = {
+    static const vec2 Vertices[] = {
         {-1, +1},
         {-1, -1},
         {+1, +1},
         {+1, -1}
     };
 
-    static vec2 UVs[] = {
-        {0, 0},
-        {0, 1},
-        {1, 0},
-        {1, 1}
+    static const vec2 UVs[] = {
+        {-1,-1},
+        {-1, 1},
+        { 1,-1},
+        { 1, 1}
     };
 
-    vec2 DstHalfSize = (DynamicData.P2-DynamicData.P1) * 0.5f;
-    vec2 DstCenter = (DynamicData.P2+DynamicData.P1) * 0.5f;
+    vec2 DstHalfSize = (DynamicData.DstP1-DynamicData.DstP0) * 0.5f;
+    vec2 DstCenter = (DynamicData.DstP1+DynamicData.DstP0) * 0.5f;
     
     //We want to flip to be top down not bottom up
     DstCenter.y = -DstCenter.y;
-
     vec2 DstVertex = Vertices[VertexID]*DstHalfSize + DstCenter;
+
+    vec2 SrcHalfSize = (DynamicData.SrcP1-DynamicData.SrcP0) * 0.5f;
+    vec2 SrcCenter = (DynamicData.SrcP1+DynamicData.SrcP0) * 0.5f;
+    
+    //We want to flip to be top down not bottom up
+    vec2 SrcVertex = UVs[VertexID]*SrcHalfSize + SrcCenter;
 
     ps_input Result = (ps_input)0;
     Result.Vertex = vec4((2.0f * DstVertex.x * GlobalData.InvRes.x) - 1.0f, 
                          (2.0f * DstVertex.y * GlobalData.InvRes.y) + 1.0f,
                          0, 1);
-    Result.UV = UVs[VertexID];
+
+    Result.UV = SrcVertex*GlobalData.InvTexRes;
 
     Result.Color = DynamicData.Color;
     return Result;

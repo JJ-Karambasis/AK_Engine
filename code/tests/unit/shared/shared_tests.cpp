@@ -1,0 +1,1 @@
+#include "atlas/atlas_tests.cpp"

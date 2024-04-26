@@ -110,6 +110,7 @@ internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const
     Texture->Height = CreateInfo.Height;
     Texture->Format = CreateInfo.Format;
     Texture->IsSwapchain = false;
+    Texture->JustAllocated = true;
 
     return true;
 }

@@ -100,6 +100,11 @@ inline void Array_Push(array<type>* Array, type&& Entry) {
 }
 
 template <typename type>
+inline bool Array_Empty(array<type>* Array) {
+    return Array->Count == 0 || !Array->Ptr;
+}
+
+template <typename type>
 inline void Array_Push_Range(array<type>* Array, const type* Ptr, uptr Count) {
     if(Array->Count+Count > Array->Capacity) {
         uptr NewCapacity = Max(Array->Capacity*2, Array->Count+Count);
@@ -107,6 +112,68 @@ inline void Array_Push_Range(array<type>* Array, const type* Ptr, uptr Count) {
     }
     Memory_Copy(Array->Ptr+Array->Count, Ptr, Count*sizeof(type));
     Array->Count += Count;
+}
+
+template <typename type>
+inline void Array_Insert_Range(array<type>* Array, uptr InsertIndex, const type* Entries, uptr Count) {
+    if(InsertIndex > Array->Count) {
+        Array_Resize(Array, InsertIndex);
+    } else if(InsertIndex == Count) {
+        Array_Push_Range(Array, Entries, Count);
+        return;
+    } 
+    
+    Assert(InsertIndex <= Array->Count);
+    uptr ArrayToCopy = Array->Count-InsertIndex;
+    Resize(Array, Array->Count+Count);
+
+    type* DstEnd = Array->Ptr+(Array->Count-1);
+    const type* SrcEnd = Array->Ptr+((InsertIndex+ArrayToCopy)-1);
+    for(uptr EntryIndex = 0; EntryIndex < ArrayToCopy; EntryIndex++) {
+        Assert(DstEnd != SrcEnd);
+        *DstEnd-- = *SrcEnd--;
+    }
+
+    SrcEnd = Entries+(Count-1);
+    for(uptr EntryIndex = 0; EntryIndex < Count; EntryIndex++) {
+        *DstEnd-- = *SrcEnd--;
+    }
+
+    Assert(DstEnd == Array->Ptr+InsertIndex);
+}
+
+template <typename type>
+inline void Array_Remove(array<type>* Array, uptr Index) {
+    Assert(Count > 0);
+    uptr IndexPlusOne = Index+1;
+    for(; IndexPlusOne < Array->Count; IndexPlusOne++) {
+        Index = IndexPlusOne-1;
+        Array->Ptr[Index] = Array->Ptr[IndexPlusOne];
+    }
+    Array->Count--;
+}
+
+template <typename type>
+inline void Array_Swap_Remove(array<type>* Array, uptr Index) {
+    Assert(Array->Count > 0 && Index < Array->Count);
+    if(Index != (Array->Count-1)) {
+        //Last the element we want to remove with the last entry
+        Array->Ptr[Index] = Array->Ptr[Array->Count-1];
+    }
+    Array->Count--;
+}
+
+template <typename type>
+inline type& Array_Last(array<type>* Array) {
+    Assert(Array->Count);
+    return Array->Ptr[Array->Count-1];
+}
+
+template <typename type>
+inline type& Array_Pop(array<type>* Array) {
+    type& Result = Array_Last(Array);
+    Array->Count--;
+    return Result;
 }
 
 template <typename type>

@@ -4,10 +4,11 @@
 #include <core/core.h>
 #include <gdi/gdi.h>
 #include <input/input.h>
-#include <glyph_manager/glyph_manager.h>
-#include <uba/uba.h>
+#include <text/text.h>
 #include <packages/packages.h>
 #include <assets/assets.h>
+#include <atlas/atlas.h>
+#include <glyph_cache/glyph_cache.h>
 
 #include "modules.h"
 #include "camera.h"

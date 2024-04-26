@@ -66,7 +66,7 @@ if "%clang%"=="1" set def=             -D
 if "%clang%"=="1" set cpp=             -std=c++20
 if "%clang%"=="1" set c=               -std=c17
 
-set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%shared_path%\uba\sheenbidi\config %inc%%dependencies_path%\SheenBidi\Headers %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
+set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%dependencies_path%\harfbuzz\src %inc%%shared_path%\uba\sheenbidi\config %inc%%dependencies_path%\SheenBidi\Headers %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
 
 if "%debug%"=="1"   set compile=%compile_debug%
 if "%release%"=="1" set compile=%compile_release%
@@ -76,7 +76,7 @@ set compile=%compile% %include_common%
 if not exist %base_path%\bin mkdir %base_path%\bin
 
 set harfbuzz_src=%dependencies_path%\harfbuzz\src
-if not exist %base_path%\bin\harfbuzz.lib (
+if not exist %base_path%\bin\hb.lib (
     mkdir %base_path%\bin\harfbuzz_temp
     pushd %base_path%\bin\harfbuzz_temp
         %compile% %harfbuzz_warnings% %only_compile% %def%HB_CUSTOM_MALLOC %cpp% ^
@@ -146,12 +146,13 @@ if not exist %base_path%\bin\ftsystem.lib (
 
 set gdi_objs=vk_loader.obj gdi.obj
 pushd %base_path%\bin    
-    %compile% %only_compile% %cpp% %shared_path%\glyph_manager\freetype\freetype_manager.cpp %obj%glyph_rasterizer.obj %compile_link% || exit /b 1
+    %compile% %def%TEXT_FREETYPE_FONT_MANAGER %def%TEXT_UBA_SHEENBIDI %def%TEXT_SHAPER_HARFBUZZ %only_compile% %cpp% %shared_path%\text\text.cpp %obj%text.obj %compile_link% || exit /b 1
+    
     %compile% %only_compile% %cpp% %shared_path%\packages\win32\win32_packages.cpp %obj%packages.obj %compile_link% || exit /b 1
     %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link% || exit /b 1
     %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
     %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj || exit /b 1
-    %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj packages.obj glyph_rasterizer.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
+    %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj packages.obj text.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
     %compile% %def%TEST_BUILD %inc%%code_path%\editor %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1
     del /s *.ilk >nul 2>&1
     del /s *.obj >nul 2>&1

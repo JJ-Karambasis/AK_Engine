@@ -44,6 +44,13 @@ struct comparer<vtx_idx_p_uv> {
     }
 };
 
+ui_font Create_UI_Font(editor* Editor, const_buffer FontBuffer) {
+    ui_font Result;
+    Result.Face   = Glyph_Manager_Create_Face(Editor->GlyphManager, FontBuffer);
+    //Result.Shaper = Text_Shaper_Create_Face(Editor->TextShaper, Result.Face);
+    return Result;
+}
+
 internal void Window_Handle_Resize(editor* Editor, window* Window) {
     uvec2 CurrentWindowSize;
     OS_Window_Get_Resolution(Window->WindowID, &CurrentWindowSize.w, &CurrentWindowSize.h);
@@ -452,7 +459,8 @@ void Window_Render(editor* Editor, window* Window) {
         });
 
         ui_box_shader_global ShaderGlobal = {
-            .InvRes = vec2(1.0f/(f32)Window->Size.w, 1.0f/(f32)Window->Size.h)
+            .InvRes    = 1.0f / vec2(Window->Size),
+            .InvTexRes = 1.0f / vec2(Editor->GlyphCache->Atlas.Dim)
         };
 
         u8* ShaderGlobalGPU = GDI_Context_Buffer_Map(Editor->GDIContext, Window->UIGlobalBuffer);
@@ -464,17 +472,17 @@ void Window_Render(editor* Editor, window* Window) {
         //todo: Render common window properties here    
         GDI_Cmd_List_Set_Pipeline(CmdList, Editor->UIBoxPipeline);
         GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_GLOBAL_INDEX, {Window->UIGlobalBindGroup});
-        
+        GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_TEXTURE_INDEX, {Editor->GlyphCache->Atlas.BindGroup});
+
         u8* ShaderDynamicGPU = GDI_Context_Buffer_Map(Editor->GDIContext, Window->UIDynamicBuffer);
 
         uptr Offset = 0;
         {
-            GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_TEXTURE_INDEX, {Editor->DefaultTexture.BindGroup});
             GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {Offset});
             
             ui_box_shader_dynamic Dynamic = {
-                .P1 = vec2(10.0f, 10.0f),
-                .P2 = vec2(50.0f, 50.0f),
+                .DstP0 = vec2(10.0f, 10.0f),
+                .DstP1 = vec2(50.0f, 50.0f),
                 .Color = vec4(1.0f, 0.0f, 0.0f, 1.0f)
             };
             Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
@@ -485,22 +493,24 @@ void Window_Render(editor* Editor, window* Window) {
         }
 
         {
-            font_bitmap Bitmap = Font_Get_Bitmap(Editor->MainFont, 'A', 20);
+            Glyph_Face_Set_Size(Editor->MainFont.Face, 20);
+            const glyph_entry* Glyph = Glyph_Cache_Get(Editor->GlyphCache, Editor->MainFont.Face, 'A');
+            if(Glyph) {
+                GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {Offset});
+                
+                ui_box_shader_dynamic Dynamic = {
+                    .DstP0 = vec2(100.0f, 100.0f),
+                    .DstP1 = vec2(100.0f, 100.0f)+vec2(Glyph->P2-Glyph->P1),
+                    .SrcP0 = vec2(Glyph->P1),
+                    .SrcP1 = vec2(Glyph->P2),
+                    .Color = vec4(1.0f, 1.0f, 1.0f, 1.0f)
+                };
 
-            GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_TEXTURE_INDEX, {Bitmap.Texture.BindGroup});
-            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {Offset});
-            
-            ui_box_shader_dynamic Dynamic = {
-                .P1 = vec2(100.0f, 100.0f),
-                .P2 = vec2(100.0f, 100.0f)+vec2(Bitmap.Texture.Dim),
-                .Color = vec4(1.0f, 1.0f, 1.0f, 1.0f)
-            };
-
-            Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
-            ShaderDynamicGPU += Window->UIDynamicBufferSize;
-            Offset += Window->UIDynamicBufferSize;
-
-            GDI_Cmd_List_Draw_Instance(CmdList, 4, 1, 0, 0);
+                Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
+                ShaderDynamicGPU += Window->UIDynamicBufferSize;
+                Offset += Window->UIDynamicBufferSize;
+                GDI_Cmd_List_Draw_Instance(CmdList, 4, 1, 0, 0);
+            }
         }
 
 
@@ -581,11 +591,17 @@ bool Editor_Main() {
         return false;
     }
 
-    Editor.GlyphManager = Glyph_Manager_Create();
+    Editor.GlyphManager = Glyph_Manager_Create({});
     if(!Editor.GlyphManager) {
         Fatal_Error_Message();
         return false;
     }
+
+    // Editor.TextShaper = Text_Shaper_Create({});
+    // if(!Editor.TextShaper) {
+    //     Fatal_Error_Message();
+    //     return false;
+    // }
 
     if(!OS_Create(Editor.GDIContext)) {
         Fatal_Error_Message();
@@ -644,6 +660,16 @@ bool Editor_Main() {
         }
     });
 
+    Editor.GlyphCache = Glyph_Cache_Create({
+        .Context = Editor.GDIContext,
+        .AtlasBindGroupLayout = Editor.LinearSamplerBindGroupLayout
+    });
+    
+    if(!Editor.GlyphCache) {
+        Fatal_Error_Message();
+        return false;
+    }
+
     domain* ShaderDomain = Packages_Get_Domain(Editor.Packages, String_Lit("shaders"));
 
     {
@@ -693,15 +719,9 @@ bool Editor_Main() {
 
     domain* FontDomain = Packages_Get_Domain(Editor.Packages, String_Lit("fonts"));
     {
-        scratch Scratch = Scratch_Get();
         resource* MainFontResource = Packages_Get_Resource(Editor.Packages, FontDomain, String_Lit("liberation mono"), String_Lit("regular"));
-        const_buffer FontBuffer = Packages_Load_Entire_Resource(Editor.Packages, MainFontResource, &Scratch);
-        Editor.MainFont = Font_Create({
-            .GDIContext = Editor.GDIContext,
-            .BitmapBindGroupLayout = Editor.LinearSamplerBindGroupLayout,
-            .GlyphManager = Editor.GlyphManager,
-            .FontBuffer = FontBuffer
-        });
+        Editor.MainFontBuffer = Packages_Load_Entire_Resource(Editor.Packages, MainFontResource, Editor.Arena);
+        Editor.MainFont = Create_UI_Font(&Editor, Editor.MainFontBuffer);
     }
 
 
@@ -740,12 +760,15 @@ bool Editor_Main() {
         for(window* Window = Editor.FirstWindow; Window; Window = Window->Next) {
             Window_Render(&Editor, Window);
         }
+        
+        Glyph_Cache_Update(Editor.GlyphCache);
 
         while(GDI_Context_Execute(Editor.GDIContext) == GDI_EXECUTE_STATUS_RESIZE) {
             for(window* Window = Editor.FirstWindow; Window; Window = Window->Next) {
                 Window_Handle_Resize(&Editor, Window);
             }
         }
+
     }
 
     AK_Job_System_Delete(Editor.JobSystemHigh);
@@ -807,6 +830,7 @@ int main() {
 #include <core/core.cpp>
 
 #pragma comment(lib, "ftsystem.lib")
+#pragma comment(lib, "hb.lib")
 
 #if defined(OS_WIN32)
 #pragma comment(lib, "user32.lib")

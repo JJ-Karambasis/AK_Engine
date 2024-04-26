@@ -1,6 +1,11 @@
 #ifndef UI_H
 #define UI_H
 
+struct ui_font {
+    glyph_face_id       Face;
+    // text_shaper_face_id Shaper;
+};
+
 struct ui_box {
     //Hash state
     ui_box* HashNext;

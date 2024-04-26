@@ -2,8 +2,20 @@ svec2::svec2(s32 _x, s32 _y) : x(_x), y(_y) { }
 
 uvec2::uvec2(u32 _x, u32 _y) : x(_x), y(_y) { }
 
+uvec2 operator+(uvec2 A, uvec2 B) {
+    return uvec2(A.x+B.x, A.y+B.y);
+}
+
+uvec2 operator-(uvec2 A, uvec2 B) {
+    return uvec2(A.x-B.x, A.y-B.y);
+}
+
 bool operator!=(uvec2 A, uvec2 B) {
     return A.x != B.x || A.y != B.y;
+}
+
+bool operator==(uvec2 A, uvec2 B) {
+    return A.x == B.x && A.y == B.y;
 }
 
 vec2::vec2(f32 _x, f32 _y) : x(_x), y(_y) { }
@@ -16,6 +28,9 @@ vec2 operator+(vec2 A, vec2 B) {
     return vec2(A.x+B.x, A.y+B.y);
 }
 
+vec2 operator/(f32 A, vec2 B) {
+    return vec2(A/B.x, A/B.y);
+}
 
 vec3::vec3(f32 _x, f32 _y, f32 _z) {
     x = _x;
@@ -273,4 +288,41 @@ inline matrix4 operator*(const matrix4_affine& A, const matrix4& B) {
     Result.Data[15] = Vec3_Dot(A.Rows[3], BTransposed.Rows[3].xyz) + BTransposed.Rows[3].w;
 
     return Result;
+}
+
+rect2u::rect2u(uvec2 _Min, uvec2 _Max) { 
+    Min = _Min;
+    Max = _Max;
+}
+
+rect2u Rect2u_Empty() {
+    rect2u Result = Rect2u(uvec2(), uvec2());
+    return Result; 
+}
+
+rect2u Rect2u(uvec2 P1, uvec2 P2) {
+    rect2u Result(P1, P2);
+    return Result;
+}
+
+rect2u Rect2u_From_Dim(uvec2 Dim) {
+    return Rect2u(uvec2(), Dim);
+}
+
+uvec2 Rect2u_Get_Dim(rect2u Rect) {
+    uvec2 Result(
+        Rect.Max.x-Rect.Min.x,
+        Rect.Max.y-Rect.Min.y
+    );
+    return Result;
+}
+
+bool Rect2u_Is_Empty(rect2u Rect) {
+    uvec2 Result = Rect2u_Get_Dim(Rect);
+    return Result.x == 0 || Result.y == 0;
+}
+
+u32 Rect2u_Area(rect2u Rect) {
+    uvec2 Result = Rect2u_Get_Dim(Rect);
+    return Result.w*Result.h;
 }

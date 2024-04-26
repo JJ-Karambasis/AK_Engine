@@ -12,11 +12,14 @@
 
 struct ui_box_shader_global {
     vec2 InvRes;
+    vec2 InvTexRes;
 };
 
 struct ui_box_shader_dynamic {
-    vec2 P1;
-    vec2 P2;
+    vec2 DstP0;
+    vec2 DstP1;
+    vec2 SrcP0;
+    vec2 SrcP1;
     vec4 Color;
 };
 

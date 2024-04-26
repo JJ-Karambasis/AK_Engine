@@ -245,10 +245,8 @@ inline value* Hashmap_Find_Or_Create(hashmap<key, value, hasher, comparer>* Hash
 }
 
 template <typename key, typename value, typename hasher, typename comparer>
-inline void Hashmap_Remove(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key) {
-    u32 Hash = hasher{}.Hash(Key);
+inline void Hashmap_Remove_By_Hash(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key, u32 Hash) {
     u32 Slot = Find_Slot<key, comparer>(Hashmap->Slots, Hashmap->SlotCapacity, Hashmap->Keys, Key, Hash);
-    
     if(Slot == HASHMAP_INVALID) return;
 
     u32 SlotMask = Hashmap->SlotCapacity-1;
@@ -267,6 +265,12 @@ inline void Hashmap_Remove(hashmap<key, value, hasher, comparer>* Hashmap, const
     }
 
     Hashmap->Count--;
+}
+
+template <typename key, typename value, typename hasher, typename comparer>
+inline void Hashmap_Remove(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key) {
+    u32 Hash = hasher{}.Hash(Key);
+    Hashmap_Remove_By_Hash(Hashmap, Key, Hash);
 }
 
 template <typename key, typename value, typename hasher, typename comparer>

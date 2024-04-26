@@ -22,7 +22,10 @@ union uvec2 {
     uvec2(u32 x, u32 y);
 };
 
-bool operator!=(uvec2 A, uvec2 B);
+uvec2 operator+(uvec2 A, uvec2 B);
+uvec2 operator-(uvec2 A, uvec2 B);
+bool  operator!=(uvec2 A, uvec2 B);
+bool  operator==(uvec2 A, uvec2 B);
 
 union vec2 {
     f32 Data[2] = {};
@@ -40,6 +43,7 @@ union vec2 {
 };
 
 vec2 operator+(vec2 A, vec2 B);
+vec2 operator/(f32 A, vec2 B);
 
 union vec3 {
     f32 Data[3] = {};
@@ -178,5 +182,20 @@ void Matrix4_Zero(matrix4* M);
 void Matrix4_Transpose(matrix4* Result, const matrix4& M);
 void Matrix4_Perspective(matrix4* M, f32 AspectRatio, f32 FieldOfView, f32 NearPlane, f32 FarPlane);
 matrix4 operator*(const matrix4_affine& A, const matrix4& B);
+
+struct rect2u {
+    uvec2 Min = uvec2();
+    uvec2 Max = uvec2();
+
+    rect2u() = default;
+    rect2u(uvec2 Min, uvec2 Max);
+};
+
+rect2u Rect2u_Empty();
+rect2u Rect2u(uvec2 Min, uvec2 Max);
+rect2u Rect2u_From_Dim(uvec2 Dim);
+uvec2  Rect2u_Get_Dim(rect2u Rect);
+bool   Rect2u_Is_Empty(rect2u Rect);
+u32    Rect2u_Area(rect2u Rect);
 
 #endif

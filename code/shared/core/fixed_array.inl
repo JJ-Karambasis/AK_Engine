@@ -46,3 +46,8 @@ template <typename type>
 inline fixed_array<type>::fixed_array(allocator* Allocator, const array<type>& Array) {
     Array_Init(this, Allocator, Array);
 }
+
+template <typename type>
+inline fixed_array<type>::fixed_array(allocator* Allocator, span<type> Span) {
+    Array_Init(this, Allocator, Span);
+}

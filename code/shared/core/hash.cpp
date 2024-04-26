@@ -58,3 +58,15 @@ u32 Hash_CRC(const void* Data, uptr Size, u32 Seed) {
         Crc = (Crc >> 8) ^ Crc32_lut[(Crc & 0xFF) ^ *Data8++];
     return ~Crc;
 }
+
+#ifdef OS_WIN32
+#include <wincrypt.h>
+void Hash_Random(void* Data, uptr Size) {
+    HCRYPTPROV Provider = NULL;
+    CryptAcquireContextW(&Provider, 0, 0, PROV_DSS, CRYPT_VERIFYCONTEXT);
+    CryptGenRandom(Provider, Safe_U32(Size), (BYTE*)Data);
+    CryptReleaseContext(Provider, 0);
+}
+#else
+#error Not Implemented
+#endif

@@ -13,7 +13,13 @@ struct fixed_array {
     fixed_array(type* Ptr, uptr Count);
     fixed_array(allocator* Allocator, uptr Count);
     fixed_array(allocator* Allocator, const array<type>& Array);
+    fixed_array(allocator* Allocator, span<type> Span);
     inline type& operator[](uptr Index) {
+        Assert(Index < Count);
+        return Ptr[Index];
+    }
+
+    inline const type& operator[](uptr Index) const {
         Assert(Index < Count);
         return Ptr[Index];
     }

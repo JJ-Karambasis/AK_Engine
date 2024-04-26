@@ -69,6 +69,8 @@ struct editor {
     gdi_context*                      GDIContext;
     packages*                         Packages;
     glyph_manager*                    GlyphManager;
+    // text_shaper*                      TextShaper;
+    glyph_cache*                      GlyphCache;
     gdi_handle<gdi_render_pass>       UIRenderPass;    
     gdi_handle<gdi_pipeline>          UIBoxPipeline;
     gdi_handle<gdi_bind_group_layout> GlobalBindGroupLayout;
@@ -76,7 +78,8 @@ struct editor {
     gdi_handle<gdi_bind_group_layout> LinearSamplerBindGroupLayout;
     editor_input_manager              InputManager;
     gpu_texture                       DefaultTexture;
-    font*                             MainFont;
+    const_buffer                      MainFontBuffer;
+    ui_font                           MainFont;
     
     window* FirstWindow;
     window* LastWindow;

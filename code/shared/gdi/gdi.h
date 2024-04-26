@@ -261,6 +261,14 @@ struct gdi_texture_create_info {
     const_buffer            InitialData;
 };
 
+struct gdi_texture_upload {
+    const_buffer Texels;
+    u32          XOffset;
+    u32          YOffset;
+    u32          Width;
+    u32          Height;          
+};
+
 enum {
     GDI_BUFFER_USAGE_FLAG_NONE,
     GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT       = (1 << 0),
@@ -394,6 +402,7 @@ gdi_handle<gdi_texture_view> GDI_Context_Create_Texture_View(gdi_context* Contex
 void                         GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle);
 gdi_handle<gdi_texture>      GDI_Context_Create_Texture(gdi_context* Context, const gdi_texture_create_info& CreateInfo);
 void                         GDI_Context_Delete_Texture(gdi_context* Context, gdi_handle<gdi_texture> Handle);
+void                         GDI_Context_Upload_Texture(gdi_context* Context, gdi_handle<gdi_texture> Handle, span<gdi_texture_upload> Uploads);
 
 gdi_handle<gdi_buffer>            GDI_Context_Create_Buffer(gdi_context* Context, const gdi_buffer_create_info& CreateInfo);
 u8*                               GDI_Context_Buffer_Map(gdi_context* Context, gdi_handle<gdi_buffer> Handle);

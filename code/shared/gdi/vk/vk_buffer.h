@@ -7,6 +7,13 @@ struct vk_upload {
     VkDeviceSize Size;
 };
 
+struct vk_region {
+    u32 XOffset;
+    u32 YOffset;
+    u32 Width;
+    u32 Height;
+};
+
 struct vk_buffer {
     VkBuffer               Buffer;
     vk_allocation          Allocation;

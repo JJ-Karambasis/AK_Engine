@@ -19,4 +19,5 @@ int main(int ArgCount, char* Args[]) {
     return Result;
 }
 
+#include "shared/shared_tests.cpp"
 #include <core/core.cpp>

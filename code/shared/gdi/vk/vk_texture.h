@@ -7,7 +7,8 @@ struct vk_texture {
     u32           Width;
     u32           Height;
     gdi_format    Format;
-    bool          IsSwapchain;
+    b16           JustAllocated;
+    b16           IsSwapchain;
 };
 
 struct vk_texture_view {

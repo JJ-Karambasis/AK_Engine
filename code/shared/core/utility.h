@@ -35,6 +35,7 @@ f32 Exp(f32 Value);
 bool Is_Nan(f32 Value);
 bool Is_Finite(f32 Value);
 s32 Random_Between(s32 Min, s32 Max);
+u32 Align_U32(u32 Alignment, u32 Value);
 
 struct scoped_mutex {
     ak_mutex* Mutex;

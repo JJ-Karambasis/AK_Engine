@@ -11,18 +11,22 @@
 #include <freetype/ftadvanc.h>
 
 #include <core/core.h>
-#include <glyph_manager/glyph_manager.h>
+#include <text/text.h>
 
 struct glyph_manager {
-    arena*          Arena;
-    heap*           Heap;
-    lock_allocator* AsyncAllocator;
-    FT_Library      Library;
+    arena*              Arena;
+    heap*               Heap;
+    lock_allocator*     AsyncAllocator;
+    FT_Library          Library;
+    ak_async_slot_map64 FaceSlots;
+    glyph_face*         Faces;
 };
 
 struct glyph_face {
     glyph_manager* Manager;
     FT_Face        Face;
+    const_buffer   FontBuffer;
+    u32            Size;
 };
 
 #endif
