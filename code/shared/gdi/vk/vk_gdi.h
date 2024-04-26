@@ -74,13 +74,6 @@ struct vk_copy_upload_to_buffer {
     VkDeviceSize            Offset;
 };
 
-struct vk_copy_upload_to_texture {
-    vk_upload                Upload;
-    async_handle<vk_texture> Texture;
-    u32                      Width;
-    u32                      Height;
-};
-
 struct vk_copy_uploads_to_texture {
     vk_upload                Upload;
     fixed_array<uptr>        Offsets;
@@ -93,7 +86,6 @@ struct vk_copy_context {
     u32                               CurrentListIndex;
     arena*                            Arenas[2];
     array<vk_copy_upload_to_buffer>   CopyUploadToBufferList[2];
-    array<vk_copy_upload_to_texture>  CopyUploadToTextureList[2];
     array<vk_copy_uploads_to_texture> CopyUploadsToTextureList[2];
 };
 

@@ -604,7 +604,6 @@ internal vk_thread_context* VK_Get_Thread_Context(gdi_context* Context) {
         for(u32 i = 0; i < 2; i++) {
             CopyContext->Arenas[i] = Arena_Create(Context->GDI->MainAllocator);
             Array_Init(&CopyContext->CopyUploadToBufferList[i], Context->GDI->MainAllocator);
-            Array_Init(&CopyContext->CopyUploadToTextureList[i], Context->GDI->MainAllocator);
             Array_Init(&CopyContext->CopyUploadsToTextureList[i], Context->GDI->MainAllocator);
         }
 
@@ -633,13 +632,6 @@ internal void VK_Copy_Context_Add_Upload_To_Buffer_Copy(vk_copy_context* CopyCon
     AK_RW_Unlock_Reader(&CopyContext->RWLock);
 }
 
-internal void VK_Copy_Context_Add_Upload_To_Texture_Copy(vk_copy_context* CopyContext, const vk_copy_upload_to_texture& CopyUploadToTexture) {
-    AK_RW_Lock_Reader(&CopyContext->RWLock);
-    u32 ListIndex = CopyContext->CurrentListIndex;
-    Array_Push(&CopyContext->CopyUploadToTextureList[ListIndex], CopyUploadToTexture);
-    AK_RW_Unlock_Reader(&CopyContext->RWLock);
-}
-
 internal void VK_Copy_Context_Add_Uploads_To_Texture_Copy(vk_copy_context* CopyContext, async_handle<vk_texture> Texture, vk_upload Upload, span<uptr> Offsets, span<vk_region> Regions) {
     AK_RW_Lock_Reader(&CopyContext->RWLock);
     u32 ListIndex = CopyContext->CurrentListIndex;
@@ -650,6 +642,10 @@ internal void VK_Copy_Context_Add_Uploads_To_Texture_Copy(vk_copy_context* CopyC
         .Texture = Texture
     });
     AK_RW_Unlock_Reader(&CopyContext->RWLock);
+}
+
+internal void VK_Copy_Context_Add_Upload_To_Texture_Copy(vk_copy_context* CopyContext, async_handle<vk_texture> Texture, vk_upload Upload, vk_region Region) {
+    VK_Copy_Context_Add_Uploads_To_Texture_Copy(CopyContext, Texture, Upload, {0}, {Region});
 }
 
 internal vk_delete_context* VK_Get_Delete_Context(gdi_context* Context) {
@@ -1557,7 +1553,7 @@ void GDI_Context_Delete(gdi_context* Context) {
             vk_copy_context* CopyContext = &ThreadContext->CopyContext;
             for(uptr i = 0; i < 2; i++) {
                 Array_Free(&CopyContext->CopyUploadToBufferList[i]);
-                Array_Free(&CopyContext->CopyUploadToTextureList[i]);
+                Array_Free(&CopyContext->CopyUploadsToTextureList[i]);
                 Arena_Delete(CopyContext->Arenas[i]);
             }
 
@@ -2006,9 +2002,7 @@ gdi_handle<gdi_texture> GDI_Context_Create_Texture(gdi_context* Context, const g
         u8* Ptr = VK_Upload_Buffer_Push(UploadBuffer, CreateInfo.InitialData.Size, &Upload);
         Memory_Copy(Ptr, CreateInfo.InitialData.Ptr, CreateInfo.InitialData.Size);
 
-        VK_Copy_Context_Add_Upload_To_Texture_Copy(&ThreadContext->CopyContext, {
-            .Upload = Upload,
-            .Texture = TextureHandle,
+        VK_Copy_Context_Add_Upload_To_Texture_Copy(&ThreadContext->CopyContext, TextureHandle, Upload, {
             .Width = CreateInfo.Width,
             .Height = CreateInfo.Height
         });
@@ -2352,18 +2346,6 @@ gdi_execute_status GDI_Context_Execute(gdi_context* Context) {
         uptr InitialImageCount = 0;
         uptr UpdateImageCount = 0;
         bool* TexturesInUse = Scratch_Push_Array(&Scratch, Async_Pool_Capacity(&ResourceContext->Textures), bool);
-        for(const vk_copy_upload_to_texture& CopyUploadToTexture : CopyContext->CopyUploadToTextureList[CopyIndex]) {
-            u32 Index           = CopyUploadToTexture.Texture.Index();
-            vk_texture* Texture = ResourceContext->Textures.Ptr + Index;
-            if(!TexturesInUse[Index]) {
-                if(Texture->JustAllocated) InitialImageCount++;
-                else UpdateImageCount++;
-
-                TexturesInUse[Index] = true;
-                MaxImageCount++;
-            }
-        }
-
         for(const vk_copy_uploads_to_texture& CopyUploadsToTexture : CopyContext->CopyUploadsToTextureList[CopyIndex]) {
             u32 Index           = CopyUploadsToTexture.Texture.Index();
             vk_texture* Texture = ResourceContext->Textures.Ptr + Index;
@@ -2418,20 +2400,6 @@ gdi_execute_status GDI_Context_Execute(gdi_context* Context) {
                                 VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, Safe_U32(UpdateMemoryBarriers.Count), UpdateMemoryBarriers.Ptr);
         }
 
-        for(const vk_copy_upload_to_texture& CopyUploadToTexture : CopyContext->CopyUploadToTextureList[CopyIndex]) {
-            vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, CopyUploadToTexture.Texture);
-            if(Texture) {
-                VkBufferImageCopy Region = {
-                    .bufferOffset = CopyUploadToTexture.Upload.Offset,
-                    .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                    .imageExtent = {CopyUploadToTexture.Width, CopyUploadToTexture.Height, 1}
-                };
-                vkCmdCopyBufferToImage(FrameContext->CopyCmdBuffer, CopyUploadToTexture.Upload.Buffer, Texture->Image, 
-                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &Region);
-                VK_Texture_Record_Frame(Context, CopyUploadToTexture.Texture);
-            }
-        }
-
         for(const vk_copy_uploads_to_texture& CopyUploadsToTexture : CopyContext->CopyUploadsToTextureList[CopyIndex]) {
             vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, CopyUploadsToTexture.Texture);
             if(Texture) {
@@ -2471,7 +2439,6 @@ gdi_execute_status GDI_Context_Execute(gdi_context* Context) {
                              VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, Safe_U32(ImageMemoryBarriers.Count), ImageMemoryBarriers.Ptr);
 
 
-        Array_Clear(&CopyContext->CopyUploadToTextureList[CopyIndex]);
         Array_Clear(&CopyContext->CopyUploadsToTextureList[CopyIndex]);
         ThreadContext = ThreadContext->Next;
     }
