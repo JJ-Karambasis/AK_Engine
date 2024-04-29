@@ -21,6 +21,9 @@
 #define TEXTURE(value) TEXTURE_(value)
 #define SAMPLER_(value) s ## value
 #define SAMPLER(value) SAMPLER_(value)
+#define SEMANTIC(name) : name
+#else
+#define SEMANTIC(name)
 #endif
 
 #endif

@@ -88,9 +88,7 @@ internal VkSurfaceKHR VK_Create_Temp_Surface(gdi* GDI) {
 }
 
 internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain, const gdi_swapchain_create_info& CreateInfo) {
-    if(!Swapchain->Swapchain) {
-        Zero_Struct(Swapchain);
-
+    if(!Swapchain->Handle) {
         Swapchain->Surface = VK_Create_Surface(Context->GDI, &CreateInfo.WindowData);
         if(!Swapchain->Surface) {
             //todo: Diagnostic
@@ -138,7 +136,7 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
         .compositeAlpha = CompositeAlphaFlags,
         .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-        .oldSwapchain = Swapchain->Swapchain
+        .oldSwapchain = Swapchain->Handle
     };
 
     VkSwapchainKHR SwapchainHandle;
@@ -149,33 +147,35 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
 
     Swapchain->Width = SurfaceCaps.currentExtent.width;
     Swapchain->Height = SurfaceCaps.currentExtent.height;
-    Swapchain->Swapchain = SwapchainHandle;
+    Swapchain->Handle = SwapchainHandle;
 
     return true;
 }
 
 internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* Swapchain) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    
     u32 ImageCount;
-    vkGetSwapchainImagesKHR(Context->Device, Swapchain->Swapchain, &ImageCount, VK_NULL_HANDLE);
+    vkGetSwapchainImagesKHR(Context->Device, Swapchain->Handle, &ImageCount, VK_NULL_HANDLE);
 
     Assert(ImageCount >= 2);
     
     scratch Scratch = Scratch_Get();
     VkImage* Images = Scratch_Push_Array(&Scratch, ImageCount, VkImage);
-    vkGetSwapchainImagesKHR(Context->Device, Swapchain->Swapchain, &ImageCount, Images);
+    vkGetSwapchainImagesKHR(Context->Device, Swapchain->Handle, &ImageCount, Images);
 
     Swapchain->Textures = array<gdi_handle<gdi_texture>>(Context->GDI->MainAllocator, ImageCount);
     Array_Resize(&Swapchain->Textures, ImageCount);
 
     for(u32 i = 0; i < ImageCount; i++) {
-        async_handle<vk_texture> TextureHandle = VK_Context_Allocate_Texture(Context);
+        vk_handle<vk_texture> TextureHandle = VK_Resource_Alloc(ResourceContext->Textures);
         if(TextureHandle.Is_Null()) {
             //todo: Diagnostic 
             return false;
         }
 
-        vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, TextureHandle);
-        Texture->Image  = Images[i];
+        vk_texture* Texture = VK_Resource_Get(ResourceContext->Textures, TextureHandle);
+        Texture->Handle = Images[i];
         Texture->Width  = Swapchain->Width;
         Texture->Height = Swapchain->Height;
         Texture->Format = Swapchain->Format;
@@ -189,9 +189,9 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
 }
 
 internal void VK_Delete_Swapchain(gdi_context* Context, vk_swapchain* Swapchain) {
-    if(Swapchain->Swapchain) {
-        vkDestroySwapchainKHR(Context->Device, Swapchain->Swapchain, Context->VKAllocator);
-        Swapchain->Swapchain = VK_NULL_HANDLE;
+    if(Swapchain->Handle) {
+        vkDestroySwapchainKHR(Context->Device, Swapchain->Handle, Context->VKAllocator);
+        Swapchain->Handle = VK_NULL_HANDLE;
     }
 
     if(Swapchain->Surface) {
@@ -201,9 +201,10 @@ internal void VK_Delete_Swapchain(gdi_context* Context, vk_swapchain* Swapchain)
 }
 
 internal void VK_Delete_Swapchain_Textures(gdi_context* Context, vk_swapchain* Swapchain) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
     for(gdi_handle<gdi_texture>& Handle : Swapchain->Textures) {
-        async_handle<vk_texture> TextureHandle(Handle.ID);
-        VK_Context_Free_Texture(Context, TextureHandle);
+        vk_handle<vk_texture> TextureHandle(Handle.ID);
+        VK_Resource_Free(ResourceContext->Textures, TextureHandle);
         Handle = {};
     }
     Array_Free(&Swapchain->Textures);
@@ -212,8 +213,4 @@ internal void VK_Delete_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
 internal void VK_Delete_Swapchain_Full(gdi_context* Context, vk_swapchain* Swapchain) {
     VK_Delete_Swapchain_Textures(Context, Swapchain);
     VK_Delete_Swapchain(Context, Swapchain);
-}
-
-internal void VK_Swapchain_Record_Frame(gdi_context* Context, async_handle<vk_swapchain> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.SwapchainsInUse[Handle.Index()], true);
 }

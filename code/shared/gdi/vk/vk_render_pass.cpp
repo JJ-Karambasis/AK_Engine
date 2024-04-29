@@ -55,7 +55,7 @@ bool VK_Create_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass, con
         .pSubpasses = &Subpass
     };
 
-    if(vkCreateRenderPass(Context->Device, &RenderPassCreateInfo, Context->VKAllocator, &RenderPass->RenderPass) != VK_SUCCESS) {
+    if(vkCreateRenderPass(Context->Device, &RenderPassCreateInfo, Context->VKAllocator, &RenderPass->Handle) != VK_SUCCESS) {
         //todo: Diagnostic 
         return false;
     }
@@ -64,17 +64,15 @@ bool VK_Create_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass, con
 }
 
 void VK_Delete_Render_Pass(gdi_context* Context, vk_render_pass* RenderPass) {
-    if(RenderPass->RenderPass) {
-        vkDestroyRenderPass(Context->Device, RenderPass->RenderPass, Context->VKAllocator);
-        RenderPass->RenderPass = VK_NULL_HANDLE;
+    if(RenderPass->Handle) {
+        vkDestroyRenderPass(Context->Device, RenderPass->Handle, Context->VKAllocator);
+        RenderPass->Handle = VK_NULL_HANDLE;
     }
 }
 
-internal void VK_Render_Pass_Record_Frame(gdi_context* Context, async_handle<vk_render_pass> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.RenderPassesInUse[Handle.Index()], true);
-}
-
 bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, const gdi_framebuffer_create_info& CreateInfo) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    
     scratch Scratch = Scratch_Get();
     array<VkImageView> Attachments(&Scratch, CreateInfo.Attachments.Count);
 
@@ -83,17 +81,14 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
 
     //Make sure all attachments are loaded already
     for(uptr i = 0; i < CreateInfo.Attachments.Count; i++) {
-        gdi_handle<gdi_texture_view> Handle = CreateInfo.Attachments[i];
-        async_handle<vk_texture_view> TextureViewHandle(Handle.ID);
-
-        vk_texture_view* TextureView = Async_Pool_Get(&Context->ResourceContext.TextureViews, TextureViewHandle);
+        vk_handle<vk_texture_view> TextureViewHandle(CreateInfo.Attachments[i].ID);
+        vk_texture_view* TextureView = VK_Resource_Get(ResourceContext->TextureViews, TextureViewHandle);
         if(!TextureView) {
             //todo: diagnostic 
             return false;
         }
 
-        async_handle<vk_texture> TextureHandle(TextureView->TextureHandle.ID);
-        vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, TextureHandle);
+        vk_texture* Texture = TextureView->References[0].Get_Texture();
         if(!Texture) {
             //todo: diagnostic 
             return false;
@@ -117,12 +112,13 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
             }
         }
 
-        Array_Push(&Attachments, TextureView->ImageView);
+        Array_Push(&Attachments, TextureView->Handle);
+        Framebuffer->Add_Reference(Context, TextureView, VK_RESOURCE_TYPE_TEXTURE_VIEW);
     }
 
 
-    async_handle<vk_render_pass> RenderPassHandle(CreateInfo.RenderPass.ID);
-    vk_render_pass* RenderPass = Async_Pool_Get(&Context->ResourceContext.RenderPasses, RenderPassHandle);
+    vk_handle<vk_render_pass> RenderPassHandle(CreateInfo.RenderPass.ID);
+    vk_render_pass* RenderPass = VK_Resource_Get(ResourceContext->RenderPasses, RenderPassHandle);
     if(!RenderPass) {
         //todo: diagnostic
         return false;
@@ -130,7 +126,7 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
     
     VkFramebufferCreateInfo FramebufferCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = RenderPass->RenderPass,
+        .renderPass = RenderPass->Handle,
         .attachmentCount = Safe_U32(Attachments.Count),
         .pAttachments = Attachments.Ptr,
         .width = Width,
@@ -138,7 +134,7 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
         .layers = 1
     };
 
-    if(vkCreateFramebuffer(Context->Device, &FramebufferCreateInfo, Context->VKAllocator, &Framebuffer->Framebuffer) != VK_SUCCESS) {
+    if(vkCreateFramebuffer(Context->Device, &FramebufferCreateInfo, Context->VKAllocator, &Framebuffer->Handle) != VK_SUCCESS) {
         //todo: diagnostic
         return false;
     }
@@ -146,22 +142,12 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
     Framebuffer->Width  = Width;
     Framebuffer->Height = Height;
 
-    Array_Init(&Framebuffer->Attachments, Context->GDI->MainAllocator, CreateInfo.Attachments.Count);
-    for(uptr i = 0; i < CreateInfo.Attachments.Count; i++) {
-        Framebuffer->Attachments[i] = async_handle<vk_texture_view>(CreateInfo.Attachments[i].ID);
-    }
-
     return true;
 }
 
 void VK_Delete_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer) {
-    Array_Free(&Framebuffer->Attachments, Context->GDI->MainAllocator);
-    if(Framebuffer->Framebuffer) {
-        vkDestroyFramebuffer(Context->Device, Framebuffer->Framebuffer, Context->VKAllocator);
-        Framebuffer->Framebuffer = VK_NULL_HANDLE;
+    if(Framebuffer->Handle) {
+        vkDestroyFramebuffer(Context->Device, Framebuffer->Handle, Context->VKAllocator);
+        Framebuffer->Handle = VK_NULL_HANDLE;
     }
-} 
-
-internal void VK_Framebuffer_Record_Frame(gdi_context* Context, async_handle<vk_framebuffer> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.FramebuffersInUse[Handle.Index()], true);
 }

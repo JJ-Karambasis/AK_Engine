@@ -19,6 +19,7 @@ enum gdi_format {
     GDI_FORMAT_R32_FLOAT,
     GDI_FORMAT_R32G32_FLOAT,
     GDI_FORMAT_R32G32B32_FLOAT,
+    GDI_FORMAT_R32G32B32A32_FLOAT,
     GDI_FORMAT_D16_UNORM,
     GDI_FORMAT_COUNT
 };
@@ -33,6 +34,10 @@ struct gdi_handle {
     gdi_handle() = default;
     inline gdi_handle(u64 _ID) : ID(_ID) { }
     inline bool Is_Null() { return ID == 0; }
+
+    inline bool operator!=(gdi_handle<type> Other) const {
+        return ID != Other.ID;
+    }
 };
 
 struct gdi_pipeline;
@@ -62,8 +67,15 @@ struct gdi_vtx_attribute {
     gdi_format Format;
 };
 
+enum gdi_vtx_input_rate {
+    GDI_VTX_INPUT_RATE_VTX,
+    GDI_VTX_INPUT_RATE_INSTANCE,
+    GDI_VTX_INPUT_RATE_COUNT
+};
+
 struct gdi_vtx_buffer_binding {
     uptr                    ByteStride;
+    gdi_vtx_input_rate      InputRate = GDI_VTX_INPUT_RATE_VTX;
     span<gdi_vtx_attribute> Attributes;
 };
 
@@ -170,10 +182,16 @@ struct gdi_bind_group_texture {
     gdi_handle<gdi_texture_view> TextureView;
 };
 
+struct gdi_bind_group_copy {
+    gdi_handle<gdi_bind_group> SrcBindGroup;
+    u32                        SrcBindIndex;
+};
+
 struct gdi_bind_group_binding {
     gdi_bind_group_type    Type;
     gdi_bind_group_buffer  BufferBinding;
     gdi_bind_group_texture TextureBinding;
+    gdi_bind_group_copy    CopyBinding;
 };
 
 struct gdi_bind_group_write_info {
@@ -387,7 +405,6 @@ void                              GDI_Context_Delete_Pipeline(gdi_context* Conte
 
 gdi_handle<gdi_bind_group>        GDI_Context_Create_Bind_Group(gdi_context* Context, const gdi_bind_group_create_info& CreateInfo);
 void                              GDI_Context_Delete_Bind_Group(gdi_context* Context, gdi_handle<gdi_bind_group> BindGroup);
-bool                              GDI_Context_Write_Bind_Group(gdi_context* Context, gdi_handle<gdi_bind_group> BindGroup, const gdi_bind_group_write_info& WriteInfo);
 gdi_handle<gdi_bind_group_layout> GDI_Context_Create_Bind_Group_Layout(gdi_context* Context, const gdi_bind_group_layout_create_info& CreateInfo);
 void                              GDI_Context_Delete_Bind_Group_Layout(gdi_context* Context, gdi_handle<gdi_bind_group_layout> Handle);
 
@@ -407,6 +424,7 @@ void                         GDI_Context_Upload_Texture(gdi_context* Context, gd
 gdi_handle<gdi_buffer>            GDI_Context_Create_Buffer(gdi_context* Context, const gdi_buffer_create_info& CreateInfo);
 u8*                               GDI_Context_Buffer_Map(gdi_context* Context, gdi_handle<gdi_buffer> Handle);
 void                              GDI_Context_Buffer_Unmap(gdi_context* Context, gdi_handle<gdi_buffer> Handle);
+void                              GDI_Context_Buffer_Write(gdi_context* Context, gdi_handle<gdi_buffer> Handle, const_buffer Data);
 void                              GDI_Context_Delete_Buffer(gdi_context* Context, gdi_handle<gdi_buffer> Buffer);
 
 gdi_handle<gdi_swapchain>         GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo);

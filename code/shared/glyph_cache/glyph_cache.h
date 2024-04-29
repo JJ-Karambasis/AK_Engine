@@ -40,6 +40,7 @@ struct glyph_cache_update_entry {
 struct glyph_cache {
     arena*                                       Arena;
     gdi_context*                                 Context;
+    gdi_handle<gdi_bind_group_layout>            AtlasLayout;
     gpu_texture                                  Atlas;
     atlas_allocator*                             AtlasAllocator;
     ak_async_slot_map64                          CreateEntrySlots;
@@ -58,7 +59,6 @@ struct glyph_cache {
 struct glyph_cache_create_info {
     gdi_context*                      Context;
     allocator*                        Allocator             = Core_Get_Base_Allocator();
-    gdi_handle<gdi_bind_group_layout> AtlasBindGroupLayout;
     uvec2                             AtlasDim              = uvec2(1024, 1024);
     u32                               MaxUpdateEntryCount   = 1024;
     u32                               MaxCreateEntryCount   = 1024;

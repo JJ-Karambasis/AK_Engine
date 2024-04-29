@@ -20,11 +20,18 @@ glyph_cache* Glyph_Cache_Create(const glyph_cache_create_info& CreateInfo) {
     glyph_cache* Result = Arena_Push_Struct(Arena, glyph_cache);
     Result->Arena       = Arena;
     Result->Context     = CreateInfo.Context;
+    Result->AtlasLayout = GDI_Context_Create_Bind_Group_Layout(Result->Context, {
+        .Bindings = { { 
+                .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE
+            }
+        }
+    });
+
     Result->Atlas       = GPU_Texture_Create(Result->Context, {
         .IsSRGB          = true,
         .Format          = GDI_FORMAT_R8G8B8A8_UNORM,
         .Dim             = CreateInfo.AtlasDim,
-        .BindGroupLayout = CreateInfo.AtlasBindGroupLayout
+        .BindGroupLayout = Result->AtlasLayout
     });
 
     Result->AtlasAllocator = Atlas_Allocator_Create({

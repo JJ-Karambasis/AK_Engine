@@ -1,11 +1,11 @@
 #ifndef VK_SWAPCHAIN_H
 #define VK_SWAPCHAIN_H
 
-struct vk_swapchain {
+struct vk_swapchain : vk_resource_base {
     gdi_format                     Format;
     gdi_texture_usage_flags        UsageFlags;
     VkSurfaceKHR                   Surface;
-    VkSwapchainKHR                 Swapchain;
+    VkSwapchainKHR                 Handle;
     array<gdi_handle<gdi_texture>> Textures;
     u32                            Width;
     u32                            Height;

@@ -18,6 +18,17 @@ struct glyph_face_id {
     struct glyph_face* Face;
 };
 
+struct glyph_face_metrics {
+    s32 Ascender;
+    s32 Descender;
+    s32 LineGap;
+};
+
+struct glyph_metrics {
+    svec2 HoriBearing;
+    svec2 VertBearing;
+};
+
 struct glyph_manager_create_info {
     u32 MaxFaceCount = 128;
 };

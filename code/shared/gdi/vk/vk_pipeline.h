@@ -1,10 +1,10 @@
 #ifndef VK_PIPELINE_H
 #define VK_PIPELINE_H
 
-struct vk_pipeline {
+struct vk_pipeline : vk_resource_base {
     VkPipelineBindPoint BindPoint;
     VkPipelineLayout    Layout;
-    VkPipeline          Pipeline;
+    VkPipeline          Handle;
 };
 
 internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, const gdi_graphics_pipeline_create_info& CreateInfo);

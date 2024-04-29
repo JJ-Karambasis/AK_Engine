@@ -14,8 +14,8 @@ struct vk_region {
     u32 Height;
 };
 
-struct vk_buffer {
-    VkBuffer               Buffer;
+struct vk_buffer : vk_resource_base {
+    VkBuffer               Handle;
     vk_allocation          Allocation;
     gdi_buffer_usage_flags UsageFlags;
     VkDeviceSize           Size;
@@ -25,6 +25,5 @@ struct vk_buffer {
 
 internal bool VK_Create_Buffer(gdi_context* Context, vk_buffer* Buffer, const gdi_buffer_create_info& CreateInfo);
 internal void VK_Delete_Buffer(gdi_context* Context, vk_buffer* Buffer);
-internal void VK_Buffer_Record_Frame(gdi_context* Context, async_handle<vk_buffer> Handle);
 
 #endif

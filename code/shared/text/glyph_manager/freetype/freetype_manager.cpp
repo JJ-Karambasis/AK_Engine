@@ -54,6 +54,11 @@ glyph_manager* Glyph_Manager_Create(const glyph_manager_create_info& CreateInfo)
     return Manager;
 }
 
+static glyph_face* Glyph_Face_Get(glyph_face_id FaceID) {
+    if(!FaceID.Generation || !FaceID.Face) return nullptr;
+    return AK_Async_Slot_Map64_Is_Allocated(&FaceID.Face->Manager->FaceSlots, (ak_slot64)FaceID.Generation) ? FaceID.Face : nullptr;
+}
+
 glyph_face_id Glyph_Manager_Create_Face(glyph_manager* Manager, const_buffer Buffer) {
     FT_Face Face;
 
@@ -75,32 +80,28 @@ glyph_face_id Glyph_Manager_Create_Face(glyph_manager* Manager, const_buffer Buf
 }
 
 const_buffer Glyph_Face_Get_Font_Buffer(glyph_face_id FaceID) {
-    if(AK_Async_Slot_Map64_Is_Allocated(&FaceID.Face->Manager->FaceSlots, (ak_slot64)FaceID.Generation)) {
-        return FaceID.Face->FontBuffer;
-    }
-    return {};
+    glyph_face* Face = Glyph_Face_Get(FaceID);
+    if(!Face) return {};
+    return Face->FontBuffer;
 }
 
 u32 Glyph_Face_Get_Size(glyph_face_id FaceID) {
-    if(AK_Async_Slot_Map64_Is_Allocated(&FaceID.Face->Manager->FaceSlots, (ak_slot64)FaceID.Generation)) {
-        return FaceID.Face->Size;
-    }
-    return 0;
+    glyph_face* Face = Glyph_Face_Get(FaceID);
+    if(!Face) return 0;
+    return Face->Size;
 }
 
 void Glyph_Face_Set_Size(glyph_face_id FaceID, u32 PixelSize) {
-    if(AK_Async_Slot_Map64_Is_Allocated(&FaceID.Face->Manager->FaceSlots, (ak_slot64)FaceID.Generation)) {
-        FT_Set_Pixel_Sizes(FaceID.Face->Face, PixelSize, PixelSize);
-        FaceID.Face->Size = PixelSize;
-    }
+    glyph_face* Face = Glyph_Face_Get(FaceID);
+    if(!Face) return;
+
+    FT_Set_Pixel_Sizes(Face->Face, PixelSize, PixelSize);
+    Face->Size = PixelSize;
 }
 
 glyph_bitmap Glyph_Face_Create_Bitmap(glyph_face_id FaceID, allocator* Allocator, u32 Codepoint) {
-    if(!AK_Async_Slot_Map64_Is_Allocated(&FaceID.Face->Manager->FaceSlots, (ak_slot64)FaceID.Generation)) {
-        return {};
-    }
-
-    glyph_face* Face = FaceID.Face;
+    glyph_face* Face = Glyph_Face_Get(FaceID);
+    if(!Face) return {};
     
     if(FT_Load_Char(Face->Face, Codepoint, FT_LOAD_DEFAULT|FT_LOAD_RENDER) != 0) {
         return {};

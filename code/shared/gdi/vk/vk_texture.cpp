@@ -8,7 +8,7 @@ internal bool VK_Create_Sampler(gdi_context* Context, vk_sampler* Sampler, const
         .addressModeV = VK_Get_Address_Mode(CreateInfo.AddressModeV)
      };
 
-     if(vkCreateSampler(Context->Device, &SamplerInfo, Context->VKAllocator, &Sampler->Sampler) != VK_SUCCESS) {
+     if(vkCreateSampler(Context->Device, &SamplerInfo, Context->VKAllocator, &Sampler->Handle) != VK_SUCCESS) {
         //todo: Logging
         return false;
      }
@@ -16,20 +16,17 @@ internal bool VK_Create_Sampler(gdi_context* Context, vk_sampler* Sampler, const
 }
 
 internal void VK_Delete_Sampler(gdi_context* Context, vk_sampler* Sampler) {
-    if(Sampler->Sampler) {
-        vkDestroySampler(Context->Device, Sampler->Sampler, Context->VKAllocator);
-        Sampler->Sampler = VK_NULL_HANDLE;
+    if(Sampler->Handle) {
+        vkDestroySampler(Context->Device, Sampler->Handle, Context->VKAllocator);
+        Sampler->Handle = VK_NULL_HANDLE;
     }
 }
 
-internal void VK_Sampler_Record_Frame(gdi_context* Context, async_handle<vk_sampler> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.SamplersInUse[Handle.Index()], true);
-}
-
 internal bool VK_Create_Texture_View(gdi_context* Context, vk_texture_view* TextureView, const gdi_texture_view_create_info& CreateInfo) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
 
-    async_handle<vk_texture> TextureHandle(CreateInfo.Texture.ID);
-    vk_texture* Texture = Async_Pool_Get(&Context->ResourceContext.Textures, TextureHandle);
+    vk_handle<vk_texture> TextureHandle(CreateInfo.Texture.ID);
+    vk_texture* Texture = VK_Resource_Get(ResourceContext->Textures, TextureHandle);
     if(!Texture) {
         return false;
     }
@@ -44,31 +41,27 @@ internal bool VK_Create_Texture_View(gdi_context* Context, vk_texture_view* Text
                                      VK_IMAGE_ASPECT_COLOR_BIT;
     VkImageViewCreateInfo ImageViewCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image = Texture->Image,
+        .image = Texture->Handle,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = VK_Get_Format(Format),
         .subresourceRange = {ImageAspect, 0, 1, 0, 1}
     };
 
-    if(vkCreateImageView(Context->Device, &ImageViewCreateInfo, Context->VKAllocator, &TextureView->ImageView) != VK_SUCCESS) {
+    if(vkCreateImageView(Context->Device, &ImageViewCreateInfo, Context->VKAllocator, &TextureView->Handle) != VK_SUCCESS) {
         //todo: diagnostic
         return false;
     }
 
-    TextureView->TextureHandle = TextureHandle;
+    TextureView->Add_Reference(Context, Texture, VK_RESOURCE_TYPE_TEXTURE);
 
     return true;
 }
 
 internal void VK_Delete_Texture_View(gdi_context* Context, vk_texture_view* TextureView) {
-    if(TextureView->ImageView) {
-        vkDestroyImageView(Context->Device, TextureView->ImageView, Context->VKAllocator);
-        TextureView->ImageView = VK_NULL_HANDLE;
+    if(TextureView->Handle) {
+        vkDestroyImageView(Context->Device, TextureView->Handle, Context->VKAllocator);
+        TextureView->Handle = VK_NULL_HANDLE;
     }
-}
-
-internal void VK_Texture_View_Record_Frame(gdi_context* Context, async_handle<vk_texture_view> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TextureViewsInUse[Handle.Index()], true);
 }
 
 internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const gdi_texture_create_info& CreateInfo) {
@@ -87,13 +80,13 @@ internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
     };
 
-    if(vkCreateImage(Context->Device, &ImageInfo, Context->VKAllocator, &Texture->Image) != VK_SUCCESS) {
+    if(vkCreateImage(Context->Device, &ImageInfo, Context->VKAllocator, &Texture->Handle) != VK_SUCCESS) {
         //todo: Logging
         return false;
     }
 
     VkMemoryRequirements MemoryRequirements;
-    vkGetImageMemoryRequirements(Context->Device, Texture->Image, &MemoryRequirements);
+    vkGetImageMemoryRequirements(Context->Device, Texture->Handle, &MemoryRequirements);
 
     if(!VK_Memory_Allocate(&Context->MemoryManager, &MemoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &Texture->Allocation)) {
         //todo: Logging
@@ -101,7 +94,7 @@ internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const
     }
 
     VkDeviceMemory Memory = VK_Get_Memory_Block(&Texture->Allocation.Allocate)->Memory;
-    if(vkBindImageMemory(Context->Device, Texture->Image, Memory, Texture->Allocation.Allocate.Offset) != VK_SUCCESS) {
+    if(vkBindImageMemory(Context->Device, Texture->Handle, Memory, Texture->Allocation.Allocate.Offset) != VK_SUCCESS) {
         //todo: Logging
         return false;
     }
@@ -115,17 +108,13 @@ internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const
     return true;
 }
 
-internal void VK_Delete_Texture(gdi_context* Context, vk_texture* Texture) {
+internal void VK_Delete_Texture(gdi_context* Context, vk_texture* Texture) {    
     //If texture is managed by the swapchain we do not free and destroy the image
     if(Texture->IsSwapchain) return;
 
-    VK_Memory_Free(&Context->MemoryManager, &Texture->Allocation);
-    if(Texture->Image) {
-        vkDestroyImage(Context->Device, Texture->Image, Context->VKAllocator);
-        Texture->Image = VK_NULL_HANDLE;
+    if(Texture->Handle) {
+        VK_Memory_Free(&Context->MemoryManager, &Texture->Allocation);
+        vkDestroyImage(Context->Device, Texture->Handle, Context->VKAllocator);
+        Texture->Handle = VK_NULL_HANDLE;
     }
-}
-
-internal void VK_Texture_Record_Frame(gdi_context* Context, async_handle<vk_texture> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.TexturesInUse[Handle.Index()], true);
 }

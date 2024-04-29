@@ -15,6 +15,6 @@
 #endif
 
 #ifdef TEXT_SHAPER_HARFBUZZ
-//#include "text_shaper/harfbuzz/harfbuzz_text_shaper.h"
-//#include "text_shaper/harfbuzz/harfbuzz_text_shaper.cpp"
+#include "text_shaper/harfbuzz/harfbuzz_text_shaper.h"
+#include "text_shaper/harfbuzz/harfbuzz_text_shaper.cpp"
 #endif

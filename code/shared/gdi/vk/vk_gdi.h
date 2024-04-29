@@ -28,125 +28,8 @@ struct vk_texture_view;
 #include "loader/vk_loader.h"
 #include "vk_functions.h"
 #include "vk_memory.h"
-#include "vk_pipeline.h"
-#include "vk_bind_groups.h"
-#include "vk_render_pass.h"
-#include "vk_texture.h"
-#include "vk_buffer.h"
-#include "vk_swapchain.h"
-
-template <typename type>
-struct vk_delete_list_entry {
-    u64  LastUsedFrameIndex;
-    type Resource;
-};
-
-template <typename type>
-struct vk_delete_list {
-    array<vk_delete_list_entry<type>> List;
-
-    vk_delete_list_entry<type>* begin() { return List.begin(); }
-    vk_delete_list_entry<type>* end() { return List.end(); }
-};
-
-#define VK_UPLOAD_BUFFER_MINIMUM_BLOCK_SIZE MB(4)
-struct vk_upload_buffer_block {
-    VkBuffer                Buffer;
-    vk_allocation           Allocation;
-    buffer                  Data;
-    uptr                    Used;
-    vk_upload_buffer_block* Next;
-};
-
-struct vk_upload_buffer {
-    arena*                  Arena;
-    VkDevice                Device;
-    VkAllocationCallbacks*  VKAllocator;
-    vk_memory_manager*      MemoryManager;
-    vk_upload_buffer_block* First;
-    vk_upload_buffer_block* Last;
-    vk_upload_buffer_block* Current;
-};
-
-struct vk_copy_upload_to_buffer {
-    vk_upload               Upload;
-    async_handle<vk_buffer> Buffer;
-    VkDeviceSize            Offset;
-};
-
-struct vk_copy_uploads_to_texture {
-    vk_upload                Upload;
-    fixed_array<uptr>        Offsets;
-    fixed_array<vk_region>   Regions;
-    async_handle<vk_texture> Texture;
-};
-
-struct vk_copy_context {
-    ak_rw_lock                        RWLock;
-    u32                               CurrentListIndex;
-    arena*                            Arenas[2];
-    array<vk_copy_upload_to_buffer>   CopyUploadToBufferList[2];
-    array<vk_copy_uploads_to_texture> CopyUploadsToTextureList[2];
-};
-
-struct vk_delete_context {
-    ak_rw_lock                           RWLock;
-    u32                                  CurrentListIndex;
-    vk_delete_list<vk_pipeline>          PipelineList[2];
-    vk_delete_list<vk_bind_group>        BindGroupList[2];
-    vk_delete_list<vk_bind_group_layout> BindGroupLayoutList[2];
-    vk_delete_list<vk_framebuffer>       FramebufferList[2];
-    vk_delete_list<vk_render_pass>       RenderPassList[2];
-    vk_delete_list<vk_sampler>           SamplerList[2];
-    vk_delete_list<vk_texture_view>      TextureViewList[2];
-    vk_delete_list<vk_texture>           TextureList[2];
-    vk_delete_list<vk_buffer>            BufferList[2];
-    vk_delete_list<vk_swapchain>         SwapchainList[2];
-};
-
-struct vk_thread_context {
-    vk_delete_context             DeleteContext;
-    vk_copy_context               CopyContext;
-    fixed_array<vk_upload_buffer> UploadBuffers; //One upload buffer per frame per thread
-    vk_thread_context*            Next;
-};
-
-struct vk_resource_context {
-    async_pool<vk_pipeline>          Pipelines;
-    async_pool<vk_bind_group>        BindGroups;
-    async_pool<vk_bind_group_layout> BindGroupLayouts;
-    async_pool<vk_framebuffer>       Framebuffers;
-    async_pool<vk_render_pass>       RenderPasses;
-    async_pool<vk_sampler>           Samplers;
-    async_pool<vk_texture_view>      TextureViews;
-    async_pool<vk_texture>           Textures;
-    async_pool<vk_buffer>            Buffers;
-    async_pool<vk_swapchain>         Swapchains;
-
-    //TODO: These probably should be atomic u8 but ak atomic 
-    //doesn't support those (yet)
-    ak_atomic_u32* PipelinesInUse;
-    ak_atomic_u32* BindGroupsInUse;
-    ak_atomic_u32* BindGroupLayoutsInUse;
-    ak_atomic_u32* FramebuffersInUse;
-    ak_atomic_u32* RenderPassesInUse;
-    ak_atomic_u32* SamplersInUse;
-    ak_atomic_u32* TextureViewsInUse;
-    ak_atomic_u32* TexturesInUse;
-    ak_atomic_u32* BuffersInUse;
-    ak_atomic_u32* SwapchainsInUse;
-
-    u64* PipelineLastFrameIndices;
-    u64* BindGroupLastFrameIndices;
-    u64* BindGroupLayoutLastFrameIndices;
-    u64* FramebufferLastFrameIndices;
-    u64* RenderPassLastFrameIndices;
-    u64* SamplerLastFrameIndices;
-    u64* TextureViewLastFrameIndices;
-    u64* TextureLastFrameIndices;
-    u64* BufferLastFrameIndices;
-    u64* SwapchainLastFrameIndices;
-};
+#include "vk_resource.h"
+#include "vk_thread_context.h"
 
 struct vk_device {
     VkPhysicalDevice                 Device;
@@ -203,11 +86,8 @@ struct gdi_context {
     u64                     TotalFramesRendered;
     array<vk_frame_context> Frames;
 
-    ak_mutex            ThreadContextLock;
-    arena*              ThreadContextArena;
-    ak_atomic_ptr       ThreadContextList;
-    ak_tls              ThreadContextTLS;
-    vk_resource_context ResourceContext;
+    vk_thread_context_manager ThreadContextManager;
+    vk_resource_context       ResourceContext;
 };
 
 struct gdi {

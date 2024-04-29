@@ -17,6 +17,7 @@ bool GDI_Is_Depth_Format(gdi_format Format) {
         false,
         false,
         false,
+        false,
         true,
     };
     static_assert(Array_Count(Flags) == GDI_FORMAT_COUNT);
@@ -43,6 +44,7 @@ uptr GDI_Get_Bytes_Per_Pixel(gdi_format Format) {
         4, 
         8, 
         12, 
+        16,
         2
     };
     static_assert(Array_Count(BytesPerPixel) == GDI_FORMAT_COUNT);
@@ -66,6 +68,7 @@ gdi_format GDI_Get_SRGB_Format(gdi_format Format) {
         GDI_FORMAT_NONE, 
         GDI_FORMAT_NONE, 
         GDI_FORMAT_NONE, 
+        GDI_FORMAT_NONE,
         GDI_FORMAT_NONE,
         GDI_FORMAT_NONE,
         GDI_FORMAT_NONE,
@@ -149,6 +152,12 @@ gdi_clear gdi_clear::Depth(f32 Depth) {
         .Type = gdi_clear_type::Depth,
         .ClearDepth = {Depth}
     };
+}
+
+void GDI_Context_Buffer_Write(gdi_context* Context, gdi_handle<gdi_buffer> Handle, const_buffer Data) {
+    Memory_Copy(GDI_Context_Buffer_Map(Context, Handle), 
+                Data.Ptr, Data.Size);
+    GDI_Context_Buffer_Unmap(Context, Handle);
 }
 
 #include "gdi_memory.cpp"

@@ -4,14 +4,16 @@
 #include <hb.h>
 
 struct text_shaper_face {
-    hb_face_t*  Face;
-    hb_font_t*  Font;
-    glyph_face* GlyphFace;
+    hb_face_t*    Face;
+    hb_font_t*    Font;
+    glyph_face_id GlyphFace;
+    text_shaper*  Shaper;
 };
 
 struct text_shaper_buffer {
     hb_buffer_t* Buffer;
     u32          CurrentOffset;
+    text_shaper* Shaper;
 };
 
 struct text_shaper {

@@ -27,13 +27,13 @@ internal bool VK_Create_Buffer(gdi_context* Context, vk_buffer* Buffer, const gd
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE
     };
 
-    if(vkCreateBuffer(Context->Device, &BufferCreateInfo, Context->VKAllocator, &Buffer->Buffer) != VK_SUCCESS) {
+    if(vkCreateBuffer(Context->Device, &BufferCreateInfo, Context->VKAllocator, &Buffer->Handle) != VK_SUCCESS) {
         //todo: Diagnostics
         return false;
     }
 
     VkMemoryRequirements MemoryRequirements;
-    vkGetBufferMemoryRequirements(Context->Device, Buffer->Buffer, &MemoryRequirements);
+    vkGetBufferMemoryRequirements(Context->Device, Buffer->Handle, &MemoryRequirements);
 
     bool MemoryFailed = false;
     if(!VK_Memory_Allocate(&Context->MemoryManager, &MemoryRequirements, MemoryFlag, &Buffer->Allocation)) {
@@ -51,7 +51,7 @@ internal bool VK_Create_Buffer(gdi_context* Context, vk_buffer* Buffer, const gd
     }
 
     VkDeviceMemory Memory = VK_Get_Memory_Block(&Buffer->Allocation.Allocate)->Memory;
-    if(vkBindBufferMemory(Context->Device, Buffer->Buffer, Memory, Buffer->Allocation.Allocate.Offset) != VK_SUCCESS) {
+    if(vkBindBufferMemory(Context->Device, Buffer->Handle, Memory, Buffer->Allocation.Allocate.Offset) != VK_SUCCESS) {
         //todo: Diagnostics
         return false;
     }
@@ -71,19 +71,16 @@ internal bool VK_Create_Buffer(gdi_context* Context, vk_buffer* Buffer, const gd
     return true;
 }
 
-internal void VK_Delete_Buffer(gdi_context* Context, vk_buffer* Buffer) {
-    if(Buffer->UsageFlags & GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT && Buffer->Ptr) {
-        VK_Memory_Unmap(Context->Device, &Buffer->Allocation);
-        Buffer->Ptr = NULL;
-    }
+internal void VK_Delete_Buffer(gdi_context* Context, vk_buffer* Buffer) {    
+    if(Buffer->Handle) {
+        if(Buffer->UsageFlags & GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT && Buffer->Ptr) {
+            VK_Memory_Unmap(Context->Device, &Buffer->Allocation);
+            Buffer->Ptr = NULL;
+        }
 
-    VK_Memory_Free(&Context->MemoryManager, &Buffer->Allocation);
-    if(Buffer->Buffer) {
-        vkDestroyBuffer(Context->Device, Buffer->Buffer, Context->VKAllocator);
-        Buffer->Buffer = VK_NULL_HANDLE;
-    }
-}
+        VK_Memory_Free(&Context->MemoryManager, &Buffer->Allocation);
 
-internal void VK_Buffer_Record_Frame(gdi_context* Context, async_handle<vk_buffer> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.BuffersInUse[Handle.Index()], true);
+        vkDestroyBuffer(Context->Device, Buffer->Handle, Context->VKAllocator);
+        Buffer->Handle = VK_NULL_HANDLE;
+    }
 }

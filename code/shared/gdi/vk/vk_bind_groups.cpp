@@ -1,20 +1,19 @@
 internal bool VK_Create_Bind_Group_Layout(gdi_context* Context, vk_bind_group_layout* Layout, const gdi_bind_group_layout_create_info& CreateInfo) {
     scratch Scratch = Scratch_Get(); 
     fixed_array<VkDescriptorSetLayoutBinding> Bindings(&Scratch, CreateInfo.Bindings.Count);
-    Layout->Samplers = array<async_handle<vk_sampler>>(Context->GDI->MainAllocator);
 
     for(uptr i = 0; i < CreateInfo.Bindings.Count; i++) {
         fixed_array<VkSampler> Samplers(&Scratch, CreateInfo.Bindings[i].ImmutableSamplers.Count);
 
         for(uptr j = 0; j < Samplers.Count; j++) {
-            async_handle<vk_sampler> SamplerHandle(CreateInfo.Bindings[i].ImmutableSamplers[j].ID);
-            vk_sampler* Sampler = Async_Pool_Get(&Context->ResourceContext.Samplers, SamplerHandle);
+            vk_handle<vk_sampler> SamplerHandle(CreateInfo.Bindings[i].ImmutableSamplers[j].ID);
+            vk_sampler* Sampler = VK_Resource_Get(Context->ResourceContext.Samplers, SamplerHandle);
             if(!Sampler) {
                 Assert(false);
                 return false;
             }
-            Samplers[j] = Sampler->Sampler;
-            Array_Push(&Layout->Samplers, SamplerHandle);
+            Samplers[j] = Sampler->Handle;
+            Layout->Add_Reference(Context, Sampler, VK_RESOURCE_TYPE_SAMPLER);            
         } 
 
         Bindings[i] = {
@@ -32,7 +31,7 @@ internal bool VK_Create_Bind_Group_Layout(gdi_context* Context, vk_bind_group_la
         .pBindings = Bindings.Ptr
     };
 
-    if(vkCreateDescriptorSetLayout(Context->Device, &DescriptorSeLayoutInfo, Context->VKAllocator, &Layout->SetLayout) != VK_SUCCESS) {
+    if(vkCreateDescriptorSetLayout(Context->Device, &DescriptorSeLayoutInfo, Context->VKAllocator, &Layout->Handle) != VK_SUCCESS) {
         //todo: Logging
         return false;
     }
@@ -41,104 +40,117 @@ internal bool VK_Create_Bind_Group_Layout(gdi_context* Context, vk_bind_group_la
 }
 
 internal void VK_Delete_Bind_Group_Layout(gdi_context* Context, vk_bind_group_layout* Layout) {
-    Array_Free(&Layout->Samplers); 
-    if(Layout->SetLayout) {
-        vkDestroyDescriptorSetLayout(Context->Device, Layout->SetLayout, Context->VKAllocator);
-        Layout->SetLayout = VK_NULL_HANDLE;
+    if(Layout->Handle) {
+        vkDestroyDescriptorSetLayout(Context->Device, Layout->Handle, Context->VKAllocator);
+        Layout->Handle = VK_NULL_HANDLE;
     }
 }
 
-internal void VK_Bind_Group_Layout_Record_Frame(gdi_context* Context, async_handle<vk_bind_group_layout> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.BindGroupLayoutsInUse[Handle.Index()], true);
-}
-
-internal bool VK_Create_Bind_Group(gdi_context* Context, vk_bind_group* BindGroup, gdi_handle<gdi_bind_group_layout> Handle) {
-    async_handle<vk_bind_group_layout> LayoutHandle(Handle.ID);
-    vk_bind_group_layout* Layout = Async_Pool_Get(&Context->ResourceContext.BindGroupLayouts, LayoutHandle);
+internal bool VK_Create_Bind_Group(gdi_context* Context, vk_bind_group* BindGroup, const gdi_bind_group_create_info& CreateInfo) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    
+    vk_handle<vk_bind_group_layout> LayoutHandle(CreateInfo.Layout.ID);
+    vk_bind_group_layout* Layout = VK_Resource_Get(ResourceContext->BindGroupLayouts, LayoutHandle);
     if(!Layout) {
         Assert(false);
         return false;
     }
 
-    if(!VK_Descriptor_Pool_Allocate(&Context->DescriptorPool, Layout->SetLayout, &BindGroup->DescriptorSet)) {
+    if(!VK_Descriptor_Pool_Allocate(&Context->DescriptorPool, Layout->Handle, &BindGroup->Handle)) {
         //todo: Diagnostics
         return false;
     }
 
+    const gdi_bind_group_write_info* WriteInfo = &CreateInfo.WriteInfo;
+
+    scratch Scratch = Scratch_Get();
     BindGroup->DynamicOffsets = array<uptr>(Context->GDI->MainAllocator);
+    array<VkWriteDescriptorSet> DescriptorWrites(&Scratch, WriteInfo->Bindings.Count);
+    array<VkCopyDescriptorSet> DescriptorCopies(&Scratch, WriteInfo->Bindings.Count);
+
+    for(uptr i = 0; i < WriteInfo->Bindings.Count; i++) {
+        VkDescriptorImageInfo* ImageInfo = NULL;
+        VkDescriptorBufferInfo* BufferInfo = NULL;
+
+        if(GDI_Is_Bind_Group_Buffer(WriteInfo->Bindings[i].Type)) {
+            const gdi_bind_group_buffer* BufferBinding = &WriteInfo->Bindings[i].BufferBinding; 
+            vk_handle<vk_buffer> BufferHandle(BufferBinding->Buffer.ID);
+            vk_buffer* Buffer = VK_Resource_Get(ResourceContext->Buffers, BufferHandle);
+            if(Buffer) {
+                BufferInfo = Scratch_Push_Struct(&Scratch, VkDescriptorBufferInfo);
+                BufferInfo->buffer = Buffer->Handle;
+                BufferInfo->offset = 0;
+                BufferInfo->range  = BufferBinding->Size == (uptr)-1 ? VK_WHOLE_SIZE : BufferBinding->Size;
+
+                if(Buffer->UsageFlags & GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT) {
+                    Assert(GDI_Is_Bind_Group_Dynamic(WriteInfo->Bindings[i].Type));
+                    Array_Push(&BindGroup->DynamicOffsets, Buffer->Size);
+                }
+
+                BindGroup->Add_Reference(Context, Buffer, VK_RESOURCE_TYPE_BUFFER);
+            }
+        } else if(GDI_Is_Bind_Group_Texture(WriteInfo->Bindings[i].Type)) {
+            const gdi_bind_group_texture* TextureBinding = &WriteInfo->Bindings[i].TextureBinding;
+            vk_handle<vk_texture_view> TextureViewHandle(TextureBinding->TextureView.ID);
+            vk_texture_view* TextureView = VK_Resource_Get(ResourceContext->TextureViews, TextureViewHandle);
+            if(TextureView) {
+                ImageInfo = Scratch_Push_Struct(&Scratch, VkDescriptorImageInfo);
+                ImageInfo->imageView = TextureView->Handle;
+                ImageInfo->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                BindGroup->Add_Reference(Context, TextureView, VK_RESOURCE_TYPE_TEXTURE_VIEW);
+            }
+        }
+
+        if(ImageInfo || BufferInfo) {        
+            Array_Push(&DescriptorWrites, {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = BindGroup->Handle,
+                .dstBinding = Safe_U32(i),
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_Get_Descriptor_Type(WriteInfo->Bindings[i].Type),
+                .pImageInfo = ImageInfo,
+                .pBufferInfo = BufferInfo
+            });
+        } else {
+            const gdi_bind_group_copy* CopyBinding = &WriteInfo->Bindings[i].CopyBinding;
+            vk_handle<vk_bind_group> Handle(CopyBinding->SrcBindGroup.ID);
+            vk_bind_group* SrcBindGroup = VK_Resource_Get(ResourceContext->BindGroups, Handle);
+            if(!SrcBindGroup) {
+                Assert(false);
+                return false;
+            }
+
+            Array_Push(&DescriptorCopies, {
+                .sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET,
+                .srcSet = SrcBindGroup->Handle,
+                .srcBinding = CopyBinding->SrcBindIndex,
+                .dstSet = BindGroup->Handle,
+                .dstBinding = Safe_U32(i),
+                .descriptorCount = 1
+            });
+
+            BindGroup->Add_Reference(Context, SrcBindGroup->References[CopyBinding->SrcBindIndex]);
+        }
+    }
+    
+    //Add the layout as the final reference so we can easily reference binding group
+    //bindings by index easily
+    BindGroup->Add_Reference(Context, Layout, VK_RESOURCE_TYPE_BIND_GROUP_LAYOUT);
+    vkUpdateDescriptorSets(Context->Device, Safe_U32(DescriptorWrites.Count), DescriptorWrites.Ptr, 
+                           Safe_U32(DescriptorCopies.Count), DescriptorCopies.Ptr);
+
     return true;
 }
 
 internal void VK_Delete_Bind_Group(gdi_context* Context, vk_bind_group* BindGroup) {
     Array_Free(&BindGroup->DynamicOffsets);
-    if(BindGroup->DescriptorSet) {
+    if(BindGroup->Handle) {
         //vkAllocateDescriptorSets is not thread safe. Descriptor pool must be
         //externally synchronized
-        VK_Descriptor_Pool_Free(&Context->DescriptorPool, BindGroup->DescriptorSet);
-        BindGroup->DescriptorSet = VK_NULL_HANDLE;
+        VK_Descriptor_Pool_Free(&Context->DescriptorPool, BindGroup->Handle);
+        BindGroup->Handle = VK_NULL_HANDLE;
     }
-}
-
-internal bool VK_Bind_Group_Write(gdi_context* Context, vk_bind_group* BindGroup, const gdi_bind_group_write_info& WriteInfo) {
-    scratch Scratch = Scratch_Get();
-    fixed_array<VkWriteDescriptorSet> DescriptorWrites(&Scratch, WriteInfo.Bindings.Count);
-
-    for(uptr i = 0; i < WriteInfo.Bindings.Count; i++) {
-        VkDescriptorImageInfo* ImageInfo = NULL;
-        VkDescriptorBufferInfo* BufferInfo = NULL;
-
-        if(GDI_Is_Bind_Group_Buffer(WriteInfo.Bindings[i].Type)) {
-            BufferInfo = Scratch_Push_Struct(&Scratch, VkDescriptorBufferInfo);
-            const gdi_bind_group_buffer* BufferBinding = &WriteInfo.Bindings[i].BufferBinding; 
-            async_handle<vk_buffer> BufferHandle(BufferBinding->Buffer.ID);
-            vk_buffer* Buffer = Async_Pool_Get(&Context->ResourceContext.Buffers, BufferHandle);
-            if(!Buffer) {
-                Assert(false);
-                return false;
-            }
-
-            BufferInfo->buffer = Buffer->Buffer;
-            BufferInfo->offset = 0;
-            BufferInfo->range  = BufferBinding->Size == (uptr)-1 ? VK_WHOLE_SIZE : BufferBinding->Size;
-
-            if(Buffer->UsageFlags & GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT) {
-                Assert(GDI_Is_Bind_Group_Dynamic(WriteInfo.Bindings[i].Type));
-                Array_Push(&BindGroup->DynamicOffsets, Buffer->Size);
-            }
-        } else if(GDI_Is_Bind_Group_Texture(WriteInfo.Bindings[i].Type)) {
-            ImageInfo = Scratch_Push_Struct(&Scratch, VkDescriptorImageInfo);
-            const gdi_bind_group_texture* TextureBinding = &WriteInfo.Bindings[i].TextureBinding;
-            async_handle<vk_texture_view> TextureViewHandle(TextureBinding->TextureView.ID);
-            vk_texture_view* TextureView = Async_Pool_Get(&Context->ResourceContext.TextureViews, TextureViewHandle);
-            if(!TextureView) {
-                Assert(false);
-                return false;
-            }
-
-            ImageInfo->imageView = TextureView->ImageView;
-            ImageInfo->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        } else {
-            Assert(false);
-        }
-        
-        DescriptorWrites[i] = {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = BindGroup->DescriptorSet,
-            .dstBinding = Safe_U32(i),
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_Get_Descriptor_Type(WriteInfo.Bindings[i].Type),
-            .pImageInfo = ImageInfo,
-            .pBufferInfo = BufferInfo
-        };
-    }
-    
-    vkUpdateDescriptorSets(Context->Device, Safe_U32(DescriptorWrites.Count), DescriptorWrites.Ptr, 0, VK_NULL_HANDLE);
-    return true;
-}
-
-internal void VK_Bind_Group_Record_Frame(gdi_context* Context, async_handle<vk_bind_group> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.BindGroupsInUse[Handle.Index()], true);
 }
 
 internal bool VK_Descriptor_Pool_Create(gdi_context* Context, vk_descriptor_pool* Pool) {

@@ -29,55 +29,6 @@ internal hb_language_t HB_Get_Language(text_language Language) {
     return Languages[Language];
 }
 
-internal hb_bool_t HB_Get_Nominal_Glyph(hb_font_t* Font, void* FontData, hb_codepoint_t Codepoint, hb_codepoint_t* Glyph, void* UserData) {
-    text_shaper_face* Face = (text_shaper_face*)FontData; 
-    glyph_face* GlyphFace  = Face->GlyphFace;
-
-    u32 GlyphIndex = Glyph_Face_Get_Glyph_Index(GlyphFace, Codepoint);
-    if(GlyphIndex == GLYPH_INVALID) {
-        return false;
-    }
-
-    *Glyph = GlyphIndex;
-    return true;
-}
-
-internal unsigned int HB_Get_Nominal_Glyphs(hb_font_t* Font, void* FontData, unsigned int CodepointCount, 
-                                            const hb_codepoint_t* FirstCodepoint, unsigned int CodepointStride, 
-                                            hb_codepoint_t* FirstGlyph, unsigned int GlyphStride, void* UserData) {
-    text_shaper_face* Face = (text_shaper_face*)FontData; 
-    glyph_face* GlyphFace  = Face->GlyphFace;
-
-    unsigned int Result = 0;
-    for(; Result < CodepointCount; Result++) {
-        u32 GlyphIndex = Glyph_Face_Get_Glyph_Index(GlyphFace, *FirstCodepoint);
-        if(GlyphIndex == GLYPH_INVALID) {
-            break;
-        }
-        *FirstGlyph = GlyphIndex;
-
-        FirstCodepoint = (const hb_codepoint_t*)(((u8*)FirstCodepoint)+CodepointStride);
-        FirstGlyph = (hb_codepoint_t*)(((u8*)FirstGlyph)+GlyphStride);
-    }
-
-    return Result;
-}
-
-internal hb_bool_t HB_Get_Variation_Glyph(hb_font_t* Font, void* FontData, hb_codepoint_t Codepoint, 
-                                          hb_codepoint_t Variation, hb_codepoint_t* Glyph, void* UserData) {
-    text_shaper_face* Face = (text_shaper_face*)FontData;
-    glyph_face* GlyphFace = Face->GlyphFace;
-
-    u32 GlyphIndex = Glyph_Face_Get_Glyph_Variant_Index(GlyphFace, Codepoint, Variation);
-    if(GlyphIndex == GLYPH_INVALID) {
-        return false;
-    }
-
-    *Glyph = GlyphIndex;
-    return true;
-
-}
-
 text_shaper* Text_Shaper_Create(const text_shaper_create_info& CreateInfo) {
     uptr AllocationSize = sizeof(text_shaper);
     AllocationSize += CreateInfo.FaceCount*(sizeof(text_shaper_face)+(u32)+sizeof(ak_slot64));
@@ -94,28 +45,6 @@ text_shaper* Text_Shaper_Create(const text_shaper_create_info& CreateInfo) {
     ak_slot64* BufferSlotsPtr = (ak_slot64*)(BufferIndicesPtr+CreateInfo.BufferCount);
     AK_Async_Slot_Map64_Init_Raw(&Result->BufferSlots, BufferIndicesPtr, BufferSlotsPtr, CreateInfo.BufferCount);
 
-    hb_font_funcs_t* FontFuncs = hb_font_funcs_create();
-    hb_font_funcs_set_nominal_glyph_func(FontFuncs, HB_Get_Nominal_Glyph, nullptr, nullptr);
-    hb_font_funcs_set_nominal_glyphs_func(FontFuncs, HB_Get_Nominal_Glyphs, nullptr, nullptr);
-    hb_font_funcs_set_variation_glyph_func(FontFuncs, HB_Get_Variation_Glyph, nullptr, nullptr);
-
-    hb_font_funcs_set_font_h_extents_func(FontFuncs, HB_Get_Font_H_Extents, nullptr, nullptr);
-    hb_font_funcs_set_glyph_h_advances_func(FontFuncs, HB_Get_Glyph_H_Advances, nullptr, nullptr);
-
-    hb_font_funcs_set_glyph_v_advance_func(FontFuncs, HB_Get_Glyph_V_Advance, nullptr, nullptr);
-    hb_font_funcs_set_glyph_v_origin_func(FontFuncs, HB_Get_Glyph_V_Origin, nullptr, nullptr);
-
-    hb_font_funcs_set_glyph_h_kerning_func(FontFuncs, HB_Get_Glyph_H_Kerning, nullptr, nullptr);
-
-    hb_font_funcs_set_glyph_extents_func(FontFuncs, HB_Get_Glyph_Extents, nullptr, nullptr);
-    hb_font_funcs_set_glyph_contour_point_func(FontFuncs, HB_Get_Glyph_Contour_Point, nullptr, nullptr);
-    hb_font_funcs_set_glyph_name_func(FontFuncs, HB_Get_Glyph_Name, nullptr, nullptr);
-    hb_font_funcs_set_glyph_from_name_func(FontFuncs, HB_Get_Glyph_From_Name, nullptr, nullptr);
-
-    hb_font_funcs_make_immutable(FontFuncs); 
-
-    Result->FontFuncs = FontFuncs;
-
     return Result;
 }
 
@@ -125,83 +54,147 @@ void Text_Shaper_Delete(text_shaper* Shaper) {
     }
 }
 
+internal text_shaper_buffer* Text_Shaper_Buffer_Get(text_shaper_buffer_id BufferID) {
+    if(!BufferID.Generation || !BufferID.Buffer) return nullptr;
+    return AK_Async_Slot_Map64_Is_Allocated(&BufferID.Buffer->Shaper->BufferSlots, (ak_slot64)BufferID.Generation) ? BufferID.Buffer : nullptr;
+}
+
 text_shaper_buffer_id Text_Shaper_Create_Buffer(text_shaper* Shaper) {
     hb_buffer_t* Buffer = hb_buffer_create();
-    if(!hb_buffer_allocation_successful(Buffer)) return 0;
+    if(!hb_buffer_allocation_successful(Buffer)) return {};
 
     ak_slot64 BufferSlot = AK_Async_Slot_Map64_Alloc_Slot(&Shaper->BufferSlots);
     if(!BufferSlot) {
         hb_buffer_destroy(Buffer);
-        return 0;
+        return {};
     }
 
     text_shaper_buffer* Result = Shaper->Buffers + AK_Slot64_Index(BufferSlot);
     Result->Buffer = Buffer;
+    Result->Shaper = Shaper;
+    Result->CurrentOffset = 0;
 
-    return (text_shaper_buffer_id)BufferSlot;
+    return {
+        .Generation = BufferSlot,
+        .Buffer = Result
+    };
 }
 
 void Text_Shaper_Delete_Buffer(text_shaper* Shaper, text_shaper_buffer_id BufferID) {
-    ak_slot64 Slot = (ak_slot64)BufferID;
-    if(AK_Async_Slot_Map64_Is_Allocated(&Shaper->BufferSlots, Slot)) {
-        text_shaper_buffer* Buffer = Shaper->Buffers + AK_Slot64_Index(Slot);
-        hb_buffer_destroy(Buffer->Buffer);
-        Buffer->Buffer = nullptr;
-        AK_Async_Slot_Map64_Free_Slot(&Shaper->BufferSlots, Slot);
-    }
+    text_shaper_buffer* Buffer = Text_Shaper_Buffer_Get(BufferID);
+    if(!Buffer) return;
+
+    hb_buffer_destroy(Buffer->Buffer);
+    Buffer->Buffer = nullptr;
+    AK_Async_Slot_Map64_Free_Slot(&Shaper->BufferSlots, BufferID.Generation);
 }
 
-void Text_Shaper_Buffer_Add(text_shaper* Shaper, text_shaper_buffer_id BufferID, string String) {
-    ak_slot64 Slot = (ak_slot64)BufferID;
-    if(AK_Async_Slot_Map64_Is_Allocated(&Shaper->BufferSlots, Slot)) {
-        text_shaper_buffer* Buffer = Shaper->Buffers + AK_Slot64_Index(Slot);
-        hb_buffer_add_utf8(Buffer->Buffer, String.Str, (int)String.Size, Buffer->CurrentOffset, (int)String.Size);
-        Buffer->CurrentOffset += Safe_U32(String.Size);
-    }
+void Text_Shaper_Buffer_Add(text_shaper_buffer_id BufferID, string String) {
+    text_shaper_buffer* Buffer = Text_Shaper_Buffer_Get(BufferID);
+    if(!Buffer) return;
+    hb_buffer_add_utf8(Buffer->Buffer, String.Str, (int)String.Size, Buffer->CurrentOffset, (int)String.Size);
+    Buffer->CurrentOffset += Safe_U32(String.Size);
 }
 
-void Text_Shaper_Buffer_Clear(text_shaper* Shaper, text_shaper_buffer_id BufferID) {
-    ak_slot64 Slot = (ak_slot64)BufferID;
-    if(AK_Async_Slot_Map64_Is_Allocated(&Shaper->BufferSlots, Slot)) {
-        text_shaper_buffer* Buffer = Shaper->Buffers + AK_Slot64_Index(Slot);
-        hb_buffer_clear_contents(Buffer->Buffer);
-        Buffer->CurrentOffset = 0;
-    }
+void Text_Shaper_Buffer_Clear(text_shaper_buffer_id BufferID) {
+    text_shaper_buffer* Buffer = Text_Shaper_Buffer_Get(BufferID);
+    if(!Buffer) return;
+    hb_buffer_clear_contents(Buffer->Buffer);
+    Buffer->CurrentOffset = 0;
 }
 
-void Text_Shaper_Buffer_Set_Properties(text_shaper* Shaper, text_shaper_buffer_id BufferID, const text_shaper_buffer_properties& Properties) {
-    ak_slot64 Slot = (ak_slot64)BufferID;
-    if(AK_Async_Slot_Map64_Is_Allocated(&Shaper->BufferSlots, Slot)) {
-        text_shaper_buffer* Buffer = Shaper->Buffers + AK_Slot64_Index(Slot);
-        hb_direction_t Direction = HB_Get_Direction(Properties.Direction);
-        hb_script_t Script = HB_Get_Script(Properties.Script);
-        hb_language_t Language = HB_Get_Language(Properties.Language);
+void Text_Shaper_Buffer_Set_Properties(text_shaper_buffer_id BufferID, const text_shaper_buffer_properties& Properties) {
+    text_shaper_buffer* Buffer = Text_Shaper_Buffer_Get(BufferID);
+    if(!Buffer) return;
 
-        hb_buffer_set_direction(Buffer->Buffer, Direction);
-        hb_buffer_set_script(Buffer->Buffer, Script);
-        hb_buffer_set_language(Buffer->Buffer, Language);        
-    }
+    hb_direction_t Direction = HB_Get_Direction(Properties.Direction);
+    hb_script_t Script = HB_Get_Script(Properties.Script);
+    hb_language_t Language = HB_Get_Language(Properties.Language);
+
+    hb_buffer_set_direction(Buffer->Buffer, Direction);
+    hb_buffer_set_script(Buffer->Buffer, Script);
+    hb_buffer_set_language(Buffer->Buffer, Language);        
 }
 
-text_shaper_face_id Text_Shaper_Create_Face(text_shaper* Shaper, glyph_face* GlyphFace) {
+internal text_shaper_face* Text_Shaper_Face_Get(text_shaper_face_id FaceID) {
+    if(!FaceID.Generation || !FaceID.Face) return nullptr;
+    return AK_Async_Slot_Map64_Is_Allocated(&FaceID.Face->Shaper->FaceSlots, (ak_slot64)FaceID.Generation) ? FaceID.Face : nullptr;
+}
+
+text_shaper_face_id Text_Shaper_Create_Face(text_shaper* Shaper, glyph_face_id FaceID) {
     ak_slot64 FaceSlot = AK_Async_Slot_Map64_Alloc_Slot(&Shaper->FaceSlots);
     if(!FaceSlot) {
-        return 0;
+        return {};
     }
 
     text_shaper_face* Face = Shaper->Faces + AK_Slot64_Index(FaceSlot);
-    Face->GlyphFace = GlyphFace;
-    const_buffer FontBuffer = Glyph_Face_Get_Font_Buffer(GlyphFace);
-    hb_blob_t* Blob = hb_blob_create((const char*)FontBuffer.Ptr, Safe_U32(FontBuffer.Size), HB_MEMORY_MODE_READONLY, GlyphFace, nullptr);
+    Face->GlyphFace = FaceID;
+    const_buffer FontBuffer = Glyph_Face_Get_Font_Buffer(FaceID);
+    hb_blob_t* Blob = hb_blob_create((const char*)FontBuffer.Ptr, Safe_U32(FontBuffer.Size), HB_MEMORY_MODE_READONLY, nullptr, nullptr);
     Face->Face = hb_face_create(Blob, 0);
     hb_blob_destroy(Blob);
     Face->Font = hb_font_create(Face->Face);
-    AK_Mutex_Create(&Face->Mutex);
-    hb_font_set_funcs(Face->Font, Shaper->FontFuncs, GlyphFace, nullptr);
 
-    return (text_shaper_face_id)FaceSlot;
+    return {
+        .Generation = FaceSlot,
+        .Face = Face
+    };
 }
 
-void                  Text_Shaper_Delete_Face(text_shaper_face_id Face);
-text_shape_result     Text_Shaper_Face_Shape(text_shaper_face_id Face, text_shaper_buffer_id Buffer, allocator* Allocator);
-void                  Text_Shaper_Free_Result(text_shape_result* Result, allocator* Allocator);
+void Text_Shaper_Delete_Face(text_shaper* Shaper, text_shaper_face_id FaceID) {
+    text_shaper_face* Face = Text_Shaper_Face_Get(FaceID);
+    if(!Face) return;
+
+    hb_face_t* HBFace = hb_font_get_face(Face->Font);
+
+    hb_font_destroy(Face->Font);
+    hb_face_destroy(HBFace);
+    Face->Font = nullptr;
+    AK_Async_Slot_Map64_Free_Slot(&Shaper->FaceSlots, FaceID.Generation);
+}
+
+text_shape_result Text_Shaper_Face_Shape(text_shaper_face_id FaceID, text_shaper_buffer_id BufferID, allocator* Allocator) {
+    text_shaper_buffer* Buffer = Text_Shaper_Buffer_Get(BufferID);
+    if(!Buffer) return {};
+
+    text_shaper_face* Face = Text_Shaper_Face_Get(FaceID);
+    if(!Face) return {};
+
+    hb_shape(Face->Font, Buffer->Buffer, nullptr, 0);
+
+    unsigned int Count;
+    hb_glyph_info_t* GlyphInfo = hb_buffer_get_glyph_infos(Buffer->Buffer, &Count);
+    hb_glyph_position_t* GlyphPos = hb_buffer_get_glyph_positions(Buffer->Buffer, &Count);
+
+    text_shape_result Result = {};
+    Result.GlyphCount = Count;
+
+    if(Result.GlyphCount) {
+        text_glyph_info* DstGlyphs = (text_glyph_info*)Allocator_Allocate_Memory(Allocator, Result.GlyphCount*(sizeof(text_glyph_info)+sizeof(text_shape_pos)));
+        text_shape_pos*  DstPos = (text_shape_pos*)(DstGlyphs + Result.GlyphCount);
+
+        for(u32 i = 0; i < Result.GlyphCount; i++) {
+            DstGlyphs[i] = {
+                .Codepoint = GlyphInfo[i].codepoint
+            };
+
+            DstPos[i] = {
+                .XOffset = GlyphPos[i].x_offset,
+                .YOffset = GlyphPos[i].y_offset,
+                .XAdvance = GlyphPos[i].x_advance,
+                .YAdvance = GlyphPos[i].y_advance
+            };
+        }
+
+        Result.Glyphs = DstGlyphs;
+        Result.Positions = DstPos;
+    }
+
+    return Result;
+}
+
+void Text_Shaper_Free_Result(text_shape_result* Result, allocator* Allocator) {
+    if(Result && Result->GlyphCount) {
+        Allocator_Free_Memory(Allocator, (void*)Result->Glyphs);
+    }
+}

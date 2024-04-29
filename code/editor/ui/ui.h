@@ -26,9 +26,15 @@ struct ui_box_hash_slot {
     ui_box* Last;
 };
 
+struct ui_create_info {
+    allocator*   Allocator;
+    glyph_cache* GlyphCache;
+};
+
 struct ui {
     //Main arena
-    arena*            Arena;
+    arena*       Arena;
+    glyph_cache* GlyphCache;
 
     //Box cache
     ui_box*           FirstFreeBox;
@@ -39,6 +45,6 @@ struct ui {
     ui_box* Root;
 };
 
-bool UI_Init(ui* UI, allocator* Allocator);
+bool UI_Init(ui* UI, const ui_create_info& CreateInfo);
 
 #endif

@@ -1,0 +1,23 @@
+- Initial UI editor work
+- OSX platform layer and window management
+- Audio backend 
+- Unified build and preprocessing system
+- CPU Profiling (performance and memory)
+- Renderer architecture (graph/task)
+- Mesh importer
+- Texture importer
+- Animation and skeleton importer
+    - Basic skeleton skinning to test importer
+- Project/Game management
+    - Folder structure, auto load project, internal and external projects
+- Entity System Architecture 
+    -Entity creation
+    -Entity deletion
+    -Properties UI 
+- Basic transform tools
+    - Translation, Scale, Rotation
+    - Gizmo rendering
+- Undo/Redo
+- Console logging
+
+THEN WE CAN START RENDERING WOOO!!!!!!

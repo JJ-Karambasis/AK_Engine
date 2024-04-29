@@ -6,6 +6,7 @@
 #include "os/os.h"
 #include "editor_input.h"
 #include "ui/ui.h"
+#include "editor_renderers/editor_renderers.h"
 
 // #include "level_editor/level_editor.h"
 
@@ -50,12 +51,7 @@ struct window {
     array<gdi_handle<gdi_framebuffer>>  Framebuffers;
     ui                                  UI;
     uvec2                               Size;
-    gdi_handle<gdi_buffer>              UIGlobalBuffer;
-    gdi_handle<gdi_bind_group>          UIGlobalBindGroup;
-    gdi_handle<gdi_buffer>              UIDynamicBuffer;
-    uptr                                UIDynamicBufferSize;
-    uptr                                UIDynamicBufferCount;
-    gdi_handle<gdi_bind_group>          UIDynamicBindGroup;
+    ui_renderer                         Renderer;
 
     //Window links
     window* Prev;
@@ -71,8 +67,8 @@ struct editor {
     glyph_manager*                    GlyphManager;
     // text_shaper*                      TextShaper;
     glyph_cache*                      GlyphCache;
-    gdi_handle<gdi_render_pass>       UIRenderPass;    
-    gdi_handle<gdi_pipeline>          UIBoxPipeline;
+    ui_render_pass                    UIRenderPass;
+    ui_pipeline                       UIPipeline;
     gdi_handle<gdi_bind_group_layout> GlobalBindGroupLayout;
     gdi_handle<gdi_bind_group_layout> DynamicBindGroupLayout;
     gdi_handle<gdi_bind_group_layout> LinearSamplerBindGroupLayout;

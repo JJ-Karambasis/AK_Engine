@@ -1,8 +1,8 @@
 #ifndef VK_TEXTURE_H
 #define VK_TEXTURE_H
 
-struct vk_texture {
-    VkImage       Image;
+struct vk_texture : vk_resource_base {
+    VkImage       Handle;
     vk_allocation Allocation;
     u32           Width;
     u32           Height;
@@ -11,13 +11,12 @@ struct vk_texture {
     b16           IsSwapchain;
 };
 
-struct vk_texture_view {
-    async_handle<vk_texture> TextureHandle;
-    VkImageView              ImageView;
+struct vk_texture_view : vk_resource_base {
+    VkImageView Handle;
 };
 
-struct vk_sampler {
-    VkSampler Sampler;
+struct vk_sampler : vk_resource_base {
+    VkSampler Handle;
 };
 
 internal bool VK_Create_Sampler(gdi_context* Context, vk_sampler* Sampler, const gdi_sampler_create_info& CreateInfo);

@@ -83,7 +83,7 @@ internal void Window_Handle_Resize(editor* Editor, window* Window) {
 
                 Array_Push(&Window->Framebuffers, GDI_Context_Create_Framebuffer(Editor->GDIContext, {
                     .Attachments = {Window->SwapchainViews[i]},
-                    .RenderPass = Editor->UIRenderPass
+                    .RenderPass = Window->Renderer.RenderPass.RenderPass
                 }));
             }
         }
@@ -126,6 +126,20 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
     //we can create srgb views for the swapchain. Not all monitors support this though,
     //so at some point we will need to implement a workaround for this
     Assert(GDI_Get_SRGB_Format(Window->SwapchainFormat) != GDI_FORMAT_NONE); 
+
+    UI_Init(&Window->UI, {
+        .Allocator = Window->Arena,
+        .GlyphCache = Editor->GlyphCache
+    });
+    if(Editor->UIRenderPass.RenderPass.Is_Null()) {
+        Editor->UIRenderPass = UI_Render_Pass_Create(Editor->GDIContext, Window->SwapchainFormat);
+    }
+
+    if(Editor->UIPipeline.Pipeline.Is_Null()) {
+        Editor->UIPipeline = UI_Pipeline_Create(Editor->GDIContext, Editor->Packages, &Editor->UIRenderPass);
+    }
+
+    UI_Renderer_Create(&Window->Renderer, Editor->GDIContext, &Editor->UIRenderPass, &Editor->UIPipeline, &Window->UI, Editor->MainFont);
 
     window_handle Result = {
         .Window = Window,
@@ -387,139 +401,21 @@ void Window_Update(editor* Editor, window* Window) {
 }
 
 void Window_Render(editor* Editor, window* Window) {
-    if(Window->Size.x != 0 && Window->Size.y != 0) {
-        gdi_context* GDIContext = Editor->GDIContext;
-        
-        if(Window->UIGlobalBuffer.Is_Null()) {
-            Window->UIGlobalBuffer = GDI_Context_Create_Buffer(Editor->GDIContext, {
-                .ByteSize = sizeof(ui_box_shader_global),
-                .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT
-            });
+    gdi_context* Context = Editor->GDIContext;
+    gdi_cmd_list* CmdList = GDI_Context_Begin_Cmd_List(Context, gdi_cmd_list_type::Graphics, Window->Swapchain); 
+    u32 TextureIndex = GDI_Cmd_List_Get_Swapchain_Texture_Index(CmdList, GDI_RESOURCE_STATE_COLOR);
+    span<gdi_handle<gdi_texture>> SwapchainTextures = GDI_Context_Get_Swapchain_Textures(Context, Window->Swapchain);
 
-            if(Window->UIGlobalBuffer.Is_Null()) return;
-        }
+    GDI_Cmd_List_Barrier(CmdList, {
+        {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_NONE, GDI_RESOURCE_STATE_COLOR}, 
+    });
 
-        if(Window->UIGlobalBindGroup.Is_Null()) {
-            Window->UIGlobalBindGroup = GDI_Context_Create_Bind_Group(Editor->GDIContext, {
-                .Layout = Editor->GlobalBindGroupLayout,
-                .WriteInfo = {
-                    .Bindings = { { 
-                                .Type = GDI_BIND_GROUP_TYPE_CONSTANT,
-                                .BufferBinding = {
-                                    .Buffer = Window->UIGlobalBuffer
-                            }
-                        }
-                    }
-                }
-            });
-            if(Window->UIGlobalBindGroup.Is_Null()) return;
-        }
+    UI_Renderer_Set_Framebuffer(&Window->Renderer, Window->Framebuffers[TextureIndex], Window->Size);
 
-        //todo: When we do ui work we will know exactly how large the dynamic buffer should be
-        Window->UIDynamicBufferSize = Align_Pow2(sizeof(ui_box_shader_dynamic), GDI_Context_Get_Info(Editor->GDIContext)->ConstantBufferAlignment);
-        if(Window->UIDynamicBuffer.Is_Null()) {
-            Window->UIDynamicBuffer = GDI_Context_Create_Buffer(Editor->GDIContext, {
-                .ByteSize = Window->UIDynamicBufferSize*2,
-                .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT
-            });
-            if(Window->UIDynamicBuffer.Is_Null()) return;
-        }
-
-        if(Window->UIDynamicBindGroup.Is_Null()) {
-            Window->UIDynamicBindGroup = GDI_Context_Create_Bind_Group(Editor->GDIContext, {
-                .Layout = Editor->DynamicBindGroupLayout,
-                .WriteInfo = {
-                    .Bindings = { {
-                            .Type = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
-                            .BufferBinding = {
-                                .Buffer = Window->UIDynamicBuffer,
-                                .Size = Window->UIDynamicBufferSize
-                            }
-                        }
-                    }
-                }
-            });
-            if(Window->UIDynamicBindGroup.Is_Null()) return;
-        }
-
-        gdi_cmd_list* CmdList = GDI_Context_Begin_Cmd_List(GDIContext, gdi_cmd_list_type::Graphics, Window->Swapchain); 
-        u32 TextureIndex = GDI_Cmd_List_Get_Swapchain_Texture_Index(CmdList, GDI_RESOURCE_STATE_COLOR);
-        span<gdi_handle<gdi_texture>> SwapchainTextures = GDI_Context_Get_Swapchain_Textures(GDIContext, Window->Swapchain);
-
-        GDI_Cmd_List_Barrier(CmdList, {
-            {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_NONE, GDI_RESOURCE_STATE_COLOR}, 
-        });
-
-        GDI_Cmd_List_Begin_Render_Pass(CmdList, {
-            .RenderPass = Editor->UIRenderPass,
-            .Framebuffer = Window->Framebuffers[TextureIndex],
-            .ClearValues = { 
-                gdi_clear::Color(0.0f, 0.0f, 1.0f, 0.0f)
-            }
-        });
-
-        ui_box_shader_global ShaderGlobal = {
-            .InvRes    = 1.0f / vec2(Window->Size),
-            .InvTexRes = 1.0f / vec2(Editor->GlyphCache->Atlas.Dim)
-        };
-
-        u8* ShaderGlobalGPU = GDI_Context_Buffer_Map(Editor->GDIContext, Window->UIGlobalBuffer);
-        Memory_Copy(ShaderGlobalGPU, &ShaderGlobal, sizeof(ui_box_shader_global));
-        GDI_Context_Buffer_Unmap(Editor->GDIContext, Window->UIGlobalBuffer);
-
-        gdi_handle<gdi_bind_group> BindGroups[UI_BIND_GROUP_COUNT];
-
-        //todo: Render common window properties here    
-        GDI_Cmd_List_Set_Pipeline(CmdList, Editor->UIBoxPipeline);
-        GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_GLOBAL_INDEX, {Window->UIGlobalBindGroup});
-        GDI_Cmd_List_Set_Bind_Groups(CmdList, UI_BIND_GROUP_TEXTURE_INDEX, {Editor->GlyphCache->Atlas.BindGroup});
-
-        u8* ShaderDynamicGPU = GDI_Context_Buffer_Map(Editor->GDIContext, Window->UIDynamicBuffer);
-
-        uptr Offset = 0;
-        {
-            GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {Offset});
-            
-            ui_box_shader_dynamic Dynamic = {
-                .DstP0 = vec2(10.0f, 10.0f),
-                .DstP1 = vec2(50.0f, 50.0f),
-                .Color = vec4(1.0f, 0.0f, 0.0f, 1.0f)
-            };
-            Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
-            ShaderDynamicGPU += Window->UIDynamicBufferSize;
-            Offset += Window->UIDynamicBufferSize;
-
-            GDI_Cmd_List_Draw_Instance(CmdList, 4, 1, 0, 0);
-        }
-
-        {
-            Glyph_Face_Set_Size(Editor->MainFont.Face, 20);
-            const glyph_entry* Glyph = Glyph_Cache_Get(Editor->GlyphCache, Editor->MainFont.Face, 'A');
-            if(Glyph) {
-                GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, UI_BIND_GROUP_DYNAMIC_INDEX, {Window->UIDynamicBindGroup}, {Offset});
-                
-                ui_box_shader_dynamic Dynamic = {
-                    .DstP0 = vec2(100.0f, 100.0f),
-                    .DstP1 = vec2(100.0f, 100.0f)+vec2(Glyph->P2-Glyph->P1),
-                    .SrcP0 = vec2(Glyph->P1),
-                    .SrcP1 = vec2(Glyph->P2),
-                    .Color = vec4(1.0f, 1.0f, 1.0f, 1.0f)
-                };
-
-                Memory_Copy(ShaderDynamicGPU, &Dynamic, sizeof(ui_box_shader_dynamic));
-                ShaderDynamicGPU += Window->UIDynamicBufferSize;
-                Offset += Window->UIDynamicBufferSize;
-                GDI_Cmd_List_Draw_Instance(CmdList, 4, 1, 0, 0);
-            }
-        }
-
-
-
-        GDI_Cmd_List_End_Render_Pass(CmdList);
-        GDI_Cmd_List_Barrier(CmdList, {
-            {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_COLOR, GDI_RESOURCE_STATE_PRESENT}
-        });
-    }
+    UI_Renderer_Update(&Window->Renderer, CmdList);
+    GDI_Cmd_List_Barrier(CmdList, {
+        {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_COLOR, GDI_RESOURCE_STATE_PRESENT}
+    });
 }
 
 bool Editor_Main() {
@@ -613,95 +509,24 @@ bool Editor_Main() {
 
     os_monitor_id MonitorID = OS_Get_Primary_Monitor();
     
+    domain* FontDomain = Packages_Get_Domain(Editor.Packages, String_Lit("fonts"));
+    {
+        resource* MainFontResource = Packages_Get_Resource(Editor.Packages, FontDomain, String_Lit("liberation mono"), String_Lit("regular"));
+        Editor.MainFontBuffer = Packages_Load_Entire_Resource(Editor.Packages, MainFontResource, Editor.Arena);
+        Editor.MainFont = Create_UI_Font(&Editor, Editor.MainFontBuffer);
+    }
+    
+    Editor.GlyphCache = Glyph_Cache_Create({
+        .Context = Editor.GDIContext
+    });
+
     uvec2 MonitorResolution = OS_Get_Monitor_Resolution(MonitorID);
     window_handle MainWindowID = Window_Open(&Editor, MonitorID, {}, MonitorResolution, 5, String_Lit("AK_Engine"));
     window* MainWindow = Window_Get(MainWindowID);
-
-    // gdi_format SwapchainFormat;
-    // OS_Window_Get_Swapchain(MainWindowID, &SwapchainFormat);
-    Editor.UIRenderPass = GDI_Context_Create_Render_Pass(Editor.GDIContext, {
-        .Attachments = {
-            gdi_render_pass_attachment::Color(MainWindow->SwapchainFormat, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_STORE)
-        }
-    });
-
-    gdi_handle<gdi_sampler> LinearSampler = GDI_Context_Create_Sampler(Editor.GDIContext, {
-        .Filter = GDI_FILTER_LINEAR
-    });
-
-    Editor.GlobalBindGroupLayout = GDI_Context_Create_Bind_Group_Layout(Editor.GDIContext, {
-        .Bindings = { {
-                .Type = GDI_BIND_GROUP_TYPE_CONSTANT,
-                .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT
-            }
-        }            
-    });
-
-    gdi_bind_group_layout_binding LinearSamplerBindGroupLayoutBindings[UI_TEXTURE_BIND_GROUP_BINDING_COUNT] = {};
-    LinearSamplerBindGroupLayoutBindings[UI_TEXTURE_BIND_GROUP_TEXTURE_BINDING] = {
-        .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
-        .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT
-    };
-    LinearSamplerBindGroupLayoutBindings[UI_TEXTURE_BIND_GROUP_SAMPLER_BINDING] = {
-        .Type = GDI_BIND_GROUP_TYPE_SAMPLER,
-        .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT,
-        .ImmutableSamplers = {LinearSampler}
-    };
-
-    Editor.LinearSamplerBindGroupLayout = GDI_Context_Create_Bind_Group_Layout(Editor.GDIContext, {
-        .Bindings = LinearSamplerBindGroupLayoutBindings
-    });
-
-    Editor.DynamicBindGroupLayout = GDI_Context_Create_Bind_Group_Layout(Editor.GDIContext, {
-        .Bindings = { { 
-                .Type = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
-                .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT|GDI_SHADER_STAGE_PIXEL_BIT
-            }
-        }
-    });
-
-    Editor.GlyphCache = Glyph_Cache_Create({
-        .Context = Editor.GDIContext,
-        .AtlasBindGroupLayout = Editor.LinearSamplerBindGroupLayout
-    });
     
     if(!Editor.GlyphCache) {
         Fatal_Error_Message();
         return false;
-    }
-
-    domain* ShaderDomain = Packages_Get_Domain(Editor.Packages, String_Lit("shaders"));
-
-    {
-        scratch Scratch = Scratch_Get();
-
-        package* UIBoxShaderPackage = Packages_Get_Package(Editor.Packages, ShaderDomain, String_Lit("ui_box")); 
-        resource* UIBoxVtxShaderResource = Packages_Get_Resource(Editor.Packages, UIBoxShaderPackage, String_Lit("vtx_shader"));
-        resource* UIBoxPxlShaderResource = Packages_Get_Resource(Editor.Packages, UIBoxShaderPackage, String_Lit("pxl_shader"));
-
-        const_buffer VtxShader = Packages_Load_Entire_Resource(Editor.Packages, UIBoxVtxShaderResource, &Scratch);
-        const_buffer PxlShader = Packages_Load_Entire_Resource(Editor.Packages, UIBoxPxlShaderResource, &Scratch);
-        
-        gdi_handle<gdi_bind_group_layout> BindGroupLayouts[UI_BIND_GROUP_COUNT];
-        BindGroupLayouts[UI_BIND_GROUP_GLOBAL_INDEX]  = Editor.GlobalBindGroupLayout;
-        BindGroupLayouts[UI_BIND_GROUP_TEXTURE_INDEX] = Editor.LinearSamplerBindGroupLayout;
-        BindGroupLayouts[UI_BIND_GROUP_DYNAMIC_INDEX] = Editor.DynamicBindGroupLayout;
-        
-        Editor.UIBoxPipeline = GDI_Context_Create_Graphics_Pipeline(Editor.GDIContext, {
-            .VS      = {VtxShader, String_Lit("VS_Main")},
-            .PS      = {PxlShader, String_Lit("PS_Main")},
-            .Layouts = BindGroupLayouts,
-            .GraphicsState = {
-                .Topology = GDI_TOPOLOGY_TRIANGLE_STRIP,
-                .BlendStates = { { 
-                        .BlendEnabled = true,
-                        .SrcColor     = GDI_BLEND_ONE,
-                        .DstColor     = GDI_BLEND_ONE_MINUS_SRC_ALPHA
-                    }
-                },
-            },
-            .RenderPass = Editor.UIRenderPass
-        });
     }
 
     //Default texture is pure white
@@ -710,19 +535,12 @@ bool Editor_Main() {
         0xFFFFFFFF, 0xFFFFFFFF
     };
 
-    Editor.DefaultTexture = GPU_Texture_Create(Editor.GDIContext, {
-        .Format = GDI_FORMAT_R8G8B8A8_UNORM,
-        .Dim = uvec2(2, 2),
-        .Texels = const_buffer(DefaultTextureTexels),
-        .BindGroupLayout = Editor.LinearSamplerBindGroupLayout
-    });
-
-    domain* FontDomain = Packages_Get_Domain(Editor.Packages, String_Lit("fonts"));
-    {
-        resource* MainFontResource = Packages_Get_Resource(Editor.Packages, FontDomain, String_Lit("liberation mono"), String_Lit("regular"));
-        Editor.MainFontBuffer = Packages_Load_Entire_Resource(Editor.Packages, MainFontResource, Editor.Arena);
-        Editor.MainFont = Create_UI_Font(&Editor, Editor.MainFontBuffer);
-    }
+    // Editor.DefaultTexture = GPU_Texture_Create(Editor.GDIContext, {
+    //     .Format = GDI_FORMAT_R8G8B8A8_UNORM,
+    //     .Dim = uvec2(2, 2),
+    //     .Texels = const_buffer(DefaultTextureTexels),
+    //     .BindGroupLayout = Editor.LinearSamplerBindGroupLayout
+    // });
 
 
     u64 Frequency = AK_Query_Performance_Frequency();
@@ -824,6 +642,7 @@ int main() {
 }
 
 //#include "level_editor/level_editor.cpp"
+#include "editor_renderers/editor_renderers.cpp"
 #include "ui/ui.cpp"
 #include "editor_input.cpp"
 #include <engine_source.cpp>

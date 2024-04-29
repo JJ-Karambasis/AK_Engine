@@ -1,15 +1,17 @@
 internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, const gdi_graphics_pipeline_create_info& CreateInfo) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    
     scratch Scratch = Scratch_Get();
     fixed_array<VkDescriptorSetLayout> SetLayouts(&Scratch, CreateInfo.Layouts.Count);
     for(uptr i = 0; i < CreateInfo.Layouts.Count; i++) {
-        async_handle<vk_bind_group_layout> LayoutHandle(CreateInfo.Layouts[i].ID);
-        vk_bind_group_layout* Layout = Async_Pool_Get(&Context->ResourceContext.BindGroupLayouts, LayoutHandle);
+        vk_handle<vk_bind_group_layout> LayoutHandle(CreateInfo.Layouts[i].ID);
+        vk_bind_group_layout* Layout = VK_Resource_Get(ResourceContext->BindGroupLayouts, LayoutHandle);
         if(!Layout) {
             Assert(false);
             return false;
         }
 
-        SetLayouts[i] = Layout->SetLayout;
+        SetLayouts[i] = Layout->Handle;
     }
 
     VkPipelineLayoutCreateInfo LayoutInfo = {
@@ -69,7 +71,7 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
         Array_Push(&VtxBindings, {
             .binding = BindingIndex,
             .stride = Safe_U32(Binding.ByteStride),
-            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+            .inputRate = VK_Get_Input_Rate(Binding.InputRate)
         });
 
         for(const gdi_vtx_attribute& Attribute : Binding.Attributes) {
@@ -164,8 +166,8 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
     Flags |= VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
 #endif
 
-    async_handle<vk_render_pass> RenderPassHandle(CreateInfo.RenderPass.ID);
-    vk_render_pass* RenderPass = Async_Pool_Get(&Context->ResourceContext.RenderPasses, RenderPassHandle);
+    vk_handle<vk_render_pass> RenderPassHandle(CreateInfo.RenderPass.ID);
+    vk_render_pass* RenderPass = VK_Resource_Get(ResourceContext->RenderPasses, RenderPassHandle);
     if(!RenderPass) {
         //todo: Diagnostics
         return false;
@@ -185,10 +187,10 @@ internal bool VK_Create_Pipeline(gdi_context* Context, vk_pipeline* Pipeline, co
         .pColorBlendState = &ColorBlendState,
         .pDynamicState = &DynamicState,
         .layout = Pipeline->Layout,
-        .renderPass = RenderPass->RenderPass
+        .renderPass = RenderPass->Handle
     };
 
-    if(vkCreateGraphicsPipelines(Context->Device, VK_NULL_HANDLE, 1, &GraphicsPipelineInfo, Context->VKAllocator, &Pipeline->Pipeline) != VK_SUCCESS) {
+    if(vkCreateGraphicsPipelines(Context->Device, VK_NULL_HANDLE, 1, &GraphicsPipelineInfo, Context->VKAllocator, &Pipeline->Handle) != VK_SUCCESS) {
         //todo: Diagnostics
         vkDestroyShaderModule(Context->Device, VtxShader, Context->VKAllocator);
         vkDestroyShaderModule(Context->Device, PxlShader, Context->VKAllocator);
@@ -208,12 +210,8 @@ internal void VK_Delete_Pipeline(gdi_context* Context, vk_pipeline* Pipeline) {
         Pipeline->Layout = VK_NULL_HANDLE;
     }
 
-    if(Pipeline->Pipeline) {
-        vkDestroyPipeline(Context->Device, Pipeline->Pipeline, Context->VKAllocator);
-        Pipeline->Pipeline = VK_NULL_HANDLE;
+    if(Pipeline->Handle) {
+        vkDestroyPipeline(Context->Device, Pipeline->Handle, Context->VKAllocator);
+        Pipeline->Handle = VK_NULL_HANDLE;
     }
-}
-
-internal void VK_Pipeline_Record_Frame(gdi_context* Context, async_handle<vk_pipeline> Handle) {
-    AK_Atomic_Store_U32_Relaxed(&Context->ResourceContext.PipelinesInUse[Handle.Index()], true);
 }
