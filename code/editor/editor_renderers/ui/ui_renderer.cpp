@@ -92,12 +92,11 @@ ui_pipeline UI_Pipeline_Create(gdi_context* Context, packages* Packages, ui_rend
     };
 }
 
-void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI, ui_font Font) {    
+void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI) {    
     Renderer->Context = Context;
     Renderer->RenderPass = *RenderPass;
     Renderer->Pipeline = *Pipeline;
     Renderer->UI = UI;
-    Renderer->Font = Font;
 
     Renderer->GlobalBuffer = GDI_Context_Create_Buffer(Renderer->Context, {
         .ByteSize = sizeof(ui_box_shader_global),
@@ -133,34 +132,92 @@ void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList) {
     scratch Scratch = Scratch_Get();
     array<ui_box_shader_box> Boxes(&Scratch);
 
-    Array_Push(&Boxes, {
-        .DstP0 = vec2(10.0f, 10.0f),
-        .DstP1 = vec2(50.0f, 50.0f),
-        .Color = vec4(1.0f, 0.0f, 0.0f, 1.0f)
-    });
+    // Array_Push(&Boxes, {
+    //     .DstP0 = vec2(10.0f, 10.0f),
+    //     .DstP1 = vec2(50.0f, 50.0f),
+    //     .Color = vec4(1.0f, 0.0f, 0.0f, 1.0f)
+    // });
 
-    Glyph_Face_Set_Size(Renderer->Font.Face, 20);
-    const glyph_entry* Glyph = Glyph_Cache_Get(Renderer->UI->GlyphCache, Renderer->Font.Face, 'A');
-    if(Glyph) {
-        Array_Push(&Boxes, {
-            .DstP0 = vec2(100.0f, 100.0f),
-            .DstP1 = vec2(100.0f, 100.0f) + vec2(Glyph->P2-Glyph->P1),
-            .SrcP0 = vec2(Glyph->P1),
-            .SrcP1 = vec2(Glyph->P2),
-            .Color = vec4(1.0f, 1.0f, 1.0f, 1.0f)
-        });
+    string ArabTextString = String_Lit("T.W.Lewis");
+    uba* UBA = UBA_Allocate(&Scratch, ArabTextString);
+    span<uba_run> Runs = UBA_Get_Runs(UBA);
+    span<uba_script_info> ScriptInfo = UBA_Get_Scripts(UBA);
+
+    uptr RunIndex = 0;
+    uptr ScriptIndex = 0;
+    const uba_run* CurrentRun = &Runs[RunIndex++];
+    const uba_script_info* CurrentScript = &ScriptInfo[ScriptIndex++];
+
+    vec2 Cursor = vec2(100, 100);
+
+    ui* UI = Renderer->UI;
+
+    uptr StartIndex = 0;
+    uptr CurrentIndex = 0;
+    for(; CurrentIndex <= ArabTextString.Size; CurrentIndex++) {
+        bool RunInRange = In_Range(CurrentIndex, CurrentRun->Offset, (CurrentRun->Offset+CurrentRun->Length)-1);
+        bool ScriptInRange = In_Range(CurrentIndex, CurrentScript->Offset, (CurrentScript->Offset+CurrentScript->Length)-1);
+
+        if(!RunInRange || !ScriptInRange) {
+            string StringRange = String_Substr(ArabTextString, StartIndex, CurrentIndex);
+            StartIndex = CurrentIndex;
+
+            //Remove the font manager. We will have another way of detecting
+            //what font to use in more arbitrary cases later
+            font_id Font = UI->FontID;
+            u32 Ascender = Font_Get_Metrics(Font)->Ascender;
+            
+            text_shape_result ShapeResult = Font_Shape(Font, {
+                .Allocator = &Scratch,
+                .Text = StringRange,
+                .Properties = {
+                    .Direction = CurrentRun->Direction,
+                    .Script = CurrentScript->Script
+                }
+            });
+
+            const text_shape_pos* Positions = ShapeResult.Positions;
+            const text_glyph_info* Glyphs = ShapeResult.Glyphs;
+            for(u32 i = 0; i < ShapeResult.GlyphCount; i++) {
+                const glyph_entry* Glyph = Glyph_Cache_Get(UI->GlyphCache, Font, Glyphs[i].Codepoint);
+                glyph_metrics Metrics = Font_Get_Glyph_Metrics(Font, Glyphs[i].Codepoint);
+                
+                if(i != 0) {
+                    svec2 Kerning = Font_Get_Kerning(Font, Glyphs[i-1].Codepoint, Glyphs[i].Codepoint);
+                    Cursor.x += (f32)Kerning.x;
+                }
+
+                if(Glyph) {
+                    //todo: Not sure if our offsets are properly calculated when the
+                    //text shaper offsets are not zero
+                    vec2 Offset = vec2(Positions[i].Offset + Metrics.Offset);
+                    Offset.y = (f32)Ascender - Offset.y;
+                    vec2 PixelP = Cursor + Offset;
+
+                    Array_Push(&Boxes, {
+                        .DstP0 = PixelP,
+                        .DstP1 = PixelP + Rect2u_Get_Dim(Glyph->AtlasRect),
+                        .SrcP0 = Glyph->AtlasRect.Min,
+                        .SrcP1 = Glyph->AtlasRect.Max,
+                        .Color = vec4(1.0f, 1.0f, 1.0f, 1.0f)
+                    });
+                }
+
+                Cursor += vec2(Positions[i].Advance);
+            }
+
+            if(!RunInRange) {
+                CurrentRun = Span_Get(&Runs, RunIndex++);
+            }
+
+            if(!ScriptInRange) {
+                CurrentScript = Span_Get(&ScriptInfo, ScriptIndex++);
+            }
+        }
     }
 
-    Glyph = Glyph_Cache_Get(Renderer->UI->GlyphCache, Renderer->Font.Face, 'q');
-    if(Glyph) {
-        Array_Push(&Boxes, {
-            .DstP0 = vec2(150.0f, 150.0f),
-            .DstP1 = vec2(150.0f, 150.0f) + vec2(Glyph->P2-Glyph->P1),
-            .SrcP0 = vec2(Glyph->P1),
-            .SrcP1 = vec2(Glyph->P2),
-            .Color = vec4(0.0f, 1.0f, 0.0f, 1.0f)
-        });
-    }
+    //If we don't have any boxes to render we can just early skip
+    if(!Boxes.Count) return;
     
     if(Boxes.Count > Renderer->InstanceCount) {
         if(!Renderer->InstanceBuffer.Is_Null()) {

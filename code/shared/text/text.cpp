@@ -18,3 +18,5 @@
 #include "text_shaper/harfbuzz/harfbuzz_text_shaper.h"
 #include "text_shaper/harfbuzz/harfbuzz_text_shaper.cpp"
 #endif
+
+#include "font_manager.cpp"

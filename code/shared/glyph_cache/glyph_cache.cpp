@@ -66,12 +66,12 @@ glyph_cache* Glyph_Cache_Create(const glyph_cache_create_info& CreateInfo) {
 
 void               Glyph_Cache_Delete(glyph_cache* Cache);
 
-const glyph_entry* Glyph_Cache_Get(glyph_cache* Cache, glyph_face_id Face, u32 Codepoint) {
-    u32 Size = Glyph_Face_Get_Size(Face);
-
+const glyph_entry* Glyph_Cache_Get(glyph_cache* Cache, font_id Font, u32 Codepoint) {
     //Hash by the font buffer instead of faces because, we may duplicate faces
     //for thread safety
-    const_buffer FontBuffer = Glyph_Face_Get_Font_Buffer(Face);
+    const_buffer FontBuffer = Font_Get_Buffer(Font);
+    u32 Size = Font_Get_Size(Font); 
+
     glyph_cache_key Key = {
         .FontBufferPtr = FontBuffer.Ptr,
         .Size = Size,
@@ -111,7 +111,7 @@ const glyph_entry* Glyph_Cache_Get(glyph_cache* Cache, glyph_face_id Face, u32 C
 
         glyph_cache_create_entry* Entry = Cache->CreateEntries + AK_Slot64_Index(Slot);
         Entry->Slot      = Slot;
-        Entry->Face      = Face;
+        Entry->Font      = Font;
         Entry->Size      = Size;
         Entry->Codepoint = Codepoint;
         Entry->Hash      = Hash;
@@ -146,7 +146,7 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
     while(CreateEntry) {
         //First check to make sure the create entry isn't a duplicate.
         //This is totally possible with multithreaded Glyph_Cache_Gets
-        const_buffer FontBuffer = Glyph_Face_Get_Font_Buffer(CreateEntry->Face);
+        const_buffer FontBuffer = Font_Get_Buffer(CreateEntry->Font);
         glyph_cache_key Key = {
             .FontBufferPtr = FontBuffer.Ptr,
             .Size = CreateEntry->Size,
@@ -154,94 +154,94 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
         };
         if(!Hashmap_Find_By_Hash(&Cache->Cache, Key, CreateEntry->Hash)) {
             //Then allocate a bitmap from the face with the appropriate size
-            Glyph_Face_Set_Size(CreateEntry->Face, CreateEntry->Size);
-            glyph_bitmap Bitmap = Glyph_Face_Create_Bitmap(CreateEntry->Face, &Scratch, CreateEntry->Codepoint);
+            glyph_bitmap Bitmap = Font_Rasterize_Glyph(CreateEntry->Font, &Scratch, CreateEntry->Codepoint);
             if(Bitmap.Texels.Ptr) {
-                //Next we will try to allocate out of the current atlas allocator
-                atlas_alloc_id AtlasAlloc = Atlas_Allocator_Alloc(Cache->AtlasAllocator, Bitmap.Dim);
-                atlas_index* AtlasIndex = Atlas_Allocator_Get(Cache->AtlasAllocator, AtlasAlloc);
+                if(Bitmap.Dim.x != 0 && Bitmap.Dim.y != 0) {
+                    //Next we will try to allocate out of the current atlas allocator
+                    atlas_alloc_id AtlasAlloc = Atlas_Allocator_Alloc(Cache->AtlasAllocator, Bitmap.Dim);
+                    atlas_index* AtlasIndex = Atlas_Allocator_Get(Cache->AtlasAllocator, AtlasAlloc);
 
-                if(!AtlasIndex) {
-                    //If we fail to allocate out of the atlas that means the cache
-                    //is now full. Lets free all atlas data that is old
-                    glyph_cache_entry* OldestEntry = Cache->LRUTail;
-                    while(OldestEntry && (OldestEntry->UpdateIndex.Nonatomic < Cache->UpdateCount)) {
-                        Atlas_Allocator_Free(Cache->AtlasAllocator, OldestEntry->AllocID);
-                        Hashmap_Remove_By_Hash(&Cache->Cache, OldestEntry->Key, OldestEntry->Hash);
-                        DLL_Remove_Back_NP(Cache->LRUHead, Cache->LRUTail, NextLRU, PrevLRU);
-                        SLL_Push_Front_N(Cache->FreeEntries, OldestEntry, NextLRU);
-                        OldestEntry = Cache->LRUTail;
+                    if(!AtlasIndex) {
+                        //If we fail to allocate out of the atlas that means the cache
+                        //is now full. Lets free all atlas data that is old
+                        glyph_cache_entry* OldestEntry = Cache->LRUTail;
+                        while(OldestEntry && (OldestEntry->UpdateIndex.Nonatomic < Cache->UpdateCount)) {
+                            Atlas_Allocator_Free(Cache->AtlasAllocator, OldestEntry->AllocID);
+                            Hashmap_Remove_By_Hash(&Cache->Cache, OldestEntry->Key, OldestEntry->Hash);
+                            DLL_Remove_Back_NP(Cache->LRUHead, Cache->LRUTail, NextLRU, PrevLRU);
+                            SLL_Push_Front_N(Cache->FreeEntries, OldestEntry, NextLRU);
+                            OldestEntry = Cache->LRUTail;
+                        }
+
+                        AtlasAlloc = Atlas_Allocator_Alloc(Cache->AtlasAllocator, Bitmap.Dim);
+                        AtlasIndex = Atlas_Allocator_Get(Cache->AtlasAllocator, AtlasAlloc);
                     }
-
-                    AtlasAlloc = Atlas_Allocator_Alloc(Cache->AtlasAllocator, Bitmap.Dim);
-                    AtlasIndex = Atlas_Allocator_Get(Cache->AtlasAllocator, AtlasAlloc);
-                }
-                
-                //If we succeeded allocating out of the atlas we are done! 
-                if(AtlasIndex) {
-                    //Allocate an entry and correctly fill out the uvs and add
-                    //to the hashmap and lru list
-                    glyph_cache_entry* Entry = Cache->FreeEntries;
-                    if(Entry) SLL_Pop_Front_N(Cache->FreeEntries, NextLRU);
-                    else Entry = Arena_Push_Struct(Cache->Arena, glyph_cache_entry);
-                    Zero_Struct(Entry);
-
-                    //Convert texels from bitmap to SRGB
-                    const_buffer Texels = {};
-                    switch(Bitmap.Format) {
-                        case GLYPH_BITMAP_FORMAT_GREYSCALE: {
-                            void* NewTexels = Scratch_Push(&Scratch, Bitmap.Dim.w*Bitmap.Dim.h*4);
-                            
-                            u8* DstTexels = (u8*)NewTexels;
-                            const u8* SrcTexels = Bitmap.Texels.Ptr;
-
-                            for(u32 YIndex = 0; YIndex < Bitmap.Dim.h; YIndex++) {
-                                for(u32 XIndex = 0; XIndex < Bitmap.Dim.w; XIndex++) {
-                                    //Premultiplied alpha, assign each pixel the alpha channel
-                                    *DstTexels++ = *SrcTexels;
-                                    *DstTexels++ = *SrcTexels;
-                                    *DstTexels++ = *SrcTexels;
-                                    *DstTexels++ = *SrcTexels;
-                                    SrcTexels++;
-                                }
-                            }
-
-                            Texels = const_buffer(NewTexels, Bitmap.Dim.w*Bitmap.Dim.h*4);
-                        } break;
-
-                        Invalid_Default_Case();
-                    }
-
-
-                    Array_Push(&TextureCopies, {
-                        .Texels  = Texels,
-                        .XOffset = AtlasIndex->Rect.Min.x,
-                        .YOffset = AtlasIndex->Rect.Min.y,
-                        .Width   = Bitmap.Dim.w,
-                        .Height  = Bitmap.Dim.h
-                    });
-
-                    Entry->AllocID = AtlasAlloc;
-                    Entry->Key = Key;
-                    Entry->Hash = CreateEntry->Hash;
-                    Entry->P1 = AtlasIndex->Rect.Min;
-                    Entry->P2 = AtlasIndex->Rect.Max;
-
-                    Hashmap_Add_By_Hash(&Cache->Cache, {
-                        .FontBufferPtr = FontBuffer.Ptr,
-                        .Size = CreateEntry->Size,
-                        .Codepoint = CreateEntry->Codepoint
-                    }, CreateEntry->Hash, Entry);
                     
-                    DLL_Push_Front_NP(Cache->LRUHead, Cache->LRUTail, Entry, NextLRU, PrevLRU);
-                    Entry->UpdateIndex.Nonatomic = Cache->UpdateCount;
-                } else {
-                    //If we still fail to allocate the atlas that really means
-                    //our atlas is full now. 
-                    //todo: We should probably resize the atlas to something greater
-                    //then. If its larger than a maximum size then we have a cache that is
-                    //full and we can't cache anymore glyphs
-                    Not_Implemented();
+                    //If we succeeded allocating out of the atlas we are done! 
+                    if(AtlasIndex) {
+                        //Allocate an entry and correctly fill out the uvs and add
+                        //to the hashmap and lru list
+                        glyph_cache_entry* Entry = Cache->FreeEntries;
+                        if(Entry) SLL_Pop_Front_N(Cache->FreeEntries, NextLRU);
+                        else Entry = Arena_Push_Struct(Cache->Arena, glyph_cache_entry);
+                        Zero_Struct(Entry);
+
+                        //Convert texels from bitmap to SRGB
+                        const_buffer Texels = {};
+                        switch(Bitmap.Format) {
+                            case GLYPH_BITMAP_FORMAT_GREYSCALE: {
+                                void* NewTexels = Scratch_Push(&Scratch, Bitmap.Dim.w*Bitmap.Dim.h*4);
+                                
+                                u8* DstTexels = (u8*)NewTexels;
+                                const u8* SrcTexels = Bitmap.Texels.Ptr;
+
+                                for(u32 YIndex = 0; YIndex < Bitmap.Dim.h; YIndex++) {
+                                    for(u32 XIndex = 0; XIndex < Bitmap.Dim.w; XIndex++) {
+                                        //Premultiplied alpha, assign each pixel the alpha channel
+                                        *DstTexels++ = *SrcTexels;
+                                        *DstTexels++ = *SrcTexels;
+                                        *DstTexels++ = *SrcTexels;
+                                        *DstTexels++ = *SrcTexels;
+                                        SrcTexels++;
+                                    }
+                                }
+
+                                Texels = const_buffer(NewTexels, Bitmap.Dim.w*Bitmap.Dim.h*4);
+                            } break;
+
+                            Invalid_Default_Case();
+                        }
+
+
+                        Array_Push(&TextureCopies, {
+                            .Texels  = Texels,
+                            .XOffset = AtlasIndex->Rect.Min.x,
+                            .YOffset = AtlasIndex->Rect.Min.y,
+                            .Width   = Bitmap.Dim.w,
+                            .Height  = Bitmap.Dim.h
+                        });
+
+                        Entry->AllocID = AtlasAlloc;
+                        Entry->Key = Key;
+                        Entry->Hash = CreateEntry->Hash;
+                        Entry->AtlasRect = AtlasIndex->Rect;
+
+                        Hashmap_Add_By_Hash(&Cache->Cache, {
+                            .FontBufferPtr = FontBuffer.Ptr,
+                            .Size = CreateEntry->Size,
+                            .Codepoint = CreateEntry->Codepoint
+                        }, CreateEntry->Hash, Entry);
+                        
+                        DLL_Push_Front_NP(Cache->LRUHead, Cache->LRUTail, Entry, NextLRU, PrevLRU);
+                        Entry->UpdateIndex.Nonatomic = Cache->UpdateCount;
+                    } else {
+                        //If we still fail to allocate the atlas that really means
+                        //our atlas is full now. 
+                        //todo: We should probably resize the atlas to something greater
+                        //then. If its larger than a maximum size then we have a cache that is
+                        //full and we can't cache anymore glyphs
+                        Not_Implemented();
+                    }
                 }
             }
         }

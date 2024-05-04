@@ -43,6 +43,7 @@ union vec2 {
 };
 
 vec2 operator+(vec2 A, vec2 B);
+vec2& operator+=(vec2& A, vec2 B);
 vec2 operator/(f32 A, vec2 B);
 
 union vec3 {

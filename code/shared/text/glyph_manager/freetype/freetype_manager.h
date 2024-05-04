@@ -13,20 +13,19 @@
 #include <core/core.h>
 #include <text/text.h>
 
-struct glyph_manager {
-    arena*              Arena;
-    heap*               Heap;
-    lock_allocator*     AsyncAllocator;
-    FT_Library          Library;
-    ak_async_slot_map64 FaceSlots;
-    glyph_face*         Faces;
+struct glyph_face {
+    FT_Face      Face;
+    const_buffer FontBuffer;
 };
 
-struct glyph_face {
-    glyph_manager* Manager;
-    FT_Face        Face;
-    const_buffer   FontBuffer;
-    u32            Size;
+struct glyph_manager {
+    arena*                 Arena;
+    heap*                  Heap;
+    lock_allocator*        AsyncAllocator;
+    FT_Library             Library;
+    async_pool<glyph_face> Faces;
 };
+
+glyph_face* FT_Glyph_Face_Get(glyph_face_id FaceID);
 
 #endif

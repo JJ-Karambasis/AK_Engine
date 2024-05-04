@@ -174,6 +174,14 @@ u32 Align_U32(u32 Alignment, u32 Value) {
     return Remainder ? Value + (Alignment-Remainder) : Value;
 }
 
+bool In_Range(u32 Value, u32 Min, u32 Max) {
+    return Value >= Min && Value <= Max;
+}
+
+bool In_Range(u64 Value, u64 Min, u64 Max) {
+    return Value >= Min && Value <= Max;
+}
+
 scoped_mutex::scoped_mutex(ak_mutex* _Mutex) : Mutex(_Mutex) { 
     AK_Mutex_Lock(Mutex);
 }

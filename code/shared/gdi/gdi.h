@@ -378,16 +378,16 @@ enum gdi_execute_status {
 struct gdi_context_create_info {
     u32 DeviceIndex          = 0;
     u32 FrameCount           = 3;    
-    u32 PipelineCount        = 128;
-    u32 BindGroupCount       = 512;
-    u32 BindGroupLayoutCount = 512;
-    u32 FramebufferCount     = 128;
-    u32 RenderPassCount      = 128;
-    u32 SamplerCount         = 128;
+    u32 PipelineCount        = 1024;
+    u32 BindGroupCount       = 1024;
+    u32 BindGroupLayoutCount = 1024;
+    u32 FramebufferCount     = 1024;
+    u32 RenderPassCount      = 1024;
+    u32 SamplerCount         = 1024;
     u32 TextureViewCount     = 1024;
     u32 TextureCount         = 1024;
     u32 BufferCount          = 1024;
-    u32 SwapchainCount       = 32;
+    u32 SwapchainCount       = 128;
 };
 
 gdi*              GDI_Create(const gdi_create_info& CreateInfo);

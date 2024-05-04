@@ -1,6 +1,16 @@
 #ifndef UTILITY_H
 #define UTILITY_H
 
+struct range_u32 {
+    u32 Min;
+    u32 Max;
+};
+
+struct range_u64 {
+    u64 Min;
+    u64 Max;
+};
+
 u32 Ceil_Pow2(u32 V);
 u64 Ceil_Pow2(u64 V);
 char To_Lower(char C);
@@ -36,6 +46,8 @@ bool Is_Nan(f32 Value);
 bool Is_Finite(f32 Value);
 s32 Random_Between(s32 Min, s32 Max);
 u32 Align_U32(u32 Alignment, u32 Value);
+bool In_Range(u32 Value, u32 Min, u32 Max);
+bool In_Range(u64 Value, u64 Min, u64 Max);
 
 struct scoped_mutex {
     ak_mutex* Mutex;

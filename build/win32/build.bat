@@ -66,7 +66,7 @@ if "%clang%"=="1" set def=             -D
 if "%clang%"=="1" set cpp=             -std=c++20
 if "%clang%"=="1" set c=               -std=c17
 
-set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%dependencies_path%\harfbuzz\src %inc%%shared_path%\uba\sheenbidi\config %inc%%dependencies_path%\SheenBidi\Headers %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
+set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%dependencies_path%\harfbuzz\src %inc%%shared_path%\text\uba\sheenbidi\config %inc%%dependencies_path%\SheenBidi\Headers %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
 
 if "%debug%"=="1"   set compile=%compile_debug%
 if "%release%"=="1" set compile=%compile_release%
@@ -79,9 +79,9 @@ set harfbuzz_src=%dependencies_path%\harfbuzz\src
 if not exist %base_path%\bin\hb.lib (
     mkdir %base_path%\bin\harfbuzz_temp
     pushd %base_path%\bin\harfbuzz_temp
-        %compile% %harfbuzz_warnings% %only_compile% %def%HB_CUSTOM_MALLOC %cpp% ^
+        %compile% %harfbuzz_warnings% %only_compile% %def%HAVE_FREETYPE %def%HB_CUSTOM_MALLOC %cpp% ^
             %harfbuzz_src%\harfbuzz.cc ^
-            %shared_path%\text_shaper\harfbuzz\config\harfbuzz_config.cpp ^
+            %shared_path%\text\text_shaper\harfbuzz\config\harfbuzz_config.cpp ^
         %compile_link% || exit /b 1
 
         lib /nologo /OUT:%base_path%\bin\hb.lib *.obj
@@ -98,7 +98,7 @@ if not exist %base_path%\bin\sheenbidi.lib (
         %compile_link% || exit /b 1
 
         %compile% %only_compile% %cpp% ^
-            %shared_path%\uba\sheenbidi\config\SBConfig.cpp ^
+            %shared_path%\text\uba\sheenbidi\config\SBConfig.cpp ^
         %compile_link% || exit /b 1
 
         lib /nologo /OUT:%base_path%\bin\sheenbidi.lib *.obj

@@ -44,13 +44,6 @@ struct comparer<vtx_idx_p_uv> {
     }
 };
 
-ui_font Create_UI_Font(editor* Editor, const_buffer FontBuffer) {
-    ui_font Result;
-    Result.Face   = Glyph_Manager_Create_Face(Editor->GlyphManager, FontBuffer);
-    //Result.Shaper = Text_Shaper_Create_Face(Editor->TextShaper, Result.Face);
-    return Result;
-}
-
 internal void Window_Handle_Resize(editor* Editor, window* Window) {
     uvec2 CurrentWindowSize;
     OS_Window_Get_Resolution(Window->WindowID, &CurrentWindowSize.w, &CurrentWindowSize.h);
@@ -139,7 +132,7 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
         Editor->UIPipeline = UI_Pipeline_Create(Editor->GDIContext, Editor->Packages, &Editor->UIRenderPass);
     }
 
-    UI_Renderer_Create(&Window->Renderer, Editor->GDIContext, &Editor->UIRenderPass, &Editor->UIPipeline, &Window->UI, Editor->MainFont);
+    UI_Renderer_Create(&Window->Renderer, Editor->GDIContext, &Editor->UIRenderPass, &Editor->UIPipeline, &Window->UI);
 
     window_handle Result = {
         .Window = Window,
@@ -321,6 +314,7 @@ void Window_Update(editor* Editor, window* Window) {
     Window_Handle_Resize(Editor, Window);
 
     ui* UI = &Window->UI;
+    UI_Push_Font(UI, Editor->MainFont);
 #if 0 
     UI_Begin(UI);
 
@@ -487,17 +481,11 @@ bool Editor_Main() {
         return false;
     }
 
-    Editor.GlyphManager = Glyph_Manager_Create({});
-    if(!Editor.GlyphManager) {
-        Fatal_Error_Message();
-        return false;
-    }
+    Editor.FontManager = Font_Manager_Create({});
 
-    // Editor.TextShaper = Text_Shaper_Create({});
-    // if(!Editor.TextShaper) {
-    //     Fatal_Error_Message();
-    //     return false;
-    // }
+    resource* FontResource = Packages_Get_Resource(Editor.Packages, String_Lit("fonts"), String_Lit("arial"), String_Lit("regular"));
+    Editor.MainFontBuffer = Packages_Load_Entire_Resource(Editor.Packages, FontResource, Editor.Arena);
+    Editor.MainFont = Font_Manager_Create_Font(Editor.FontManager, Editor.MainFontBuffer, 40);
 
     if(!OS_Create(Editor.GDIContext)) {
         Fatal_Error_Message();
@@ -508,13 +496,6 @@ bool Editor_Main() {
     editor_input_manager* InputManager = &Editor.InputManager;
 
     os_monitor_id MonitorID = OS_Get_Primary_Monitor();
-    
-    domain* FontDomain = Packages_Get_Domain(Editor.Packages, String_Lit("fonts"));
-    {
-        resource* MainFontResource = Packages_Get_Resource(Editor.Packages, FontDomain, String_Lit("liberation mono"), String_Lit("regular"));
-        Editor.MainFontBuffer = Packages_Load_Entire_Resource(Editor.Packages, MainFontResource, Editor.Arena);
-        Editor.MainFont = Create_UI_Font(&Editor, Editor.MainFontBuffer);
-    }
     
     Editor.GlyphCache = Glyph_Cache_Create({
         .Context = Editor.GDIContext
@@ -650,6 +631,7 @@ int main() {
 
 #pragma comment(lib, "ftsystem.lib")
 #pragma comment(lib, "hb.lib")
+#pragma comment(lib, "sheenbidi.lib")
 
 #if defined(OS_WIN32)
 #pragma comment(lib, "user32.lib")

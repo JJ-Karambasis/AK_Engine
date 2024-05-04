@@ -42,6 +42,12 @@ inline void Span_Init(span<type>* Span, const type* First, const type* Last) {
 }
 
 template <typename type>
+inline const type* Span_Get(span<type>* Span, uptr Index) {
+    if(Index >= Count) return nullptr;
+    return Span->Ptr + Index;
+}
+
+template <typename type>
 inline void Span_Init(span<type>* Span, std::initializer_list<type> List) {
     Span_Init(Span, List.begin(), List.end());
 }

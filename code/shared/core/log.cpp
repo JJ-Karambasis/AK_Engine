@@ -89,7 +89,7 @@ logger* Log_Manager__Create_Logger(log_manager* LogManager, u64 ThreadID) {
     AK_Mutex_Lock(&LogManager->MapLock);
     Logger_Map__Add(&LogManager->LoggerMap, Result->ThreadID, Result);
     AK_Mutex_Unlock(&LogManager->MapLock);
-
+    
     return Result;
 }
 
@@ -98,8 +98,9 @@ logger* Log_Manager__Get_Logger() {
     if(LogManager) {
         logger* Logger = (logger*)AK_TLS_Get(&LogManager->LoggerLocalStorage);
         if(!Logger) {
+            
             u64 ThreadID = AK_Thread_Get_Current_ID();
-
+            
             AK_Mutex_Lock(&LogManager->MapLock);
             Logger = Logger_Map__Get(&LogManager->LoggerMap, ThreadID);
             AK_Mutex_Unlock(&LogManager->MapLock);

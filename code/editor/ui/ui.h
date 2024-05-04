@@ -1,11 +1,6 @@
 #ifndef UI_H
 #define UI_H
 
-struct ui_font {
-    glyph_face_id       Face;
-    // text_shaper_face_id Shaper;
-};
-
 struct ui_box {
     //Hash state
     ui_box* HashNext;
@@ -27,14 +22,15 @@ struct ui_box_hash_slot {
 };
 
 struct ui_create_info {
-    allocator*   Allocator;
-    glyph_cache* GlyphCache;
+    allocator*    Allocator;
+    glyph_cache*  GlyphCache;
 };
 
 struct ui {
     //Main arena
-    arena*       Arena;
+    arena*  Arena;
     glyph_cache* GlyphCache;
+    font_id FontID;
 
     //Box cache
     ui_box*           FirstFreeBox;
@@ -46,5 +42,7 @@ struct ui {
 };
 
 bool UI_Init(ui* UI, const ui_create_info& CreateInfo);
+
+void UI_Push_Font(ui* UI, font_id FontID);
 
 #endif

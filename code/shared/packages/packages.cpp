@@ -129,6 +129,15 @@ package* Packages_Get_Package(packages* Packages, string Domain, string Package)
     return *pPackage;
 }
 
+resource* Packages_Get_Resource(packages* Packages, string DomainName, string PackageName, string ResourceName) {
+    u32 DomainHash = Hash_CRC(DomainName.Str, DomainName.Size);
+    u32 PackageHash = Hash_CRC(PackageName.Str, PackageName.Size, DomainHash);
+    u32 ResourceHash = Hash_CRC(ResourceName.Str, ResourceName.Size, PackageHash);
+    resource** pResource = Hashmap_Find_By_Hash(&Packages->ResourceMap, ResourceName, ResourceHash); 
+    if(!pResource) return nullptr;
+    return *pResource;
+}
+
 resource* Packages_Get_Resource(packages* Packages, domain* Domain, string PackageName, string ResourceName) {
     u32 PackageHash = Hash_CRC(PackageName.Str, PackageName.Size, Domain->Hash);
     u32 ResourceHash = Hash_CRC(ResourceName.Str, ResourceName.Size, PackageHash);

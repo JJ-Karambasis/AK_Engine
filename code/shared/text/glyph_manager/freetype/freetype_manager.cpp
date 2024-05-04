@@ -46,36 +46,35 @@ glyph_manager* Glyph_Manager_Create(const glyph_manager_create_info& CreateInfo)
     FT_Add_Default_Modules(Manager->Library);
     FT_Set_Default_Properties(Manager->Library);
 
-    ak_slot64* Slots = Arena_Push_Array(Manager->Arena, CreateInfo.MaxFaceCount, ak_slot64);
-    u32* FreeIndices = Arena_Push_Array(Manager->Arena, CreateInfo.MaxFaceCount, u32);
-    AK_Async_Slot_Map64_Init_Raw(&Manager->FaceSlots, FreeIndices, Slots, CreateInfo.MaxFaceCount);
-    Manager->Faces = Arena_Push_Array(Manager->Arena, CreateInfo.MaxFaceCount, glyph_face);
+    Async_Pool_Create(&Manager->Faces, Manager->Arena, CreateInfo.MaxFaceCount);
 
     return Manager;
 }
 
 static glyph_face* Glyph_Face_Get(glyph_face_id FaceID) {
-    if(!FaceID.Generation || !FaceID.Face) return nullptr;
-    return AK_Async_Slot_Map64_Is_Allocated(&FaceID.Face->Manager->FaceSlots, (ak_slot64)FaceID.Generation) ? FaceID.Face : nullptr;
+    if(!FaceID.ID || !FaceID.Manager) return nullptr;
+    return Async_Pool_Get(&FaceID.Manager->Faces, async_handle<glyph_face>(FaceID.ID));
 }
 
-glyph_face_id Glyph_Manager_Create_Face(glyph_manager* Manager, const_buffer Buffer) {
-    FT_Face Face;
-
-    FT_Error Error = FT_New_Memory_Face(Manager->Library, (const FT_Byte*)Buffer.Ptr, (FT_Long)Buffer.Size, 0, &Face);
-    if(Error != 0) {
+glyph_face_id Glyph_Manager_Create_Face(glyph_manager* Manager, const_buffer Buffer, u32 PixelSize) {
+    async_handle<glyph_face> FaceHandle = Async_Pool_Allocate(&Manager->Faces);
+    if(FaceHandle.Is_Null()) {
         return {};
     }
 
-    ak_slot64 Slot = AK_Async_Slot_Map64_Alloc_Slot(&Manager->FaceSlots);
-    glyph_face* Result = Manager->Faces + AK_Slot64_Index(Slot);
-    Result->Manager = Manager;
-    Result->Face = Face;
-    Result->FontBuffer = Buffer;
+    glyph_face* Face = Async_Pool_Get(&Manager->Faces, FaceHandle);
+    
+    FT_Error Error = FT_New_Memory_Face(Manager->Library, (const FT_Byte*)Buffer.Ptr, (FT_Long)Buffer.Size, 0, &Face->Face);
+    if(Error != 0) {
+        Async_Pool_Free(&Manager->Faces, FaceHandle);
+        return {};
+    }
+    Face->FontBuffer = Buffer;
+    FT_Set_Pixel_Sizes(Face->Face, PixelSize, PixelSize);
 
     return {
-        .Generation = Slot,
-        .Face       = Result
+        .ID = FaceHandle.ID,
+        .Manager = Manager
     };
 }
 
@@ -85,29 +84,58 @@ const_buffer Glyph_Face_Get_Font_Buffer(glyph_face_id FaceID) {
     return Face->FontBuffer;
 }
 
-u32 Glyph_Face_Get_Size(glyph_face_id FaceID) {
+glyph_face_metrics Glyph_Face_Get_Metrics(glyph_face_id FaceID) {
     glyph_face* Face = Glyph_Face_Get(FaceID);
-    if(!Face) return 0;
-    return Face->Size;
+    if(!Face) return {};
+    FT_Size_Metrics* Metrics = &Face->Face->size->metrics;
+
+    s32 Ascender = Metrics->ascender;
+    s32 Descender = Metrics->descender;
+    s32 LineGap = Metrics->height - (Ascender-Descender);
+
+    return {
+        .Ascender = (u32)(Abs(Ascender) >> 6),
+        .Descender = (u32)(Abs(Descender) >> 6),
+        .LineGap = (u32)(Abs(LineGap) >> 6)
+    };
 }
 
-void Glyph_Face_Set_Size(glyph_face_id FaceID, u32 PixelSize) {
+glyph_metrics Glyph_Face_Get_Glyph_Metrics(glyph_face_id FaceID, u32 GlyphIndex) {
     glyph_face* Face = Glyph_Face_Get(FaceID);
-    if(!Face) return;
+    if(!Face) return {};
 
-    FT_Set_Pixel_Sizes(Face->Face, PixelSize, PixelSize);
-    Face->Size = PixelSize;
+    if(FT_Load_Glyph(Face->Face, GlyphIndex, FT_LOAD_DEFAULT)) {
+        return {};
+    }
+
+    FT_Glyph_Metrics* GlyphMetric = &Face->Face->glyph->metrics;
+
+    return {
+        .Advance = uvec2((u32)(GlyphMetric->horiAdvance >> 6), (u32)(GlyphMetric->vertAdvance >> 6)),
+        .Offset = svec2(GlyphMetric->horiBearingX >> 6, GlyphMetric->horiBearingY >> 6),
+        .Dim = uvec2((u32)(GlyphMetric->width >> 6), (u32)(GlyphMetric->height >> 6)) 
+    };
 }
 
-glyph_bitmap Glyph_Face_Create_Bitmap(glyph_face_id FaceID, allocator* Allocator, u32 Codepoint) {
+svec2 Glyph_Face_Get_Kerning(glyph_face_id FaceID, u32 GlyphA, u32 GlyphB) {
+    glyph_face* Face = Glyph_Face_Get(FaceID);
+    if(!Face) return {};
+
+    FT_Vector Delta;
+    FT_Get_Kerning(Face->Face, GlyphA, GlyphB, FT_KERNING_DEFAULT, &Delta);
+    return svec2(Delta.x >> 6, Delta.y >> 6);
+}
+
+glyph_bitmap Glyph_Face_Create_Bitmap(glyph_face_id FaceID, allocator* Allocator, u32 GlyphIndex) {
     glyph_face* Face = Glyph_Face_Get(FaceID);
     if(!Face) return {};
     
-    if(FT_Load_Char(Face->Face, Codepoint, FT_LOAD_DEFAULT|FT_LOAD_RENDER) != 0) {
+    if(FT_Load_Glyph(Face->Face, GlyphIndex, FT_LOAD_DEFAULT|FT_LOAD_RENDER) != 0) {
         return {};
     }
 
     FT_GlyphSlot GlyphSlot = Face->Face->glyph;
+
     glyph_bitmap Result = {
         .Dim = uvec2(GlyphSlot->bitmap.width, GlyphSlot->bitmap.rows)
     };
@@ -135,4 +163,8 @@ glyph_bitmap Glyph_Face_Create_Bitmap(glyph_face_id FaceID, allocator* Allocator
     }
 
     return Result;
+}
+
+glyph_face* FT_Glyph_Face_Get(glyph_face_id FaceID) {
+    return Glyph_Face_Get(FaceID);
 }

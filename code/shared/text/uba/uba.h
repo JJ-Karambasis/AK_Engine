@@ -11,19 +11,21 @@ enum uba_direction {
 struct uba_run {
     uptr          Offset;
     uptr          Length;
-    uba_direction Type;
+    uba_direction Direction;
 };
 
 enum uba_script {
     UBA_SCRIPT_NONE,
     UBA_SCRIPT_LATIN,
+    UBA_SCRIPT_ARABIC,
+    UBA_SCRIPT_DEVANAGARI,
     UBA_SCRIPT_COUNT
 };
 
 struct uba_script_info {
     uptr       Offset;
     uptr       Length;
-    uba_script Type;
+    uba_script Script;
 };
 
 struct uba;

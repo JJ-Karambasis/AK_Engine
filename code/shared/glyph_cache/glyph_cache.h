@@ -2,8 +2,7 @@
 #define GLYPH_CACHE_H
 
 struct glyph_entry {
-    uvec2 P1;
-    uvec2 P2;
+    rect2u AtlasRect;
 };
 
 struct glyph_cache_key {
@@ -24,7 +23,7 @@ struct glyph_cache_entry : glyph_entry {
 
 struct glyph_cache_create_entry {
     ak_slot64                 Slot;
-    glyph_face_id             Face;
+    font_id                   Font;
     u32                       Size;
     u32                       Codepoint;
     u32                       Hash;
@@ -70,7 +69,7 @@ void               Glyph_Cache_Delete(glyph_cache* Cache);
 //Glyph_Cache_Get is threadsafe relative to other Glyph_Cache_Gets,
 //must call Glyph_Cache_Update when no more Glyph_Cache_Gets are being
 //called so we can update the cache
-const glyph_entry* Glyph_Cache_Get(glyph_cache* Cache, glyph_face_id FaceID, u32 Codepoint);
+const glyph_entry* Glyph_Cache_Get(glyph_cache* Cache, font_id Font, u32 Codepoint);
 void               Glyph_Cache_Update(glyph_cache* Cache);
 
 

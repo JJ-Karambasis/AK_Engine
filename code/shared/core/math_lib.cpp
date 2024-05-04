@@ -28,6 +28,11 @@ vec2 operator+(vec2 A, vec2 B) {
     return vec2(A.x+B.x, A.y+B.y);
 }
 
+vec2& operator+=(vec2& A, vec2 B) {
+    A = A+B;
+    return A;
+}
+
 vec2 operator/(f32 A, vec2 B) {
     return vec2(A/B.x, A/B.y);
 }

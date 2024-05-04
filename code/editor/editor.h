@@ -64,8 +64,7 @@ struct editor {
     ak_job_system*                    JobSystemLow;
     gdi_context*                      GDIContext;
     packages*                         Packages;
-    glyph_manager*                    GlyphManager;
-    // text_shaper*                      TextShaper;
+    font_manager*                     FontManager;
     glyph_cache*                      GlyphCache;
     ui_render_pass                    UIRenderPass;
     ui_pipeline                       UIPipeline;
@@ -75,7 +74,7 @@ struct editor {
     editor_input_manager              InputManager;
     gpu_texture                       DefaultTexture;
     const_buffer                      MainFontBuffer;
-    ui_font                           MainFont;
+    font_id                           MainFont;
     
     window* FirstWindow;
     window* LastWindow;

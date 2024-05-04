@@ -227,8 +227,9 @@ vk_thread_context* VK_Get_Thread_Context(vk_thread_context_manager* Manager) {
     vk_thread_context* Result = (vk_thread_context*)AK_TLS_Get(&Manager->TLS);
     if(!Result) {
         //One allocation for the entire delete context
-        arena* ThreadContextArena = Manager->Arena;
+
         AK_Mutex_Lock(&Manager->Lock);
+        arena* ThreadContextArena = Manager->Arena;
         Result = Arena_Push_Struct(ThreadContextArena, vk_thread_context);
         Result->UploadBuffers = fixed_array<vk_upload_buffer>(ThreadContextArena, Context->Frames.Count);
         AK_Mutex_Unlock(&Manager->Lock);

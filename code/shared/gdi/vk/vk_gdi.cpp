@@ -1545,11 +1545,8 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
         for(;;) {
             VkResult SwapchainStatus = vkAcquireNextImageKHR(Context->Device, Swapchain->Handle, UINT64_MAX, CmdList->SubmitLock, VK_NULL_HANDLE, &CmdList->SwapchainTextureIndex);
             if(SwapchainStatus == VK_SUBOPTIMAL_KHR) {
-                if(!GDI_Context_Resize_Swapchain(Context, SwapchainID)) {
-                    //todo: error logging
-                    VK_Free_Cmd_List(Context, CmdPool, CmdList);
-                    return NULL;
-                }
+                //todo: What the actual fuck are we going to do here!
+                Not_Implemented();
             } else if(SwapchainStatus != VK_SUCCESS) {
                 //todo: error logging
                 VK_Free_Cmd_List(Context, CmdPool, CmdList);
