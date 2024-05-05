@@ -158,6 +158,8 @@ void         Arena_Track(arena* Arena, string DebugName);
 
 #define Arena_Push_Struct(Arena, type) (type*)Arena_Push(Arena, sizeof(type), alignof(type))
 #define Arena_Push_Array(Arena, count, type) (type*)Arena_Push(Arena, sizeof(type)*count, alignof(type))
+#define Arena_Push_Struct_No_Clear(Arena, type) (type*)Arena_Push(Arena, sizeof(type), alignof(type), ALLOCATOR_CLEAR_FLAG_NO_CLEAR)
+
 
 struct heap_block;
 struct heap_block_node;

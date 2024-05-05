@@ -1,6 +1,16 @@
 #ifndef UI_H
 #define UI_H
 
+#include "ui_common.h"
+#include "ui_stack.h"
+
+typedef u32 ui_box_flags;
+
+enum {
+    UI_BOX_FLAG_FIXED_WIDTH_BIT = (1 << 0),
+    UI_BOX_FLAG_FIXED_HEIGHT_BIT = (1 << 1)
+};
+
 struct ui_box {
     //Hash state
     ui_box* HashNext;
@@ -12,37 +22,95 @@ struct ui_box {
     ui_box* NextSibling;
     ui_box* PrevSibling;
     ui_box* Parent;
+    u32     ChildCount;
 
     //Per build info
-};
+    ui_key       Key;
+    ui_box_flags Flags;
+    u64          LastUsedBuildIndex;
+    vec2         FixedSize;
+    vec2         FixedPosition;
+    ui_size      PrefSize[UI_AXIS2_COUNT];
+    ui_axis2     ChildLayoutAxis;
+    vec4         BackgroundColor;
+    rect2        Rect;
 
-struct ui_box_hash_slot {
-    ui_box* First;
-    ui_box* Last;
 };
 
 struct ui_create_info {
     allocator*    Allocator;
-    glyph_cache*  GlyphCache;
 };
 
 struct ui {
     //Main arena
     arena*  Arena;
-    glyph_cache* GlyphCache;
-    font_id FontID;
+
+    //Build arenas
+    u64    BuildIndex;
+    arena* BuildArenas[2];
 
     //Box cache
-    ui_box*           FirstFreeBox;
-    u64               BoxHashTableCount;
-    ui_box_hash_slot* BoxHashTable;
+    ui_box*                  FirstFreeBox;
+    hashmap<ui_key, ui_box*> BoxHashTable;
 
     //Build Hierarchy
     ui_box* Root;
+
+    //Stacks
+    ui_stack_list Stacks[UI_STACK_TYPE_COUNT];
 };
 
-bool UI_Init(ui* UI, const ui_create_info& CreateInfo);
+//Creation and deletion API
+ui*  UI_Create(const ui_create_info& CreateInfo);
+void UI_Delete(ui* UI);
 
-void UI_Push_Font(ui* UI, font_id FontID);
+//Build API
+void UI_Begin_Build(ui* UI, window_handle Window);
+void UI_End_Build(ui* UI);
+
+//Cache lookup
+ui_box* UI_Box_From_Key(ui* UI, ui_key Key);
+
+//Box construction API
+ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key);
+ui_box* UI_Build_Box_From_String(ui* UI, ui_box_flags Flags, string String);
+ui_box* UI_Build_Box_From_StringF(ui* UI, ui_box_flags Flags, const char* Format, ...);
+
+//UI push stack API
+void UI_Push_Parent(ui* UI, ui_box* Box);
+void UI_Push_Child_Layout_Axis(ui* UI, ui_axis2 Axis);
+void UI_Push_Fixed_Width(ui* UI, f32 Width);
+void UI_Push_Fixed_Height(ui* UI, f32 Height);
+void UI_Push_Pref_Width(ui* UI, ui_size Size);
+void UI_Push_Pref_Height(ui* UI, ui_size Size);
+void UI_Push_Background_Color(ui* UI, vec4 Color);
+
+//UI pop stack API
+void UI_Pop_Parent(ui* UI);
+void UI_Pop_Child_Layout_Axis(ui* UI);
+void UI_Pop_Fixed_Width(ui* UI);
+void UI_Pop_Fixed_Height(ui* UI);
+void UI_Pop_Pref_Width(ui* UI);
+void UI_Pop_Pref_Height(ui* UI);
+void UI_Pop_Background_Color(ui* UI);
+
+//UI autopop api
+void UI_Set_Next_Parent(ui* UI, ui_box* Box);
+void UI_Set_Next_Child_Layout_Axis(ui* UI, ui_axis2 Axis);
+void UI_Set_Next_Fixed_Width(ui* UI, f32 Width);
+void UI_Set_Next_Fixed_Height(ui* UI, f32 Height);
+void UI_Set_Next_Pref_Width(ui* UI, ui_size Size);
+void UI_Set_Next_Pref_Height(ui* UI, ui_size Size);
+void UI_Set_Next_Background_Color(ui* UI, vec4 Color);
+
+//UI get most recent stack api
+ui_stack_parent*            UI_Current_Parent(ui* UI);
+ui_stack_child_layout_axis* UI_Current_Child_Layout(ui* UI);
+ui_stack_fixed_width*       UI_Current_Fixed_Width(ui* UI);
+ui_stack_fixed_height*      UI_Current_Fixed_Height(ui* UI);
+ui_stack_pref_width*        UI_Current_Pref_Width(ui* UI);
+ui_stack_pref_height*       UI_Current_Pref_Height(ui* UI);
+ui_stack_background_color*  UI_Current_Background_Color(ui* UI);
+
 
 #endif

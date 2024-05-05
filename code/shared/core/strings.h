@@ -42,6 +42,8 @@ string String_Concat(allocator* Allocator, string StringA, string StringB);
 string String_Concat(allocator* Allocator, const span<string>& Strings);
 string String_Substr(string String, uptr FirstIndex, uptr LastIndex);
 uptr   String_Find_Last(string String, char Character);
+bool   String_Begins_With(string String, string Substr);
+uptr   String_Find(string String, string Substring);
 string String_Get_Path(string String);
 
 string String_To_Date_Format(allocator* Allocator, u32 Value);

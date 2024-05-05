@@ -79,12 +79,32 @@ vec4::vec4(f32 _x, f32 _y, f32 _z, f32 _w) {
     w = _w;
 }
 
-vec4 vec4::Red(f32 Alpha) {
+vec4 Vec4_Red(f32 Alpha) {
     return vec4(1.0f, 0.0f, 0.0f, Alpha);
 }
 
-vec4 vec4::Green(f32 Alpha) {
+vec4 Vec4_Green(f32 Alpha) {
     return vec4(0.0f, 1.0f, 0.0f, Alpha);
+}
+
+vec4 Vec4_Blue(f32 Alpha) {
+    return vec4(0.0f, 0.0f, 1.0f, Alpha);
+}
+
+vec4 Vec4_Yellow(f32 Alpha) {
+    return vec4(1.0f, 1.0f, 0.0f, Alpha);
+}
+
+vec4 Vec4_Magenta(f32 Alpha) {
+    return vec4(1.0f, 0.0f, 1.0f, Alpha);
+}
+
+vec4 Vec4_White(f32 Alpha) {
+    return vec4(1.0f, 1.0f, 1.0f, Alpha);
+}
+
+vec4 Vec4_Black(f32 Alpha) {
+    return vec4(0.0f, 0.0f, 0.0f, Alpha);
 }
 
 quat::quat(f32 _x, f32 _y, f32 _z, f32 _w) {
@@ -329,5 +349,42 @@ bool Rect2u_Is_Empty(rect2u Rect) {
 
 u32 Rect2u_Area(rect2u Rect) {
     uvec2 Result = Rect2u_Get_Dim(Rect);
+    return Result.w*Result.h;
+}
+
+rect2::rect2(vec2 _Min, vec2 _Max) { 
+    Min = _Min;
+    Max = _Max;
+}
+
+rect2 Rect2_Empty() {
+    rect2 Result = Rect2(vec2(), vec2());
+    return Result; 
+}
+
+rect2 Rect2(vec2 P1, vec2 P2) {
+    rect2 Result(P1, P2);
+    return Result;
+}
+
+rect2 Rect2_From_Dim(vec2 Dim) {
+    return Rect2(vec2(), Dim);
+}
+
+vec2 Rect2_Get_Dim(rect2 Rect) {
+    vec2 Result(
+        Rect.Max.x-Rect.Min.x,
+        Rect.Max.y-Rect.Min.y
+    );
+    return Result;
+}
+
+bool Rect2_Is_Empty(rect2 Rect) {
+    vec2 Result = Rect2_Get_Dim(Rect);
+    return Result.x == 0 || Result.y == 0;
+}
+
+f32 Rect2_Area(rect2 Rect) {
+    vec2 Result = Rect2_Get_Dim(Rect);
     return Result.w*Result.h;
 }

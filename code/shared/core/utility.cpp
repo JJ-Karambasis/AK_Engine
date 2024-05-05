@@ -76,6 +76,10 @@ s32 Floor_S32(f64 V) {
     return (s32)floor(V);
 }
 
+f32 Floor_F32(f32 V) {
+    return floorf(V);
+}
+
 u32 Ceil_U32(f32 V) {
     return (u32)ceilf(V);
 }

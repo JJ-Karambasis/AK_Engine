@@ -281,16 +281,54 @@ uptr String_Find_Last(string String, char Character) {
     return STR_INVALID_FIND;
 }
 
+bool String_Begins_With(string String, string Substr) {
+    if(String.Size < Substr.Size) return false;
+
+    for(uptr i = 0; i < Substr.Size; i++) {
+        if(String[i] != Substr[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+uptr String_Find(string String, string Substring) {
+    uptr StopOffset = Max(String.Size+1, Substring.Size)-Substring.Size;
+    uptr PStart = 0;
+    uptr PEnd = StopOffset;
+
+    if(Substring.Size > 0) {
+        char FirstChar = Substring[0];
+        string SubstringTail = String_Substr(Substring, 1, Substring.Size);
+        for(; PStart < PEnd; PStart++) {
+            char HaystackChar = String[PStart];
+            if(HaystackChar == FirstChar) {
+                if(String_Begins_With(String_Substr(String, PStart+1, String.Size), 
+                                      SubstringTail)) {
+                    break;
+                }
+            }
+        }
+    }
+
+    uptr Result = STR_INVALID_FIND;
+    if(PStart < PEnd) {
+        Result = PStart;
+    }
+    return Result;
+}
+
 string String_Get_Path(string String) {
     uptr LastIndexDoubleSlash = String_Find_Last(String, '\\')+1;
     uptr LastIndexSlash = String_Find_Last(String, '/')+1;
 
     uptr LastIndex = 0;
-    if(LastIndexDoubleSlash != STR_INVALID_FIND && LastIndexSlash != STR_INVALID_FIND) {
+    if(LastIndexDoubleSlash != 0 && LastIndexSlash != 0) {
         LastIndex = LastIndexDoubleSlash > LastIndexSlash ? LastIndexDoubleSlash : LastIndexSlash;
-    } else if(LastIndexDoubleSlash != STR_INVALID_FIND) {
+    } else if(LastIndexDoubleSlash != 0) {
         LastIndex = LastIndexDoubleSlash;
-    } else if(LastIndexSlash != STR_INVALID_FIND) {
+    } else if(LastIndexSlash != 0) {
         LastIndex = LastIndexSlash;
     }
 

@@ -44,6 +44,12 @@ struct comparer<vtx_idx_p_uv> {
     }
 };
 
+window_handle::window_handle(window* _Window) {
+    Assert(_Window);
+    Window = _Window;
+    Generation = Window->Generation;
+}
+
 internal void Window_Handle_Resize(editor* Editor, window* Window) {
     uvec2 CurrentWindowSize;
     OS_Window_Get_Resolution(Window->WindowID, &CurrentWindowSize.w, &CurrentWindowSize.h);
@@ -98,7 +104,7 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
 
     DLL_Push_Back(Editor->FirstWindow, Editor->LastWindow, Window);
 
-    Window->Arena = Arena_Create(Core_Get_Base_Allocator());
+    Window->Arena = Arena_Create(Core_Get_Base_Allocator(), MB(1));
     Array_Init(&Window->SwapchainViews, Window->Arena);
     Array_Init(&Window->Framebuffers, Window->Arena);
 
@@ -118,12 +124,10 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
     //Right now we must use a valid render target format that is srgb compatible, so
     //we can create srgb views for the swapchain. Not all monitors support this though,
     //so at some point we will need to implement a workaround for this
-    Assert(GDI_Get_SRGB_Format(Window->SwapchainFormat) != GDI_FORMAT_NONE); 
+    Assert(GDI_Get_SRGB_Format(Window->SwapchainFormat) != GDI_FORMAT_NONE);
 
-    UI_Init(&Window->UI, {
-        .Allocator = Window->Arena,
-        .GlyphCache = Editor->GlyphCache
-    });
+    Window->UI = UI_Create({.Allocator = Window->Arena}); 
+
     if(Editor->UIRenderPass.RenderPass.Is_Null()) {
         Editor->UIRenderPass = UI_Render_Pass_Create(Editor->GDIContext, Window->SwapchainFormat);
     }
@@ -132,14 +136,9 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
         Editor->UIPipeline = UI_Pipeline_Create(Editor->GDIContext, Editor->Packages, &Editor->UIRenderPass);
     }
 
-    UI_Renderer_Create(&Window->Renderer, Editor->GDIContext, &Editor->UIRenderPass, &Editor->UIPipeline, &Window->UI);
+    UI_Renderer_Create(&Window->Renderer, Editor->GDIContext, &Editor->UIRenderPass, &Editor->UIPipeline, Window->UI, Editor->GlyphCache);
 
-    window_handle Result = {
-        .Window = Window,
-        .Generation = Window->Generation
-    };
-
-    return Result;
+    return window_handle(Window);
 }
 
 void Window_Close(editor* Editor, window_handle Handle) {
@@ -313,8 +312,48 @@ void Window_Update_Panel_Tree(editor* Editor, ui* UI, panel* Panel, vec2 PanelDi
 void Window_Update(editor* Editor, window* Window) {
     Window_Handle_Resize(Editor, Window);
 
-    ui* UI = &Window->UI;
-    UI_Push_Font(UI, Editor->MainFont);
+    ui* UI = Window->UI;
+    UI_Begin_Build(UI, window_handle(Window));
+
+    f32 ButtonSize = 50;
+
+    UI_Push_Fixed_Height(UI, ButtonSize);
+    UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.w);
+    UI_Set_Next_Child_Layout_Axis(UI, UI_AXIS2_X);
+    UI_Push_Background_Color(UI, Vec4_Red());
+    ui_box* MenuBox = UI_Build_Box_From_StringF(UI, 0, "###%llux", (u64)(uptr)Window);
+    UI_Push_Parent(UI, MenuBox);
+    {
+
+        UI_Set_Next_Fixed_Width(UI, ButtonSize);
+        UI_Set_Next_Background_Color(UI, Vec4_Yellow());
+        UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 1"));
+
+        f32 FinalButtonsSize = ButtonSize*3;
+        f32 NextRect = Max(0.0f, (f32)Window->Size.w - (FinalButtonsSize+ButtonSize));
+
+        UI_Set_Next_Fixed_Width(UI, NextRect);
+        UI_Build_Box_From_String(UI, 0, String_Lit("###Filler Box"));
+
+        UI_Push_Fixed_Width(UI, ButtonSize);
+        
+        UI_Set_Next_Background_Color(UI, Vec4_Blue());
+        UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 2"));
+
+        UI_Set_Next_Background_Color(UI, Vec4_Green());
+        UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 3"));
+
+        UI_Set_Next_Background_Color(UI, Vec4_Magenta());
+        UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 4"));
+
+        UI_Pop_Fixed_Width(UI);
+    }
+    UI_Pop_Parent(UI);
+    UI_Pop_Background_Color(UI);
+    UI_Pop_Fixed_Height(UI);
+    
+    UI_End_Build(UI);
+
 #if 0 
     UI_Begin(UI);
 
@@ -483,7 +522,7 @@ bool Editor_Main() {
 
     Editor.FontManager = Font_Manager_Create({});
 
-    resource* FontResource = Packages_Get_Resource(Editor.Packages, String_Lit("fonts"), String_Lit("arial"), String_Lit("regular"));
+    resource* FontResource = Packages_Get_Resource(Editor.Packages, String_Lit("fonts"), String_Lit("liberation mono"), String_Lit("regular"));
     Editor.MainFontBuffer = Packages_Load_Entire_Resource(Editor.Packages, FontResource, Editor.Arena);
     Editor.MainFont = Font_Manager_Create_Font(Editor.FontManager, Editor.MainFontBuffer, 40);
 

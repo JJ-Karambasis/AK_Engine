@@ -92,11 +92,12 @@ ui_pipeline UI_Pipeline_Create(gdi_context* Context, packages* Packages, ui_rend
     };
 }
 
-void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI) {    
+void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI, glyph_cache* GlyphCache) {    
     Renderer->Context = Context;
     Renderer->RenderPass = *RenderPass;
     Renderer->Pipeline = *Pipeline;
     Renderer->UI = UI;
+    Renderer->GlyphCache = GlyphCache;
 
     Renderer->GlobalBuffer = GDI_Context_Create_Buffer(Renderer->Context, {
         .ByteSize = sizeof(ui_box_shader_global),
@@ -118,7 +119,7 @@ void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_p
                 }, {
                     .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
                     .CopyBinding = {
-                        .SrcBindGroup = Renderer->UI->GlyphCache->Atlas.BindGroup
+                        .SrcBindGroup = Renderer->GlyphCache->Atlas.BindGroup
                     }
                 }
             }
@@ -128,16 +129,32 @@ void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_p
 
 void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList) {
     //Rebind the resources to the bind group if they need to change. This only needs to 
-
     scratch Scratch = Scratch_Get();
-    array<ui_box_shader_box> Boxes(&Scratch);
+    ui* UI = Renderer->UI;
+    array<ui_box_shader_box> DrawBoxes(&Scratch);
 
-    // Array_Push(&Boxes, {
-    //     .DstP0 = vec2(10.0f, 10.0f),
-    //     .DstP1 = vec2(50.0f, 50.0f),
-    //     .Color = vec4(1.0f, 0.0f, 0.0f, 1.0f)
-    // });
+    array<ui_box*> BoxStack(&Scratch, UI->BoxHashTable.Count);
+    if(UI->Root) {
+        Array_Push(&BoxStack, UI->Root);
+        while(!Array_Empty(&BoxStack)) {
+            ui_box* Box = Array_Pop(&BoxStack);
 
+            if(!Rect2_Is_Empty(Box->Rect)) {
+                Array_Push(&DrawBoxes, {
+                    .DstP0 = Box->Rect.Min,
+                    .DstP1 = Box->Rect.Max,
+                    .Color = Box->BackgroundColor
+                });
+            }
+
+            for(ui_box* Child = Box->FirstChild; Child; Child = Child->NextSibling) {
+                Array_Push(&BoxStack, Child);
+            }
+        }
+    }
+
+
+#if 0 
     string ArabTextString = String_Lit("T.W.Lewis");
     uba* UBA = UBA_Allocate(&Scratch, ArabTextString);
     span<uba_run> Runs = UBA_Get_Runs(UBA);
@@ -150,7 +167,6 @@ void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList) {
 
     vec2 Cursor = vec2(100, 100);
 
-    ui* UI = Renderer->UI;
 
     uptr StartIndex = 0;
     uptr CurrentIndex = 0;
@@ -215,17 +231,18 @@ void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList) {
             }
         }
     }
+#endif
 
     //If we don't have any boxes to render we can just early skip
-    if(!Boxes.Count) return;
+    if(!DrawBoxes.Count) return;
     
-    if(Boxes.Count > Renderer->InstanceCount) {
+    if(DrawBoxes.Count > Renderer->InstanceCount) {
         if(!Renderer->InstanceBuffer.Is_Null()) {
             GDI_Context_Delete_Buffer(Renderer->Context, Renderer->InstanceBuffer);
             Renderer->InstanceBuffer = {};
         }
 
-        Renderer->InstanceCount = Boxes.Count;
+        Renderer->InstanceCount = DrawBoxes.Count;
         Renderer->InstanceBuffer = GDI_Context_Create_Buffer(Renderer->Context, {
             .ByteSize   = Renderer->InstanceCount*sizeof(ui_box_shader_box),
             .UsageFlags = GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_GPU_LOCAL_BUFFER_BIT 
@@ -234,11 +251,11 @@ void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList) {
 
     ui_box_shader_global ShaderGlobal = {
         .InvRes = 1.0f / vec2(Renderer->FramebufferDim),
-        .InvTexRes = 1.0f / vec2(Renderer->UI->GlyphCache->Atlas.Dim)
+        .InvTexRes = 1.0f / vec2(Renderer->GlyphCache->Atlas.Dim)
     };
 
     GDI_Context_Buffer_Write(Renderer->Context, Renderer->GlobalBuffer, const_buffer(&ShaderGlobal));
-    GDI_Context_Buffer_Write(Renderer->Context, Renderer->InstanceBuffer, const_buffer(span(Boxes)));
+    GDI_Context_Buffer_Write(Renderer->Context, Renderer->InstanceBuffer, const_buffer(span(DrawBoxes)));
 
     GDI_Cmd_List_Begin_Render_Pass(CmdList, {
         .RenderPass = Renderer->RenderPass.RenderPass,
@@ -251,7 +268,7 @@ void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList) {
     GDI_Cmd_List_Set_Pipeline(CmdList, Renderer->Pipeline.Pipeline);
     GDI_Cmd_List_Set_Bind_Groups(CmdList, 0, {Renderer->GlobalBindGroup});
     GDI_Cmd_List_Set_Vtx_Buffers(CmdList, {Renderer->InstanceBuffer});
-    GDI_Cmd_List_Draw_Instance(CmdList, 4, Safe_U32(Boxes.Count), 0, 0);
+    GDI_Cmd_List_Draw_Instance(CmdList, 4, Safe_U32(DrawBoxes.Count), 0, 0);
 
     GDI_Cmd_List_End_Render_Pass(CmdList);
 }

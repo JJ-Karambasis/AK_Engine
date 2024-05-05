@@ -30,6 +30,7 @@ bool  operator==(uvec2 A, uvec2 B);
 union vec2 {
     f32 Data[2] = {};
     struct { f32 x, y; };
+    struct { f32 w, h; };
     vec2() = default;
     vec2(f32 _x, f32 _y);
     vec2(const svec2& V);
@@ -77,10 +78,15 @@ union vec4 {
     struct { vec3 xyz; f32 Unused__0; };
     vec4() = default;
     vec4(f32 _x, f32 _y, f32 _z, f32 _w);
-
-    static vec4 Red(f32 Alpha=1.0f);
-    static vec4 Green(f32 Alpha=1.0f);
 };
+
+vec4 Vec4_Red(f32 Alpha=1.0f);
+vec4 Vec4_Green(f32 Alpha=1.0f);
+vec4 Vec4_Blue(f32 Alpha=1.0f);
+vec4 Vec4_Yellow(f32 Alpha=1.0f);
+vec4 Vec4_Magenta(f32 Alpha=1.0f);
+vec4 Vec4_White(f32 Alpha=1.0f);
+vec4 Vec4_Black(f32 Alpha=1.0f);
 
 struct uvec4 {
     u32 Data[4] = {};
@@ -198,5 +204,20 @@ rect2u Rect2u_From_Dim(uvec2 Dim);
 uvec2  Rect2u_Get_Dim(rect2u Rect);
 bool   Rect2u_Is_Empty(rect2u Rect);
 u32    Rect2u_Area(rect2u Rect);
+
+struct rect2 {
+    vec2 Min = vec2();
+    vec2 Max = vec2();
+
+    rect2() = default;
+    rect2(vec2 Min, vec2 Max);
+};
+
+rect2 Rect2_Empty();
+rect2 Rect2(vec2 Min, vec2 Max);
+rect2 Rect2_From_Dim(vec2 Dim);
+vec2  Rect2_Get_Dim(rect2 Rect);
+bool  Rect2_Is_Empty(rect2 Rect);
+f32   Rect2_Area(rect2 Rect);
 
 #endif

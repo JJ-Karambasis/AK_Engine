@@ -220,6 +220,7 @@ do { \
         Target->Prev = Node; \
     } while(0)
 
+#define DLL_Remove_Back(First, Last) DLL_Remove_Back_NP(First, Last, Next, Prev)
 #define DLL_Remove_Front(First, Last) DLL_Remove_Front_NP(First, Last, Next, Prev)
 #define DLL_Push_Front(First, Last, Node) DLL_Push_Front_NP(First, Last, Node, Next, Prev)
 #define DLL_Push_Back(First, Last, Node) DLL_Push_Back_NP(First, Last, Node, Next, Prev)

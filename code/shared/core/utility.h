@@ -26,6 +26,7 @@ u32 Ceil_U32(f64 V);
 s32 Ceil_S32(f64 V);
 u32 Floor_U32(f64 V);
 s32 Floor_S32(f64 V);
+f32 Floor_F32(f32 V);
 u32 Ceil_U32(f32 V);
 s32 Ceil_S32(f32 V);
 u32 Floor_U32(f32 V);

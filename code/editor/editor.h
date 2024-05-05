@@ -4,6 +4,16 @@
 #include <engine.h>
 #include "editor_modules.h"
 #include "os/os.h"
+
+struct window;
+struct window_handle {
+    window* Window;
+    u64     Generation;
+
+    window_handle() = default;
+    window_handle(window* Window);
+};
+
 #include "editor_input.h"
 #include "ui/ui.h"
 #include "editor_renderers/editor_renderers.h"
@@ -34,13 +44,6 @@ struct panel {
     view* ChosenView;
 };
 
-struct window;
-
-struct window_handle {
-    window* Window;
-    u64     Generation;
-};
-
 struct window {
     arena*                              Arena;
     u64                                 Generation;
@@ -49,7 +52,7 @@ struct window {
     gdi_format                          SwapchainFormat;
     array<gdi_handle<gdi_texture_view>> SwapchainViews;
     array<gdi_handle<gdi_framebuffer>>  Framebuffers;
-    ui                                  UI;
+    ui*                                 UI;
     uvec2                               Size;
     ui_renderer                         Renderer;
 

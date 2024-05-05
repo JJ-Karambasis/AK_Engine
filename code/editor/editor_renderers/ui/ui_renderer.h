@@ -23,6 +23,7 @@ struct ui_renderer {
     gdi_handle<gdi_buffer>      InstanceBuffer;
     uptr                        InstanceCount;
     ui*                         UI;
+    glyph_cache*                GlyphCache;
 
     //Per frame updates by the app
     uvec2                       FramebufferDim;
@@ -31,7 +32,7 @@ struct ui_renderer {
 
 ui_render_pass UI_Render_Pass_Create(gdi_context* Context, gdi_format Format);
 ui_pipeline    UI_Pipeline_Create(gdi_context* Context, packages* Packages, ui_render_pass* RenderPass);
-void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI);
+void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI, glyph_cache* GlyphCache);
 void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList);
 void UI_Renderer_Set_Framebuffer(ui_renderer* Renderer, gdi_handle<gdi_framebuffer> Framebuffer, uvec2 FramebufferDim);
 
