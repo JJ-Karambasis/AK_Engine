@@ -54,7 +54,7 @@ struct window {
     array<gdi_handle<gdi_framebuffer>>  Framebuffers;
     ui*                                 UI;
     uvec2                               Size;
-    ui_renderer                         Renderer;
+    ui_renderer                         UIRenderer;
 
     //Window links
     window* Prev;
@@ -65,7 +65,7 @@ struct editor {
     arena*                            Arena;
     ak_job_system*                    JobSystemHigh;
     ak_job_system*                    JobSystemLow;
-    gdi_context*                      GDIContext;
+    renderer*                         Renderer;
     packages*                         Packages;
     font_manager*                     FontManager;
     glyph_cache*                      GlyphCache;

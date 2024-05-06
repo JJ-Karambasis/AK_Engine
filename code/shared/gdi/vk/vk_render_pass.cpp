@@ -116,7 +116,6 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
         Framebuffer->Add_Reference(Context, TextureView, VK_RESOURCE_TYPE_TEXTURE_VIEW);
     }
 
-
     vk_handle<vk_render_pass> RenderPassHandle(CreateInfo.RenderPass.ID);
     vk_render_pass* RenderPass = VK_Resource_Get(ResourceContext->RenderPasses, RenderPassHandle);
     if(!RenderPass) {

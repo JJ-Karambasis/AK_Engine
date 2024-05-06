@@ -13,8 +13,6 @@ struct ui_pipeline {
 
 struct ui_renderer {
     //Globals that are set on creation
-    gdi_context*   Context;
-    ui_render_pass RenderPass;
     ui_pipeline    Pipeline;
 
     //Persistant updates per frame by the renderer
@@ -24,16 +22,11 @@ struct ui_renderer {
     uptr                        InstanceCount;
     ui*                         UI;
     glyph_cache*                GlyphCache;
-
-    //Per frame updates by the app
-    uvec2                       FramebufferDim;
-    gdi_handle<gdi_framebuffer> Framebuffer;
+    render_task_id              RenderTask;
 };
 
-ui_render_pass UI_Render_Pass_Create(gdi_context* Context, gdi_format Format);
-ui_pipeline    UI_Pipeline_Create(gdi_context* Context, packages* Packages, ui_render_pass* RenderPass);
-void UI_Renderer_Create(ui_renderer* Renderer, gdi_context* Context, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI, glyph_cache* GlyphCache);
-void UI_Renderer_Update(ui_renderer* Renderer, gdi_cmd_list* CmdList);
-void UI_Renderer_Set_Framebuffer(ui_renderer* Renderer, gdi_handle<gdi_framebuffer> Framebuffer, uvec2 FramebufferDim);
+ui_render_pass UI_Render_Pass_Create(renderer* Renderer, gdi_format Format);
+ui_pipeline    UI_Pipeline_Create(renderer* Renderer, packages* Packages, ui_render_pass* RenderPass);
+void           UI_Renderer_Create(ui_renderer* UIRenderer, renderer* Renderer, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI, glyph_cache* GlyphCache);
 
 #endif

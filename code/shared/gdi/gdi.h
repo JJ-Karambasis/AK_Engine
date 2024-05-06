@@ -330,8 +330,8 @@ struct gdi_swapchain_create_info {
 
 
 enum gdi_cmd_list_type {
-    Graphics,
-    Compute
+    GDI_CMD_LIST_TYPE_GRAPHICS,
+    GDI_CMD_LIST_TYPE_COMPUTE
 };
 
 struct gdi_device {
@@ -369,10 +369,23 @@ struct gdi_context_info {
     uptr ConstantBufferAlignment;
 };
 
+enum {
+    GDI_CMD_LIST_NONE,
+    GDI_CMD_LIST_GRAPHICS_BIT = (1 << 0),
+    GDI_CMD_LIST_SECONDARY_BIT = (1 << 1)
+};
+typedef u32 gdi_cmd_list_flags;
+
 enum gdi_execute_status {
     GDI_EXECUTE_STATUS_NONE,
     GDI_EXECUTE_STATUS_RESIZE,
     GDI_EXECUTE_STATUS_ERROR
+};
+
+enum gdi_swapchain_status {
+    GDI_SWAPCHAIN_STATUS_OK,
+    GDI_SWAPCHAIN_STATUS_RESIZE,
+    GDI_SWAPCHAIN_STATUS_ERROR
 };
 
 struct gdi_context_create_info {
@@ -410,6 +423,7 @@ void                              GDI_Context_Delete_Bind_Group_Layout(gdi_conte
 
 gdi_handle<gdi_framebuffer>       GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo);
 void                              GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
+uvec2                             GDI_Context_Get_Framebuffer_Resolution(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
 gdi_handle<gdi_render_pass>       GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo);
 void                              GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle);
 
@@ -431,9 +445,11 @@ gdi_handle<gdi_swapchain>         GDI_Context_Create_Swapchain(gdi_context* Cont
 void                              GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 bool                              GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 span<gdi_handle<gdi_texture>>     GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
+s32                               GDI_Context_Get_Swapchain_Texture_Index(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
+gdi_swapchain_status              GDI_Context_Get_Swapchain_Status(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 
-gdi_cmd_list*                     GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_swapchain> Swapchain = {});
-gdi_execute_status                GDI_Context_Execute(gdi_context* Context);
+gdi_cmd_list*                     GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_flags Flags);
+bool                              GDI_Context_Execute(gdi_context* Context);
 
 enum gdi_resource_state {
     GDI_RESOURCE_STATE_NONE,
@@ -497,7 +513,11 @@ struct gdi_render_pass_begin_info {
     span<gdi_clear> ClearValues;
 };
 
-u32  GDI_Cmd_List_Get_Swapchain_Texture_Index(gdi_cmd_list* CmdList, gdi_resource_state ResourceState);
+struct gdi_swapchain_present_info {
+    gdi_handle<gdi_swapchain> Swapchain;
+    gdi_resource_state        InitialState;
+};
+
 void GDI_Cmd_List_Barrier(gdi_cmd_list* CmdList, span<gdi_barrier> Barriers);
 void GDI_Cmd_List_Begin_Render_Pass(gdi_cmd_list* CmdList, const gdi_render_pass_begin_info& BeginInfo);
 void GDI_Cmd_List_End_Render_Pass(gdi_cmd_list* CmdList);
@@ -508,5 +528,7 @@ void GDI_Cmd_List_Set_Bind_Groups(gdi_cmd_list* CmdList, u32 StartingIndex, span
 void GDI_Cmd_List_Set_Dynamic_Bind_Groups(gdi_cmd_list* CmdList, u32 StartingIndex, span<gdi_handle<gdi_bind_group>> BindGroups, span<uptr> Offsets);
 void GDI_Cmd_List_Draw_Instance(gdi_cmd_list* CmdList, u32 VtxCount, u32 InstanceCount, u32 VtxOffset, u32 InstanceOffset);
 void GDI_Cmd_List_Draw_Indexed_Instance(gdi_cmd_list* CmdList, u32 IdxCount, u32 IdxOffset, u32 VtxOffset, u32 InstanceCount, u32 InstanceOffset);
+void GDI_Cmd_List_Execute_Cmds(gdi_cmd_list* MainCmdList, span<gdi_cmd_list*> CmdLists);
+void GDI_Cmd_List_Present(gdi_cmd_list* CmdList, span<gdi_swapchain_present_info> PresentInfo);
 
 #endif

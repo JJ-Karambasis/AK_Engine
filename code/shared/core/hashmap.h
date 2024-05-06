@@ -61,6 +61,8 @@ struct hashmap {
         kvp_iter Result = {this, Count};
         return Result;
     }
+
+    value& operator[](const key& Key);
 };
 
 inline u32 Expand_Slots(allocator* Allocator, hash_slot** Slots, u32 OldCapacity, u32 NewCapacity, u32* ItemSlots) {
@@ -302,6 +304,13 @@ inline void Hashmap_Free(hashmap<key, value, hasher, comparer>* Hashmap) {
         Hashmap->Values = nullptr;
         Hashmap->ItemSlots = nullptr;
     }
+}
+
+template <typename key, typename value, typename hasher, typename comparer>
+inline value& hashmap<key, value, hasher, comparer>::operator[](const key& Key) {
+    value* pValue = Hashmap_Find(this, Key);
+    Assert(pValue);
+    return *pValue;
 }
 
 template <typename key, typename value, typename hasher, typename comparer>

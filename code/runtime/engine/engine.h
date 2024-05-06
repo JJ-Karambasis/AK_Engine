@@ -9,6 +9,7 @@
 #include <assets/assets.h>
 #include <atlas/atlas.h>
 #include <glyph_cache/glyph_cache.h>
+#include <renderer/renderer.h>
 
 #include "modules.h"
 #include "camera.h"
