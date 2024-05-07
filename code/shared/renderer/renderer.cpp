@@ -225,15 +225,7 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
         Clears[i] = RenderTask->RenderPassAttachmentStates[i].Clear;
     }
 
-    gdi_cmd_list* CmdList = GDI_Context_Begin_Cmd_List(Context, GDI_CMD_LIST_GRAPHICS_BIT|GDI_CMD_LIST_SECONDARY_BIT);
-    GDI_Cmd_List_Begin_Render_Pass(CmdList, {
-        .RenderPass = RenderTask->RenderPass,
-        .Framebuffer = RenderTask->Framebuffer,
-        .ClearValues = Clears
-    });
-
-
-    GDI_Cmd_List_End_Render_Pass(CmdList);
+    gdi_cmd_list* CmdList = GDI_Context_Begin_Cmd_List(Context, GDI_CMD_LIST_TYPE_GRAPHICS, RenderTask->RenderPass, RenderTask->Framebuffer);
 
     RenderTask->CmdList = CmdList;
 }
@@ -289,7 +281,7 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
     array<gdi_barrier> Barriers(&Scratch);
     array<gdi_swapchain_present_info> PresentInfo(&Scratch);
 
-    gdi_cmd_list* MainCmdList = GDI_Context_Begin_Cmd_List(Renderer->Context, GDI_CMD_LIST_GRAPHICS_BIT);
+    gdi_cmd_list* MainCmdList = GDI_Context_Begin_Cmd_List(Renderer->Context, GDI_CMD_LIST_TYPE_GRAPHICS, {}, {});
 
     Array_Push(&Stack, Graph->Children);
     while(!Array_Empty(&Stack)) {
@@ -302,7 +294,10 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
                 if(Task->DependentIndex >= Task->DependentJobs) {
                     Assert(Task->DependentIndex == Task->DependentJobs);
                     span<render_texture_state> RenderPassAttachmentStates = Task->RenderPassAttachmentStates;
-                    for(render_texture_state State : RenderPassAttachmentStates) {
+                    fixed_array<gdi_clear> Clears(&Scratch, RenderPassAttachmentStates.Count);
+                    
+                    for(uptr i = 0; i < RenderPassAttachmentStates.Count; i++) {
+                        render_texture_state State = RenderPassAttachmentStates[i];
                         if(CurrentTextureStates[State.Attachment] != State.ResourceState) {
                             Array_Push(&Barriers, {
                                 .Resource = gdi_resource::Texture(State.Attachment),
@@ -315,6 +310,7 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
                                 Hashmap_Add(&InitialTextureStates, State.Attachment, State.ResourceState);
                             }
                         }
+                        Clears[i] = RenderPassAttachmentStates[i].Clear;
                     }
 
                     if(Barriers.Count) {
@@ -322,7 +318,13 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
                         Array_Clear(&Barriers);
                     }
 
+                    GDI_Cmd_List_Begin_Render_Pass(MainCmdList, {
+                        .RenderPass = Task->RenderPass,
+                        .Framebuffer = Task->Framebuffer, 
+                        .ClearValues = Clears
+                    });
                     GDI_Cmd_List_Execute_Cmds(MainCmdList, {Task->CmdList});
+                    GDI_Cmd_List_End_Render_Pass(MainCmdList);
                 }
 
             }
@@ -362,11 +364,7 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
         Array_Clear(&Barriers);
     }
 
-    if(PresentInfo.Count) {
-        GDI_Cmd_List_Present(MainCmdList, PresentInfo);
-    }
-
-    return GDI_Context_Execute(Renderer->Context);    
+    return GDI_Context_Execute(Renderer->Context, PresentInfo);    
 }
 
 render_task_id Render_Graph_Create_Draw_Task(renderer* Renderer, draw_callback_func* Callback, void* UserData) {

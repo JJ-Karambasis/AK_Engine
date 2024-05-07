@@ -189,6 +189,20 @@ u8* VK_Upload_Buffer_Push(vk_upload_buffer* UploadBuffer, size_t Size, vk_upload
     return Result; 
 }
 
+void VK_Cmd_Storage_Free_All(vk_cmd_storage_list* StorageList) {
+    while(StorageList->Tail) {
+        vk_cmd_list* CmdList = StorageList->Tail;
+        DLL_Remove_Back(StorageList->Head, StorageList->Tail);
+        SLL_Push_Front(StorageList->Free, CmdList);
+    }
+}
+
+vk_cmd_pool* VK_Get_Current_Cmd_Pool(vk_thread_context_manager* Manager, vk_thread_context* ThreadContext) {
+    gdi_context* Context = Manager->Context;
+    u64 FrameIndex = Context->TotalFramesRendered % Context->Frames.Count;
+    return &ThreadContext->CmdPools[FrameIndex];  
+}
+
 vk_upload_buffer* VK_Get_Current_Upload_Buffer(vk_thread_context_manager* Manager, vk_thread_context* ThreadContext) {
     gdi_context* Context = Manager->Context;
     u64 FrameIndex = Context->TotalFramesRendered % Context->Frames.Count;
@@ -227,14 +241,31 @@ vk_thread_context* VK_Get_Thread_Context(vk_thread_context_manager* Manager) {
     vk_thread_context* Result = (vk_thread_context*)AK_TLS_Get(&Manager->TLS);
     if(!Result) {
         //One allocation for the entire delete context
-
-        AK_Mutex_Lock(&Manager->Lock);
-        arena* ThreadContextArena = Manager->Arena;
-        Result = Arena_Push_Struct(ThreadContextArena, vk_thread_context);
-        Result->UploadBuffers = fixed_array<vk_upload_buffer>(ThreadContextArena, Context->Frames.Count);
-        AK_Mutex_Unlock(&Manager->Lock);
-
+        arena* Arena = Arena_Create(Context->GDI->MainAllocator);
+        Result = Arena_Push_Struct(Arena, vk_thread_context);
+        Result->Arena = Arena;
         SLL_Push_Front_Async(&Manager->List, Result);
+        
+        Result->UploadBuffers = fixed_array<vk_upload_buffer>(Result->Arena, Context->Frames.Count);
+        Result->CmdPools = fixed_array<vk_cmd_pool>(Result->Arena, Context->Frames.Count);
+        for(u32 i = 0; i < Context->Frames.Count; i++) {
+            vk_cmd_pool* CmdPool = &Result->CmdPools[i];
+
+            VkCommandPoolCreateInfo CreateInfo = {
+                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .queueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex
+            };
+
+            if(vkCreateCommandPool(Context->Device, &CreateInfo, Context->VKAllocator, &CmdPool->CommandPool) != VK_SUCCESS) {
+                //todo: Logging
+                Arena_Delete(Arena);
+                return nullptr;
+            }
+
+            if(i == 0) {
+                vkResetCommandPool(Context->Device, CmdPool->CommandPool, 0);
+            }
+        }
 
         vk_delete_context* DeleteContext = &Result->DeleteContext;
         AK_RW_Lock_Create(&DeleteContext->RWLock);
@@ -305,6 +336,7 @@ void VK_Thread_Context_Manager_Delete(vk_thread_context_manager* Manager) {
             VK_Upload_Buffer_Delete(&UploadBuffer);
         }
 
+        Arena_Delete(ThreadContext->Arena);
         ThreadContext = ThreadContext->Next;
     }
 
@@ -453,6 +485,12 @@ void VK_Thread_Context_Manager_New_Frame(vk_thread_context_manager* Manager) {
     while(ThreadContext) {
         vk_upload_buffer* UploadBuffer = VK_Get_Current_Upload_Buffer(Manager, ThreadContext);
         VK_Upload_Buffer_Clear(UploadBuffer);
+
+        vk_cmd_pool* CmdPool = VK_Get_Current_Cmd_Pool(Manager, ThreadContext);
+        vkResetCommandPool(Context->Device, CmdPool->CommandPool, 0);
+
+        VK_Cmd_Storage_Free_All(&CmdPool->PrimaryCmds);
+        VK_Cmd_Storage_Free_All(&CmdPool->SecondaryCmds);
 
         vk_delete_context* DeleteContext = &ThreadContext->DeleteContext;
         u32 DeleteIndex = VK_Delete_Context_Swap(DeleteContext);

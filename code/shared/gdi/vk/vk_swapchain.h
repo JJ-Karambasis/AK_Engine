@@ -9,6 +9,10 @@ struct vk_swapchain : vk_resource_base {
     array<gdi_handle<gdi_texture>> Textures;
     u32                            Width;
     u32                            Height;
+    s32                            TextureIndex;
+    VkSemaphore                    AcquireLock;
+    VkSemaphore                    ExecuteLock;
+    gdi_swapchain_status           Status;
 };
 
 internal string VK_Get_Surface_Extension_Name();

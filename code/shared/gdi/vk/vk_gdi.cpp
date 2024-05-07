@@ -408,108 +408,6 @@ internal VkImageLayout VK_Get_Image_Layout(gdi_resource_state ResourceState) {
     return G_VKImageLayouts[ResourceState];
 }
 
-void VK_Release_Cmd_List(gdi_context* Context, vk_cmd_pool* CmdPool, vk_cmd_list* CmdList) {
-    if(CmdList->PresentLock) {
-        vkDestroySemaphore(Context->Device, CmdList->PresentLock, Context->VKAllocator);
-        CmdList->PresentLock = VK_NULL_HANDLE;
-    }
-
-    if(CmdList->SubmitLock) {
-        vkDestroySemaphore(Context->Device, CmdList->SubmitLock, Context->VKAllocator);
-        CmdList->SubmitLock = VK_NULL_HANDLE;
-    }
-
-    if(CmdList->CmdPool) {
-        vkDestroyCommandPool(Context->Device, CmdList->CmdPool, Context->VKAllocator);
-        CmdList->CmdPool = VK_NULL_HANDLE;
-    }
-}
-
-void VK_Free_Cmd_List(gdi_context* Context, vk_cmd_pool* CmdPool, vk_cmd_list* CmdList) {
-    if(CmdList) {
-        VK_Release_Cmd_List(Context, CmdPool, CmdList);
-
-        DLL_Remove(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail, CmdList);
-        SLL_Push_Front(CmdPool->FreeCmdList, CmdList);
-    }
-}
-
-vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context, vk_cmd_pool* CmdPool) {
-    vk_cmd_list* Result = CmdPool->FreeCmdList;
-    if(Result) SLL_Pop_Front(CmdPool->FreeCmdList);
-    else {
-        VkSemaphore SubmitLock = VK_NULL_HANDLE;
-        VkSemaphore PresentLock = VK_NULL_HANDLE;
-        if(CmdPool->Level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-            VkSemaphoreCreateInfo SemaphoreCreateInfo = {
-                .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            };
-
-            vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &SubmitLock);
-            vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &PresentLock);
-        }
-
-        VkCommandPoolCreateInfo CmdPoolCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-            .queueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex
-        };
-
-        VkCommandPool VkCmdPool;
-        if(vkCreateCommandPool(Context->Device, &CmdPoolCreateInfo, Context->VKAllocator, &VkCmdPool) != VK_SUCCESS) {
-            //todo: diagnostics
-            if(SubmitLock)  vkDestroySemaphore(Context->Device, SubmitLock, Context->VKAllocator);
-            if(PresentLock) vkDestroySemaphore(Context->Device, PresentLock, Context->VKAllocator);
-            return NULL;
-        }
-
-        VkCommandBufferAllocateInfo CmdBufferAllocateInfo = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .commandPool = VkCmdPool,
-            .level = CmdPool->Level,
-            .commandBufferCount = 1,
-        };
-
-        VkCommandBuffer CmdBuffer;
-        if(vkAllocateCommandBuffers(Context->Device, &CmdBufferAllocateInfo, &CmdBuffer) != VK_SUCCESS) {
-            //todo: diagnostics
-            if(SubmitLock)  vkDestroySemaphore(Context->Device, SubmitLock, Context->VKAllocator);
-            if(PresentLock) vkDestroySemaphore(Context->Device, PresentLock, Context->VKAllocator);
-            vkDestroyCommandPool(Context->Device, VkCmdPool, Context->VKAllocator);
-            return NULL;
-        }
-
-        Result = Arena_Push_Struct(Context->Arena, vk_cmd_list);
-        Result->Context = Context;
-        Result->CmdPool = VkCmdPool;
-        Result->CmdBuffer = CmdBuffer;
-        Result->SubmitLock = SubmitLock;
-        Result->PresentLock = PresentLock;
-    }
-    Result->SwapchainTextureIndex = (u32)-1;
-    Result->Next = Result->Prev = NULL;
-
-    DLL_Push_Back(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail, Result);
-
-    return Result;
-}
-
-internal void VK_Cmd_Pool_Delete(gdi_context* Context, vk_cmd_pool* CmdPool) {
-    vk_cmd_list* CmdListToDelete = CmdPool->FreeCmdList;
-    while(CmdPool->FreeCmdList) {
-        VK_Release_Cmd_List(Context, CmdPool, CmdPool->FreeCmdList);
-        SLL_Pop_Front(CmdPool->FreeCmdList);
-    }
-
-    while(CmdPool->CurrentCmdListHead) {
-        VK_Release_Cmd_List(Context, CmdPool, CmdPool->CurrentCmdListHead);
-        SLL_Pop_Front(CmdPool->CurrentCmdListHead);
-    }
-
-    CmdPool->CurrentCmdListHead = NULL;
-    CmdPool->CurrentCmdListTail = NULL;
-    CmdPool->FreeCmdList = NULL;
-}
-
 internal bool VK_Create__Internal(gdi* GDI, const gdi_create_info& CreateInfo) {
     GDI->Arena = Arena_Create(GDI->MainAllocator);
     GDI->VKAllocator = {
@@ -823,22 +721,24 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
     Context->Frames = array<vk_frame_context>(Context->Arena, CreateInfo.FrameCount);
     Array_Resize(&Context->Frames, CreateInfo.FrameCount);
     
+    VK_Thread_Context_Manager_Create(Context, &Context->ThreadContextManager);
+
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    VK_Resource_Context_Create(Context, ResourceContext, CreateInfo);
+
+    vk_thread_context* ThreadContext = VK_Get_Thread_Context(&Context->ThreadContextManager);
     for(u32 i = 0; i < CreateInfo.FrameCount; i++) {
         vk_frame_context* Frame = &Context->Frames[i];
+        vk_cmd_pool* CmdPool = &ThreadContext->CmdPools[i];
 
         VkCommandPoolCreateInfo CmdPoolCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .queueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex
         };
 
-        if(vkCreateCommandPool(Context->Device, &CmdPoolCreateInfo, Context->VKAllocator, &Frame->CopyCmdPool) != VK_SUCCESS) {
-            //todo: logging
-            return false;
-        }
-
         VkCommandBufferAllocateInfo CmdBufferAllocateInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .commandPool = Frame->CopyCmdPool,
+            .commandPool = CmdPool->CommandPool,
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount = 1
         };
@@ -854,33 +754,9 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
 
         if(i != 0) {
             FenceCreateInfo.flags |= VK_FENCE_CREATE_SIGNALED_BIT;
-        } else {
-            if(vkResetCommandPool(Context->Device, Frame->CopyCmdPool, 0) != VK_SUCCESS) {
-                //todo: logging
-                return false;
-            }
-
-            VkCommandBufferBeginInfo BeginInfo = {
-                .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-                .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-            };
-
-            if(vkBeginCommandBuffer(Frame->CopyCmdBuffer, &BeginInfo) != VK_SUCCESS) {
-                //todo: logging
-                return false;
-            }
         }
-
         vkCreateFence(Context->Device, &FenceCreateInfo, Context->VKAllocator, &Frame->Fence);
-
-        Frame->PrimaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        Frame->SecondaryCmdPool.Level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
     }
-
-    VK_Thread_Context_Manager_Create(Context, &Context->ThreadContextManager);
-
-    vk_resource_context* ResourceContext = &Context->ResourceContext;
-    VK_Resource_Context_Create(Context, ResourceContext, CreateInfo);
 
     return true;
 }
@@ -891,6 +767,35 @@ u64 VK_Get_Current_Frame_Index(gdi_context* Context) {
 
 vk_frame_context* VK_Get_Current_Frame_Context(gdi_context* Context) {
     return &Context->Frames[Context->TotalFramesRendered % Context->Frames.Count];
+}
+
+vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context, bool IsPrimary) {
+    vk_thread_context* ThreadContext = VK_Get_Thread_Context(&Context->ThreadContextManager);
+    vk_cmd_pool* CmdPool = VK_Get_Current_Cmd_Pool(&Context->ThreadContextManager, ThreadContext);
+
+    vk_cmd_storage_list* CmdStorage = IsPrimary ? &CmdPool->PrimaryCmds : &CmdPool->SecondaryCmds;
+
+    vk_cmd_list* CmdList = CmdStorage->Free;
+    if(CmdList) SLL_Pop_Front(CmdStorage->Head);
+    else {
+        CmdList = Arena_Push_Struct(ThreadContext->Arena, vk_cmd_list);
+        CmdList->Context = Context;
+
+        VkCommandBufferAllocateInfo AllocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = CmdPool->CommandPool,
+            .level = IsPrimary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY : VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+            .commandBufferCount = 1
+        };
+
+        if(vkAllocateCommandBuffers(Context->Device, &AllocateInfo, &CmdList->CmdBuffer) != VK_SUCCESS) {
+            //todo: Diagnostic and error logging
+            SLL_Push_Front(CmdStorage->Free, CmdList);
+            return nullptr;
+        }
+    }
+    CmdList->Pipeline = nullptr;
+    return CmdList;
 }
 
 gdi* GDI_Create(const gdi_create_info& CreateInfo) {
@@ -972,11 +877,7 @@ void GDI_Context_Delete(gdi_context* Context) {
         VK_Resource_Context_Delete(&Context->ResourceContext);
 
         for(vk_frame_context& FrameContext : Context->Frames) {
-            vkDestroyCommandPool(Context->Device, FrameContext.CopyCmdPool, Context->VKAllocator);
             vkDestroyFence(Context->Device, FrameContext.Fence, Context->VKAllocator);
-            
-            VK_Cmd_Pool_Delete(Context, &FrameContext.PrimaryCmdPool);
-            VK_Cmd_Pool_Delete(Context, &FrameContext.SecondaryCmdPool);
         }
 
         VK_Descriptor_Pool_Delete(&Context->DescriptorPool);
@@ -1527,93 +1428,121 @@ span<gdi_handle<gdi_texture>> GDI_Context_Get_Swapchain_Textures(gdi_context* Co
     return span<gdi_handle<gdi_texture>>();
 }
 
-gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_swapchain> SwapchainID) {
+s32 GDI_Context_Get_Swapchain_Texture_Index(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
     vk_resource_context* ResourceContext = &Context->ResourceContext;
-    vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
-    
-    vk_handle<vk_swapchain> SwapchainHandle(SwapchainID.ID);
+    vk_handle<vk_swapchain> SwapchainHandle(Handle.ID);
     vk_swapchain* Swapchain = VK_Resource_Get(ResourceContext->Swapchains, SwapchainHandle);
+    if(!Swapchain) {
+        return -1;
+    }
 
-    vk_cmd_pool* CmdPool;
-    vk_cmd_list* CmdList;
-
-    if(Swapchain) {
-        CmdPool = &FrameContext->PrimaryCmdPool;
-        CmdList = VK_Allocate_Cmd_List(Context, CmdPool);
-        //Just in case the swapchain is suboptimal we will need to perform 
-        //this in a loop to try again
-        for(;;) {
-            VkResult SwapchainStatus = vkAcquireNextImageKHR(Context->Device, Swapchain->Handle, UINT64_MAX, CmdList->SubmitLock, VK_NULL_HANDLE, &CmdList->SwapchainTextureIndex);
-            if(SwapchainStatus == VK_SUBOPTIMAL_KHR) {
-                //todo: What the actual fuck are we going to do here!
-                Not_Implemented();
-            } else if(SwapchainStatus != VK_SUCCESS) {
-                //todo: error logging
-                VK_Free_Cmd_List(Context, CmdPool, CmdList);
-                return NULL;
-            } else {
-                //Success and we can break and write that the swapchain is
-                //used in this frame
-                CmdList->Swapchain = Swapchain->Handle;
-                VK_Resource_Record_Frame(Swapchain);
-                break;
-            }
+    if(Swapchain->TextureIndex == -1) {
+        u32 ImageIndex;
+        VkResult SwapchainStatus = vkAcquireNextImageKHR(Context->Device, Swapchain->Handle, UINT64_MAX, Swapchain->AcquireLock, VK_NULL_HANDLE, &ImageIndex);
+        if(SwapchainStatus != VK_SUCCESS) {
+            Swapchain->Status = SwapchainStatus == VK_SUBOPTIMAL_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_ERROR;
+            return -1;
         }
-    } else {
-        CmdPool = &FrameContext->SecondaryCmdPool;
-        CmdList = VK_Allocate_Cmd_List(Context, CmdPool);
+        Swapchain->Status = GDI_SWAPCHAIN_STATUS_OK;
+        Swapchain->TextureIndex = (s32)ImageIndex;
     }
-    
-    if(vkResetCommandPool(Context->Device, CmdList->CmdPool, 0) != VK_SUCCESS) {
-        //todo: error logging
-        VK_Free_Cmd_List(Context, CmdPool, CmdList);
-        return NULL;
-    }
+
+    return Swapchain->TextureIndex;
+}
+
+gdi_swapchain_status GDI_Context_Get_Swapchain_Status(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    vk_handle<vk_swapchain> SwapchainHandle(Handle.ID);
+    vk_swapchain* Swapchain = VK_Resource_Get(ResourceContext->Swapchains, SwapchainHandle);
+    if(!Swapchain) {
+        return GDI_SWAPCHAIN_STATUS_ERROR;
+    } 
+    return Swapchain->Status;
+}
+
+gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_render_pass> RenderPassID, gdi_handle<gdi_framebuffer> FramebufferID) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+
+    vk_handle<vk_render_pass> RenderPassHandle(RenderPassID.ID);
+    vk_handle<vk_framebuffer> FramebufferHandle(FramebufferID.ID);
+
+    vk_render_pass* RenderPass = VK_Resource_Get(ResourceContext->RenderPasses, RenderPassHandle);
+    vk_framebuffer* Framebuffer = VK_Resource_Get(ResourceContext->Framebuffers, FramebufferHandle);
+
+    bool IsPrimary = !RenderPass || !Framebuffer;
+    vk_cmd_list* CmdList = VK_Allocate_Cmd_List(Context, IsPrimary);
 
     VkCommandBufferBeginInfo BeginInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
     };
 
-    if(CmdPool->Level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
-        BeginInfo.flags |= VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+    VkCommandBufferInheritanceInfo InheritanceInfo;
+
+    if(!IsPrimary) {
+        BeginInfo.flags |= VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT|VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+        InheritanceInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+            .renderPass = RenderPass->Handle,
+            .framebuffer = Framebuffer->Handle
+        };
+
+        BeginInfo.pInheritanceInfo = &InheritanceInfo;
     }
 
-    if(vkBeginCommandBuffer(CmdList->CmdBuffer, &BeginInfo) != VK_SUCCESS) {
-        //todo: error logging
-        VK_Free_Cmd_List(Context, CmdPool, CmdList);
-        return NULL;
-    }
-
+    vkBeginCommandBuffer(CmdList->CmdBuffer, &BeginInfo);
     return (gdi_cmd_list*)CmdList;
 }
 
-gdi_execute_status GDI_Context_Execute(gdi_context* Context) {
+bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> PresentInfos) {
     scratch Scratch = Scratch_Get();
     vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
     vk_resource_context* ResourceContext = &Context->ResourceContext;
-    array<VkCommandBuffer>      CmdBuffers(&Scratch);
-    array<VkPipelineStageFlags> SubmitWaitStages(&Scratch);
-    array<VkSemaphore>          SubmitSemaphores(&Scratch);
-    array<VkSemaphore>          PresentSemaphores(&Scratch);
-    array<VkSwapchainKHR>       Swapchains(&Scratch);
-    array<uint32_t>             SwapchainImageIndices(&Scratch);
+    array<VkCommandBuffer> CmdBuffers(&Scratch);
     
     VK_Thread_Context_Manager_Copy_Data(&Context->ThreadContextManager);
     
     vkEndCommandBuffer(FrameContext->CopyCmdBuffer);
     Array_Push(&CmdBuffers, FrameContext->CopyCmdBuffer);
 
-    vk_cmd_pool* CmdPool = &FrameContext->PrimaryCmdPool;
-    uptr i = 0;
-    for(vk_cmd_list* CmdList = CmdPool->CurrentCmdListHead; CmdList; CmdList = CmdList->Next) {
-        vkEndCommandBuffer(CmdList->CmdBuffer);
-        Array_Push(&CmdBuffers, CmdList->CmdBuffer);
-        Array_Push(&SubmitWaitStages, CmdList->ExecuteLockWaitStage);
-        Array_Push(&SubmitSemaphores, CmdList->SubmitLock);
-        Array_Push(&PresentSemaphores, CmdList->PresentLock);
-        Array_Push(&SwapchainImageIndices, CmdList->SwapchainTextureIndex);
-        Array_Push(&Swapchains, CmdList->Swapchain);
+    vk_thread_context* ThreadContext = (vk_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->ThreadContextManager.List);
+    while(ThreadContext) {
+        vk_cmd_pool* CmdPool = VK_Get_Current_Cmd_Pool(&Context->ThreadContextManager, ThreadContext);
+        
+        for(vk_cmd_list* CmdList = CmdPool->SecondaryCmds.Head; CmdList; CmdList = CmdList->Next) {
+            vkEndCommandBuffer(CmdList->CmdBuffer);
+        }
+        
+        for(vk_cmd_list* CmdList = CmdPool->PrimaryCmds.Head; CmdList; CmdList = CmdList->Next) {
+            vkEndCommandBuffer(CmdList->CmdBuffer);
+            Array_Push(&CmdBuffers, CmdList->CmdBuffer);
+        }
+
+        ThreadContext = ThreadContext->Next;
+    }
+
+    fixed_array<VkPipelineStageFlags> SubmitWaitStages(&Scratch, PresentInfos.Count);
+    fixed_array<VkSemaphore>          SubmitSemaphores(&Scratch, PresentInfos.Count);
+    fixed_array<VkSemaphore>          PresentSemaphores(&Scratch, PresentInfos.Count);
+    fixed_array<VkSwapchainKHR>       Swapchains(&Scratch, PresentInfos.Count);
+    fixed_array<uint32_t>             SwapchainImageIndices(&Scratch, PresentInfos.Count);
+    fixed_array<vk_swapchain*>        SwapchainPtrs(&Scratch, PresentInfos.Count);
+    for(uptr i = 0; i < PresentInfos.Count; i++) {
+        vk_handle<vk_swapchain> SwapchainHandle(PresentInfos[i].Swapchain.ID);
+        vk_swapchain* Swapchain = VK_Resource_Get(ResourceContext->Swapchains, SwapchainHandle);
+        if(Swapchain || Swapchain->TextureIndex < 0) {
+            //todo: Error logging
+            Swapchain->Status = GDI_SWAPCHAIN_STATUS_ERROR;
+            return false;
+        }
+
+        SubmitWaitStages[i]      = VK_Get_Pipeline_Stage_Flags(PresentInfos[i].InitialState);
+        SubmitSemaphores[i]      = Swapchain->AcquireLock;
+        PresentSemaphores[i]     = Swapchain->ExecuteLock;
+        SwapchainImageIndices[i] = (u32)Swapchain->TextureIndex;
+        Swapchains[i]            = Swapchain->Handle;
+        SwapchainPtrs[i]         = Swapchain;
+        VK_Resource_Record_Frame(Swapchain);
     }
 
     if(CmdBuffers.Count > 0) {
@@ -1630,42 +1559,41 @@ gdi_execute_status GDI_Context_Execute(gdi_context* Context) {
 
         if(vkQueueSubmit(Context->GraphicsQueue, 1, &SubmitInfo, FrameContext->Fence) != VK_SUCCESS) {
             Assert(false);
-            return GDI_EXECUTE_STATUS_ERROR;
+            return false;
         }
     }
 
     gdi_execute_status Result = GDI_EXECUTE_STATUS_NONE;
     if(Swapchains.Count > 0) {
+        fixed_array<VkResult> Results(&Scratch, Swapchains.Count);
         VkPresentInfoKHR PresentInfo = {
             .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .waitSemaphoreCount = Safe_U32(PresentSemaphores.Count),
             .pWaitSemaphores = PresentSemaphores.Ptr,
             .swapchainCount = Safe_U32(Swapchains.Count),
             .pSwapchains = Swapchains.Ptr,
-            .pImageIndices = SwapchainImageIndices.Ptr
+            .pImageIndices = SwapchainImageIndices.Ptr,
+            .pResults = Results.Ptr
         };
         
-
         VkResult PresentStatus = vkQueuePresentKHR(Context->PresentQueue, &PresentInfo);
         if(PresentStatus == VK_ERROR_OUT_OF_DATE_KHR) {
-            Result = GDI_EXECUTE_STATUS_RESIZE;
+            for(u32 i = 0; i < Swapchains.Count; i++) {
+                SwapchainPtrs[i]->Status = Results[i] == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_ERROR : GDI_SWAPCHAIN_STATUS_OK;
+            }
+            return false;
         } else if(PresentStatus != VK_SUCCESS) {
             Assert(false);
-            return GDI_EXECUTE_STATUS_ERROR;
+            for(u32 i = 0; i < Swapchains.Count; i++) {
+                SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_ERROR;
+            }
+            return false;
         }
-    }
 
-    while(CmdPool->CurrentCmdListHead) {
-        vk_cmd_list* CmdListToDelete = CmdPool->CurrentCmdListHead;
-        DLL_Remove_Front(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail);
-        SLL_Push_Front(CmdPool->FreeCmdList, CmdListToDelete);
-    }
-
-    CmdPool = &FrameContext->SecondaryCmdPool;
-    while(CmdPool->CurrentCmdListHead) {
-        vk_cmd_list* CmdListToDelete = CmdPool->CurrentCmdListHead;
-        DLL_Remove_Front(CmdPool->CurrentCmdListHead, CmdPool->CurrentCmdListTail);
-        SLL_Push_Front(CmdPool->FreeCmdList, CmdListToDelete);
+        for(u32 i = 0; i < Swapchains.Count; i++) {
+            SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_OK;
+            SwapchainPtrs[i]->TextureIndex = -1;
+        }
     }
 
     VK_Resource_Update_Last_Frame_Indices(ResourceContext);
@@ -1676,44 +1604,21 @@ gdi_execute_status GDI_Context_Execute(gdi_context* Context) {
     if(FenceStatus == VK_NOT_READY) {
         if(vkWaitForFences(Context->Device, 1, &FrameContext->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
             Assert(false);
-            return GDI_EXECUTE_STATUS_ERROR;
+            return false;
         }
     } else if (FenceStatus != VK_SUCCESS) {
         Assert(false);
-            return GDI_EXECUTE_STATUS_ERROR;
+        return false;
     }
     
     if(vkResetFences(Context->Device, 1, &FrameContext->Fence) != VK_SUCCESS) {
         Assert(false);
-        return GDI_EXECUTE_STATUS_ERROR;
-    }
-
-    if(vkResetCommandPool(Context->Device, FrameContext->CopyCmdPool, 0) != VK_SUCCESS) {
-        Assert(false);
-        return GDI_EXECUTE_STATUS_ERROR;
-    }
-
-    VkCommandBufferBeginInfo BeginInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    };
-
-    if(vkBeginCommandBuffer(FrameContext->CopyCmdBuffer, &BeginInfo) != VK_SUCCESS) {
-        //todo: logging
-        Assert(false);
-        return GDI_EXECUTE_STATUS_ERROR;
+        return false;
     }
 
     VK_Thread_Context_Manager_New_Frame(&Context->ThreadContextManager);
 
-    return Result;
-}
-
-u32 GDI_Cmd_List_Get_Swapchain_Texture_Index(gdi_cmd_list* _CmdList, gdi_resource_state ResourceState) {
-    vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
-    Assert(CmdList->SwapchainTextureIndex != (u32)-1);
-    CmdList->ExecuteLockWaitStage = VK_Get_Pipeline_Stage_Flags(ResourceState);
-    return CmdList->SwapchainTextureIndex;
+    return true;
 }
 
 void GDI_Cmd_List_Barrier(gdi_cmd_list* _CmdList, span<gdi_barrier> Barriers) {

@@ -606,7 +606,7 @@ bool Editor_Main() {
                     } else if (PresentStatus != GDI_SWAPCHAIN_STATUS_OK) {
                         Assert(false);
                         //todo: Actual error logging
-                        break;
+                        return false;
                     }
                 }
             } while(Texture == -1);
@@ -632,16 +632,24 @@ bool Editor_Main() {
         
         Glyph_Cache_Update(Editor.GlyphCache);
         while(!Renderer_Execute(Editor.Renderer, RenderGraph, Swapchains)) {
+            bool HandledError = false;
             for(window_handle WindowHandle : Windows) {
                 window* Window = Window_Get(WindowHandle);
                 gdi_swapchain_status PresentStatus = GDI_Context_Get_Swapchain_Status(Context, Window->Swapchain); 
                 if(PresentStatus == GDI_SWAPCHAIN_STATUS_RESIZE) {
-                    Window_Handle_Resize(&Editor, Window);    
+                    Window_Handle_Resize(&Editor, Window);
+                    HandledError = true;    
                 } else if (PresentStatus != GDI_SWAPCHAIN_STATUS_OK) {
                     Assert(false);
                     //todo: Actual error logging
-                    break;
+                    return false;
                 }
+            }
+
+            if(!HandledError) {
+                Assert(false);
+                //todo: Actual error logging
+                return false;
             }
         }
 

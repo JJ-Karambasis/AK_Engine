@@ -1,6 +1,26 @@
 #ifndef VK_THREAD_CONTEXT_H
 #define VK_THREAD_CONTEXT_H
 
+struct vk_cmd_list {
+    gdi_context*    Context;
+    VkCommandBuffer CmdBuffer;
+    vk_pipeline*    Pipeline;
+    vk_cmd_list*    Next;
+    vk_cmd_list*    Prev;
+};
+
+struct vk_cmd_storage_list {
+    vk_cmd_list* Free;
+    vk_cmd_list* Head;
+    vk_cmd_list* Tail;
+};
+
+struct vk_cmd_pool {
+    VkCommandPool       CommandPool;
+    vk_cmd_storage_list PrimaryCmds;
+    vk_cmd_storage_list SecondaryCmds;
+};
+
 template <typename type>
 struct vk_delete_list_entry {
     u64  LastUsedFrameIndex;
@@ -71,9 +91,11 @@ struct vk_delete_context {
 };
 
 struct vk_thread_context {
+    arena*                        Arena;
     vk_delete_context             DeleteContext;
     vk_copy_context               CopyContext;
     fixed_array<vk_upload_buffer> UploadBuffers; //One upload buffer per frame per thread
+    fixed_array<vk_cmd_pool>      CmdPools; //One command per frame per thread
     vk_thread_context*            Next;
 };
 
@@ -85,6 +107,8 @@ struct vk_thread_context_manager {
     ak_tls        TLS;
 };
 
+void VK_Cmd_Storage_Free_All(vk_cmd_storage_list* StorageList);
+vk_cmd_pool* VK_Get_Current_Cmd_Pool(vk_thread_context_manager* Manager, vk_thread_context* ThreadContext);
 u8* VK_Upload_Buffer_Push(vk_upload_buffer* UploadBuffer, size_t Size, vk_upload* Upload);
 vk_upload_buffer* VK_Get_Current_Upload_Buffer(vk_thread_context_manager* Manager, vk_thread_context* ThreadContext);
 void VK_Copy_Context_Add_Upload_To_Buffer_Copy(vk_copy_context* CopyContext, const vk_copy_upload_to_buffer& CopyUploadToBuffer);

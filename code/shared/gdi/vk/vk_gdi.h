@@ -56,33 +56,9 @@ struct vk_device {
     string                           Name;
 };
 
-struct vk_cmd_list {
-    gdi_context*         Context;
-    VkCommandPool        CmdPool;
-    VkCommandBuffer      CmdBuffer;
-    VkPipelineStageFlags ExecuteLockWaitStage;
-    VkSemaphore          SubmitLock;
-    VkSemaphore          PresentLock;
-    VkSwapchainKHR       Swapchain;
-    u32                  SwapchainTextureIndex;
-    vk_pipeline*         Pipeline;
-    vk_cmd_list*         Next;
-    vk_cmd_list*         Prev;
-};
-
-struct vk_cmd_pool {
-    VkCommandBufferLevel Level;
-    vk_cmd_list*         FreeCmdList;
-    vk_cmd_list*         CurrentCmdListHead;
-    vk_cmd_list*         CurrentCmdListTail;
-};
-
 struct vk_frame_context {
-    VkCommandPool   CopyCmdPool;
     VkCommandBuffer CopyCmdBuffer;
     VkFence         Fence;
-    vk_cmd_pool     PrimaryCmdPool;
-    vk_cmd_pool     SecondaryCmdPool;
 };
 
 struct gdi_context {
@@ -172,5 +148,6 @@ static const VkImageLayout G_VKImageLayouts[] = {
 static_assert(Array_Count(G_VKImageLayouts) == GDI_RESOURCE_STATE_COUNT);
 
 vk_frame_context* VK_Get_Current_Frame_Context(gdi_context* Context);
+vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context);
 
 #endif

@@ -148,6 +148,20 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
     Swapchain->Width = SurfaceCaps.currentExtent.width;
     Swapchain->Height = SurfaceCaps.currentExtent.height;
     Swapchain->Handle = SwapchainHandle;
+    
+    VkSemaphoreCreateInfo SemaphoreCreateInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    
+    if(vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &Swapchain->AcquireLock) != VK_SUCCESS) {
+        //todo: Diagnostics
+        return false;
+    }
+
+    if(vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &Swapchain->ExecuteLock) != VK_SUCCESS) {
+        //todo: Diagnostics
+        return false;
+    }
+
+    Swapchain->Status = GDI_SWAPCHAIN_STATUS_OK;
 
     return true;
 }
@@ -164,6 +178,7 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
     VkImage* Images = Scratch_Push_Array(&Scratch, ImageCount, VkImage);
     vkGetSwapchainImagesKHR(Context->Device, Swapchain->Handle, &ImageCount, Images);
 
+    Swapchain->TextureIndex = -1;
     Swapchain->Textures = array<gdi_handle<gdi_texture>>(Context->GDI->MainAllocator, ImageCount);
     Array_Resize(&Swapchain->Textures, ImageCount);
 
@@ -189,6 +204,16 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
 }
 
 internal void VK_Delete_Swapchain(gdi_context* Context, vk_swapchain* Swapchain) {
+    if(Swapchain->AcquireLock) {
+        vkDestroySemaphore(Context->Device, Swapchain->AcquireLock, Context->VKAllocator);
+        Swapchain->AcquireLock = VK_NULL_HANDLE;
+    }
+
+    if(Swapchain->ExecuteLock) {
+        vkDestroySemaphore(Context->Device, Swapchain->ExecuteLock, Context->VKAllocator);
+        Swapchain->ExecuteLock = VK_NULL_HANDLE;
+    }
+    
     if(Swapchain->Handle) {
         vkDestroySwapchainKHR(Context->Device, Swapchain->Handle, Context->VKAllocator);
         Swapchain->Handle = VK_NULL_HANDLE;
