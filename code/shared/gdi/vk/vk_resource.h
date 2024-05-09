@@ -118,6 +118,13 @@ template <typename type>
 struct vk_resource_pool {
     ak_async_stack_index32 FreeIndices;
     type*                  Resources;
+
+    inline uptr Get_Index(type* Entry) {
+        //Make sure the entry is in range of the resource pool. Otherwise we 
+        //can't grab the index
+        Assert(Entry >= Resources && Entry <= Resources+FreeIndices.Capacity);
+        return ((uptr)Entry-(uptr)Resources)/sizeof(type);
+    }
 };
 
 #include "vk_pipeline.h"

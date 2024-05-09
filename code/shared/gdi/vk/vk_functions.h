@@ -91,6 +91,7 @@ internal VK_FUNCTION(vkDestroyDescriptorSetLayout);
 internal VK_FUNCTION(vkDestroyDescriptorPool);
 internal VK_FUNCTION(vkFreeDescriptorSets);
 internal VK_FUNCTION(vkDestroyFence);
+internal VK_FUNCTION(vkCmdExecuteCommands);
 
 void VK_Load_Global_Funcs(gdi* GDI);
 void VK_Load_Instance_Funcs(gdi* GDI, vk_instance_extension_support* InstanceInfo);

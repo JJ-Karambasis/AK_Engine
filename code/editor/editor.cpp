@@ -611,11 +611,11 @@ bool Editor_Main() {
                 }
             } while(Texture == -1);
 
-            Assert(Texture > 0);
+            Assert(Texture >= 0);
 
             ui_renderer* UIRenderer = &Window->UIRenderer;
 
-            Render_Task_Attach_Render_Pass(UIRenderer->RenderTask, {
+            Render_Task_Attach_Render_Pass(Editor.Renderer, UIRenderer->RenderTask, {
                 .RenderPass = Editor.UIRenderPass.RenderPass,
                 .Framebuffer = Window->Framebuffers[(uptr)Texture],
                 .ClearValues = {

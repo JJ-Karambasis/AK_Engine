@@ -24,6 +24,7 @@ enum gdi_format {
     GDI_FORMAT_COUNT
 };
 
+bool       GDI_Is_Index_Format(gdi_format Format);
 bool       GDI_Is_Depth_Format(gdi_format Format);
 uptr       GDI_Get_Bytes_Per_Pixel(gdi_format Format);
 gdi_format GDI_Get_SRGB_Format(gdi_format Format);
@@ -427,16 +428,19 @@ void                              GDI_Context_Delete_Bind_Group(gdi_context* Con
 gdi_handle<gdi_bind_group_layout> GDI_Context_Create_Bind_Group_Layout(gdi_context* Context, const gdi_bind_group_layout_create_info& CreateInfo);
 void                              GDI_Context_Delete_Bind_Group_Layout(gdi_context* Context, gdi_handle<gdi_bind_group_layout> Handle);
 
-gdi_handle<gdi_framebuffer>       GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo);
-void                              GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
-uvec2                             GDI_Context_Get_Framebuffer_Resolution(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
-gdi_handle<gdi_render_pass>       GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo);
-void                              GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle);
+gdi_handle<gdi_framebuffer>               GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo);
+void                                      GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
+uvec2                                     GDI_Context_Get_Framebuffer_Resolution(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
+fixed_array<gdi_handle<gdi_texture_view>> GDI_Context_Get_Framebuffer_Attachments(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle, allocator* Allocator);
+gdi_handle<gdi_render_pass>               GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo);
+void                                      GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle);
 
 gdi_handle<gdi_sampler>      GDI_Context_Create_Sampler(gdi_context* Context, const gdi_sampler_create_info& CreateInfo);
 void                         GDI_Context_Delete_Sampler(gdi_context* Context, gdi_handle<gdi_sampler> Sampler);
 gdi_handle<gdi_texture_view> GDI_Context_Create_Texture_View(gdi_context* Context, const gdi_texture_view_create_info& CreateInfo);
 void                         GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_texture_view> Handle);
+gdi_handle<gdi_texture>      GDI_Context_Get_Texture(gdi_context* Context, gdi_handle<gdi_texture_view> Handle);
+
 gdi_handle<gdi_texture>      GDI_Context_Create_Texture(gdi_context* Context, const gdi_texture_create_info& CreateInfo);
 void                         GDI_Context_Delete_Texture(gdi_context* Context, gdi_handle<gdi_texture> Handle);
 void                         GDI_Context_Upload_Texture(gdi_context* Context, gdi_handle<gdi_texture> Handle, span<gdi_texture_upload> Uploads);

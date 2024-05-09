@@ -42,6 +42,6 @@ void            Renderer_Delete_Graph(renderer* Renderer, render_graph_id Graph)
 void Render_Graph_Add_Task(render_graph_id RenderGraph, render_task_id Task, render_task_id ParentTask);
 void Render_Graph_Clear(render_graph_id RenderGraph);
 
-void Render_Task_Attach_Render_Pass(render_task_id Task, const gdi_render_pass_begin_info& RenderPassInfo, span<gdi_resource_state> AttachmentStates);
+void Render_Task_Attach_Render_Pass(renderer* Renderer, render_task_id Task, const gdi_render_pass_begin_info& RenderPassInfo, span<gdi_resource_state> AttachmentStates);
 
 #endif

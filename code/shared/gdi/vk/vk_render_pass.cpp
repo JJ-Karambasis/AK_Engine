@@ -150,3 +150,18 @@ void VK_Delete_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer) {
         Framebuffer->Handle = VK_NULL_HANDLE;
     }
 }
+
+fixed_array<gdi_handle<gdi_texture_view>> VK_Framebuffer_Get_Attachments(gdi_context* Context, vk_framebuffer* Framebuffer, allocator* Allocator) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    uptr AttachmentCount = Framebuffer->References.Count;
+    if(!AttachmentCount) return {};
+
+    fixed_array<gdi_handle<gdi_texture_view>> Result(Allocator, AttachmentCount);
+    for(uptr i = 0; i < AttachmentCount; i++) {
+        vk_texture_view* TextureView = Framebuffer->References[i].Get_Texture_View();
+        vk_handle<vk_texture_view> Handle(Safe_U32(ResourceContext->TextureViews.Get_Index(TextureView)), 
+                                          Framebuffer->References[i].Generation);
+        Result[i] = gdi_handle<gdi_texture_view>(Handle.ID);
+    }
+    return Result;
+}

@@ -81,6 +81,29 @@ struct renderer {
     render_graph*    FreeGraphs;
 };
 
+struct draw_state {
+    u32 IdxOffset;
+    u32 VtxOffset;
+    u32 InstOffset;
+    u32 PrimCount;
+    u32 InstCount;
+    b32 IsVtxDraw;
+};
+
+template <typename type>
+struct hasher<gdi_handle<type>> {
+    inline u32 Hash(gdi_handle<type> Handle) {
+        return Hash_U64(Handle.ID);
+    }
+};
+
+template <typename type>
+struct comparer<gdi_handle<type>> {
+    inline bool Equal(gdi_handle<type> A, gdi_handle<type> B) {
+        return A.ID == B.ID;
+    }
+};
+
 internal void Render_Task_Pool_Init(render_task_pool* Pool, render_task_type Type) {
     Zero_Struct(Pool);
     Pool->FirstFreeIndex = RENDER_TASK_INVALID_INDEX;
@@ -227,6 +250,112 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
 
     gdi_cmd_list* CmdList = GDI_Context_Begin_Cmd_List(Context, GDI_CMD_LIST_TYPE_GRAPHICS, RenderTask->RenderPass, RenderTask->Framebuffer);
 
+    memory_stream MemoryStream = Memory_Stream_Begin(DrawStream->Start, DrawStream->At);
+    
+    draw_state DrawState = {};
+    gdi_handle<gdi_buffer> IdxBuffer = {};
+    gdi_format IdxFormat = GDI_FORMAT_NONE;
+    gdi_handle<gdi_bind_group> DynBindGroups[RENDERER_MAX_DYN_BIND_GROUP] = {};
+    uptr DynBindGroupOffsets[RENDERER_MAX_DYN_BIND_GROUP] = {};
+
+    while(Memory_Stream_Is_Valid(&MemoryStream)) {
+        RENDERER_DIRTY_FLAG_TYPE DirtyFlag = Memory_Stream_Consume<RENDERER_DIRTY_FLAG_TYPE>(&MemoryStream);
+        //Then only write out the changes to the stream using the dirty flag
+        if(DirtyFlag & draw_bits::Pipeline) {
+            gdi_handle<gdi_pipeline> Pipeline = Memory_Stream_Consume<gdi_handle<gdi_pipeline>>(&MemoryStream); 
+            GDI_Cmd_List_Set_Pipeline(CmdList, Pipeline);
+        }
+
+        for(uptr i = 0; i < RENDERER_MAX_BIND_GROUP; i++) {
+            if(DirtyFlag & draw_bits::BindGroups[i]) {
+                gdi_handle<gdi_bind_group> BindGroup = Memory_Stream_Consume<gdi_handle<gdi_bind_group>>(&MemoryStream); 
+                GDI_Cmd_List_Set_Bind_Groups(CmdList, Safe_U32(i), {BindGroup});
+            }
+        }
+
+        for(uptr i = 0; i < RENDERER_MAX_DYN_BIND_GROUP; i++) {
+            if(DirtyFlag & draw_bits::DynBindGroups[i]) {
+                //We keep the current bind group state because we need to 
+                //know the current offsets. Only when the bind group or the
+                //offset changes do we change the bind group
+                DynBindGroups[i] = Memory_Stream_Consume<gdi_handle<gdi_bind_group>>(&MemoryStream);
+            }
+        }
+
+        //Similar to the dynamic bind groups, we need to wait for the
+        //idx format before we can determine what the proper parameters are
+        //for setting the index buffer
+        if(DirtyFlag & draw_bits::IdxBuffer) {
+            IdxBuffer = Memory_Stream_Consume<gdi_handle<gdi_buffer>>(&MemoryStream);
+        }
+
+        for(uptr i = 0; i < RENDERER_MAX_VTX_BUFFERS; i++) {
+            if(DirtyFlag & draw_bits::VtxBuffers[i]) {
+                gdi_handle<gdi_buffer> VtxBuffer = Memory_Stream_Consume<gdi_handle<gdi_buffer>>(&MemoryStream);
+                GDI_Cmd_List_Set_Vtx_Buffers(CmdList, {VtxBuffer});
+            }
+        }
+        
+        if(DirtyFlag & draw_bits::IdxFormat) {
+            IdxFormat = Memory_Stream_Consume<gdi_format>(&MemoryStream);
+        }
+
+        if(DirtyFlag & draw_bits::IdxOffset) {
+            DrawState.IdxOffset = Memory_Stream_Consume<u32>(&MemoryStream);
+        }
+
+        if(DirtyFlag & draw_bits::VtxOffset) {
+            DrawState.VtxOffset = Memory_Stream_Consume<u32>(&MemoryStream);
+        }
+
+        if(DirtyFlag & draw_bits::InstOffset) {
+            DrawState.InstOffset = Memory_Stream_Consume<u32>(&MemoryStream);
+        }
+
+        if(DirtyFlag & draw_bits::PrimCount) {
+            DrawState.PrimCount = Memory_Stream_Consume<u32>(&MemoryStream);
+        }
+
+        if(DirtyFlag & draw_bits::InstCount) {
+            DrawState.InstCount = Memory_Stream_Consume<u32>(&MemoryStream);
+        }
+
+        if(DirtyFlag & draw_bits::IsVtxDraw) {
+            DrawState.IsVtxDraw = Memory_Stream_Consume<b32>(&MemoryStream);
+        }
+
+        uptr DynOffsets[RENDERER_MAX_DYN_BIND_GROUP] = {};
+        for(uptr i = 0; i < RENDERER_MAX_DYN_BIND_GROUP; i++) {
+            if(DirtyFlag & draw_bits::DynOffsets[i]) {
+                //We keep the bind group offset state 
+                DynBindGroupOffsets[i] = Memory_Stream_Consume<u32>(&MemoryStream);
+            }
+        }
+
+        //If either the index buffer or index format has changed, reset 
+        //the index buffer
+        if((DirtyFlag & draw_bits::IdxBuffer) || 
+           (DirtyFlag & draw_bits::IdxFormat)) {
+            GDI_Cmd_List_Set_Idx_Buffer(CmdList, IdxBuffer, IdxFormat);
+        }
+
+        //Now check to see if we update the dynamic bind groups
+        for(uptr i = 0; i < RENDERER_MAX_DYN_BIND_GROUP; i++) {
+            if((DirtyFlag & draw_bits::DynBindGroups[i]) ||
+               (DirtyFlag & draw_bits::DynOffsets[i])) {
+                //Use the current bind group state to update
+                GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, Safe_U32(i), {DynBindGroups[i]}, {DynBindGroupOffsets[i]});
+            }
+        }
+
+        if(DrawState.IsVtxDraw) {
+            GDI_Cmd_List_Draw_Instance(CmdList, DrawState.PrimCount, DrawState.InstCount, DrawState.VtxOffset, DrawState.InstOffset);
+        } else {
+            GDI_Cmd_List_Draw_Indexed_Instance(CmdList, DrawState.PrimCount, DrawState.IdxOffset, DrawState.VtxOffset, DrawState.InstCount, DrawState.InstOffset);
+        }
+    }
+
+
     RenderTask->CmdList = CmdList;
 }
 
@@ -243,6 +372,13 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
     //Iterate through all the tasks and execute them. Ordering won't matter since
     //each task records into separate command lists 
     for(render_task* Task = Graph->FirstTask; Task; Task = Task->Next) {
+        //Register the initial state
+        for(render_texture_state State : Task->RenderPassAttachmentStates) {
+            if(!Hashmap_Find(&CurrentTextureStates, State.Attachment)) {
+                Hashmap_Add(&CurrentTextureStates, State.Attachment, GDI_RESOURCE_STATE_NONE);
+            }
+        }
+        
         //Reset the dependency count
         Task->DependentIndex = 0;
         
@@ -254,6 +390,7 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
             .At = DrawStream
         };
         
+        //Submit the job
         render_graph_draw_data DrawData = {
             .Context = Renderer->Context,
             .Task = Task
@@ -264,12 +401,6 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
             .Data = &DrawData,
             .DataByteSize = sizeof(render_graph_draw_data)
         };
-
-        for(render_texture_state State : Task->RenderPassAttachmentStates) {
-            if(!Hashmap_Find(&CurrentTextureStates, State.Attachment)) {
-                Hashmap_Add(&CurrentTextureStates, State.Attachment, GDI_RESOURCE_STATE_NONE);
-            }
-        }
 
         AK_Job_System_Alloc_Job(Renderer->JobSystem, JobData, RootJobID, AK_JOB_FLAG_FREE_WHEN_DONE_BIT|AK_JOB_FLAG_QUEUE_IMMEDIATELY_BIT);
     }
@@ -293,6 +424,11 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
                 Task->DependentIndex++;
                 if(Task->DependentIndex >= Task->DependentJobs) {
                     Assert(Task->DependentIndex == Task->DependentJobs);
+                    
+                    //todo: This barrier stuff needs to be cleaned up, this is not good
+                    //it submits barriers too often, and we should be preventing multiple different
+                    //resource states on tasks at the same level anyways! Combined the barriers at each level 
+                    //in the graph
                     span<render_texture_state> RenderPassAttachmentStates = Task->RenderPassAttachmentStates;
                     fixed_array<gdi_clear> Clears(&Scratch, RenderPassAttachmentStates.Count);
                     
@@ -367,13 +503,22 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
     return GDI_Context_Execute(Renderer->Context, PresentInfo);    
 }
 
-render_task_id Render_Graph_Create_Draw_Task(renderer* Renderer, draw_callback_func* Callback, void* UserData) {
+gdi_context* Renderer_Get_Context(renderer* Renderer) {
+    return Renderer->Context;
+}
+
+render_task_id Renderer_Create_Draw_Task(renderer* Renderer, draw_callback_func* Callback, void* UserData) {
     render_task_pool* DrawPool = &Renderer->TaskPools[RENDER_TASK_TYPE_DRAW];
 
     render_task_id Result = Render_Task_Pool_Allocate(DrawPool, Renderer->Arena);
     if(!Result) return 0;
 
     render_task* RenderTask = Render_Task_Pool_Get(DrawPool, Result);
+    if(!RenderTask->RenderPassAttachmentStates.Allocator) {
+        Array_Init(&RenderTask->RenderPassAttachmentStates, Renderer->Arena);
+    } else {
+        Array_Clear(&RenderTask->RenderPassAttachmentStates);
+    }
 
     RenderTask->Callback = Callback;
     RenderTask->UserData = UserData;
@@ -402,8 +547,13 @@ render_graph_id Renderer_Create_Graph(renderer* Renderer) {
 }
 
 void Renderer_Delete_Graph(renderer* Renderer, render_graph_id GraphID) {
-    //todo: Implement
-    Not_Implemented();
+    Render_Graph_Clear(GraphID);
+    
+    render_graph* Graph = Render_Graph_Get(GraphID);
+    if(!Graph) return;
+
+    Graph->Generation++;
+    SLL_Push_Front(Renderer->FreeGraphs, Graph);
 }
 
 void Render_Graph_Add_Task(render_graph_id GraphID, render_task_id _TaskID, render_task_id _ParentID) {
@@ -415,12 +565,6 @@ void Render_Graph_Add_Task(render_graph_id GraphID, render_task_id _TaskID, rend
     renderer* Renderer = Graph->Renderer;
     
     render_task_id_internal TaskID = {_TaskID};
-    render_task_id_internal ParentID = {_ParentID};
-
-    if(!TaskID.ID || !ParentID.ID) {
-        Assert(false);
-        return;
-    }
     
     render_task* RenderTask = Render_Task_Pool_Get(&Renderer->TaskPools[TaskID.Type], TaskID.ID);
     if(!RenderTask) {
@@ -433,6 +577,7 @@ void Render_Graph_Add_Task(render_graph_id GraphID, render_task_id _TaskID, rend
     
     RenderTask->DependentJobs++;
 
+    render_task_id_internal ParentID = {_ParentID};
     render_task* ParentTask = Render_Task_Pool_Get(&Renderer->TaskPools[ParentID.Type], ParentID.ID);
     if(ParentTask) {
         DLL_Push_Back_NP(ParentTask->Children.First, ParentTask->Children.Last, GraphEntry, NextSibling, PrevSibling);
@@ -447,13 +592,16 @@ void Render_Graph_Add_Task(render_graph_id GraphID, render_task_id _TaskID, rend
 
 void Render_Graph_Clear(render_graph_id GraphID) {
     render_graph* Graph = Render_Graph_Get(GraphID);
+    if(!Graph) return;
+
     Graph->Children = {};
 
     render_task* Task = Graph->FirstTask;
     while(Task) {
         render_task* TaskToRemove = Task;
         Task = Task->Next;
-        
+
+        TaskToRemove->DependentJobs = 0;
         TaskToRemove->Next = nullptr;
         TaskToRemove->Children = {};
     }
@@ -461,6 +609,41 @@ void Render_Graph_Clear(render_graph_id GraphID) {
     Graph->FirstTask = nullptr;
     Graph->LastTask = nullptr;
     Arena_Clear(Graph->Arena);
+}
+
+void Render_Task_Attach_Render_Pass(renderer* Renderer, render_task_id _TaskID, const gdi_render_pass_begin_info& RenderPassInfo, span<gdi_resource_state> AttachmentStates) {
+    render_task_id_internal TaskID = {_TaskID};
+    render_task* Task = Render_Task_Pool_Get(&Renderer->TaskPools[TaskID.Type], TaskID.ID);
+    if(!Task) {
+        Assert(false);
+        return;
+    }
+
+    Task->RenderPass = RenderPassInfo.RenderPass;
+    Task->Framebuffer = RenderPassInfo.Framebuffer;
+
+    scratch Scratch = Scratch_Get();
+
+    fixed_array<gdi_handle<gdi_texture_view>> Attachments = GDI_Context_Get_Framebuffer_Attachments(Renderer->Context, Task->Framebuffer, &Scratch);
+    Assert(Attachments.Count > 0);
+
+    Assert(Attachments.Count == AttachmentStates.Count);
+    Array_Resize(&Task->RenderPassAttachmentStates, AttachmentStates.Count);
+    for(uptr i = 0; i < Attachments.Count; i++) {
+        gdi_handle<gdi_texture> Texture = GDI_Context_Get_Texture(Renderer->Context, Attachments[i]);
+        Assert(!Texture.Is_Null());
+
+        gdi_clear Clear = {};
+        if(i < RenderPassInfo.ClearValues.Count) {
+            Clear = RenderPassInfo.ClearValues[i];
+        }
+
+        Task->RenderPassAttachmentStates[i] = {
+            .Attachment = Texture,
+            .ResourceState = AttachmentStates[i],
+            .Clear = Clear
+        };
+    }
 }
 
 #include "draw_stream.cpp"

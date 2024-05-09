@@ -17,6 +17,7 @@ struct vk_framebuffer : vk_resource_base {
 
 bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, const gdi_framebuffer_create_info& CreateInfo);
 void VK_Delete_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer);
+fixed_array<gdi_handle<gdi_texture_view>> VK_Framebuffer_Get_Attachments(gdi_context* Context, vk_framebuffer* Framebuffer, allocator* Allocator);
 internal void VK_Framebuffer_Record_Frame(gdi_context* Context, async_handle<vk_framebuffer> Handle);
 
 

@@ -10,8 +10,8 @@ struct vk_swapchain : vk_resource_base {
     u32                            Width;
     u32                            Height;
     s32                            TextureIndex;
-    VkSemaphore                    AcquireLock;
-    VkSemaphore                    ExecuteLock;
+    fixed_array<VkSemaphore>       AcquireLocks;
+    fixed_array<VkSemaphore>       ExecuteLocks;
     gdi_swapchain_status           Status;
 };
 

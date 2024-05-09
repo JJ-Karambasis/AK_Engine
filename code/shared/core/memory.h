@@ -241,4 +241,22 @@ void  operator delete(void* Memory, allocator* Allocator) noexcept;
 void* operator new[](uptr Size, allocator* Allocator) noexcept;
 void  operator delete[](void* Memory, allocator* Allocator) noexcept;
 
+struct memory_stream {
+	const u8* Start;
+	const u8* End;
+	const u8* At;
+};
+
+memory_stream Memory_Stream_Begin(void* Start, void* End);
+bool          Memory_Stream_Is_Valid(memory_stream* Stream);
+const void*   Memory_Stream_Current(memory_stream* Stream);
+void          Memory_Stream_Skip(memory_stream* Stream, uptr Size);
+
+template <typename type>
+inline type Memory_Stream_Consume(memory_stream* Stream) {
+	type* Ptr = (type*)Memory_Stream_Current(Stream);
+	Memory_Stream_Skip(Stream, sizeof(type));
+	return *Ptr;
+}
+
 #endif

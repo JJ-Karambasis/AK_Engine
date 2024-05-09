@@ -97,6 +97,7 @@ void VK_Load_Device_Funcs(gdi* GDI, gdi_context* Context) {
     vkDestroyDescriptorPool = DeviceFuncs->vkDestroyDescriptorPool;
     vkFreeDescriptorSets = DeviceFuncs->vkFreeDescriptorSets;
     vkDestroyFence = DeviceFuncs->vkDestroyFence;
+    vkCmdExecuteCommands = DeviceFuncs->vkCmdExecuteCommands;
 ;
     Assert(DeviceFuncs->SwapchainKHR.Enabled);
 

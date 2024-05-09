@@ -1,3 +1,30 @@
+bool GDI_Is_Index_Format(gdi_format Format) {
+    local_persist const bool Flags[] = {
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+    };
+    static_assert(Array_Count(Flags) == GDI_FORMAT_COUNT);
+    Assert(Format < GDI_FORMAT_COUNT);
+    return Flags[Format];
+}
+
 bool GDI_Is_Depth_Format(gdi_format Format) {
     local_persist const bool Flags[] = {
         false,

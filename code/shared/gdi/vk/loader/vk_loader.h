@@ -174,6 +174,7 @@ typedef struct {
     VK_FUNCTION(vkDestroyDescriptorPool);
     VK_FUNCTION(vkFreeDescriptorSets);
     VK_FUNCTION(vkDestroyFence);
+    VK_FUNCTION(vkCmdExecuteCommands);
 
     vk_khr_swapchain SwapchainKHR;
 }  vk_device_funcs;

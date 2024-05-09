@@ -175,6 +175,7 @@ void VK_Shared_Loader_Load_Device_Default_Funcs(vk_shared_loader* Loader, VkInst
         VK_Load_Device_Func(DeviceFuncs, vkDestroyDescriptorPool);
         VK_Load_Device_Func(DeviceFuncs, vkFreeDescriptorSets);
         VK_Load_Device_Func(DeviceFuncs, vkDestroyFence);
+        VK_Load_Device_Func(DeviceFuncs, vkCmdExecuteCommands);
         Loader->HasLoadedDevices = true;
     }
 }

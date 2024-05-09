@@ -1,6 +1,25 @@
 #ifndef ARRAY_H
 #define ARRAY_H
 
+template <typename type, uptr N>
+struct static_array {
+    type Array[N];
+
+    inline type& operator[](uptr Index) {
+        Assert(Index < N);
+        return Array[Index];
+    }
+
+    inline const type& operator[](uptr Index) const {
+        Assert(Index < N);
+        return Array[Index];
+    }
+
+    inline static constexpr uptr Count() {
+        return N;
+    }
+};
+
 template <typename type>
 struct array {
     allocator* Allocator = nullptr;
@@ -167,6 +186,18 @@ template <typename type>
 inline type& Array_Last(array<type>* Array) {
     Assert(Array->Count);
     return Array->Ptr[Array->Count-1];
+}
+
+template <typename type, uptr N>
+inline type& Array_Last(static_array<type, N>* Array) {
+    Assert(N > 0);
+    return Array->Array[N-1];
+}
+
+template <typename type, uptr N>
+inline const type& Array_Last(const static_array<type, N>* Array) {
+    Assert(N > 0);
+    return Array->Array[N-1];
 }
 
 template <typename type>

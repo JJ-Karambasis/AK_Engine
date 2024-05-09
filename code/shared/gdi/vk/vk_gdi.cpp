@@ -776,7 +776,7 @@ vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context, bool IsPrimary) {
     vk_cmd_storage_list* CmdStorage = IsPrimary ? &CmdPool->PrimaryCmds : &CmdPool->SecondaryCmds;
 
     vk_cmd_list* CmdList = CmdStorage->Free;
-    if(CmdList) SLL_Pop_Front(CmdStorage->Head);
+    if(CmdList) SLL_Pop_Front(CmdStorage->Free);
     else {
         CmdList = Arena_Push_Struct(ThreadContext->Arena, vk_cmd_list);
         CmdList->Context = Context;
@@ -795,6 +795,8 @@ vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context, bool IsPrimary) {
         }
     }
     CmdList->Pipeline = nullptr;
+    DLL_Push_Back(CmdStorage->Head, CmdStorage->Tail, CmdList);
+
     return CmdList;
 }
 
@@ -1064,6 +1066,22 @@ void GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebu
     }
 }
 
+uvec2 GDI_Context_Get_Framebuffer_Resolution(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    vk_handle<vk_framebuffer> FramebufferHandle(Handle.ID);
+    vk_framebuffer* Framebuffer = VK_Resource_Get(ResourceContext->Framebuffers, FramebufferHandle);
+    if(!Framebuffer) return {};
+    return uvec2(Framebuffer->Width, Framebuffer->Height);
+}
+
+fixed_array<gdi_handle<gdi_texture_view>> GDI_Context_Get_Framebuffer_Attachments(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle, allocator* Allocator) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    vk_handle<vk_framebuffer> FramebufferHandle(Handle.ID);
+    vk_framebuffer* Framebuffer = VK_Resource_Get(ResourceContext->Framebuffers, FramebufferHandle);
+    if(!Framebuffer) return {};
+    return VK_Framebuffer_Get_Attachments(Context, Framebuffer, Allocator);
+}
+
 gdi_handle<gdi_render_pass> GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo) { 
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     vk_handle<vk_render_pass> RenderPassHandle = VK_Resource_Alloc(ResourceContext->RenderPasses);
@@ -1164,6 +1182,20 @@ void GDI_Context_Delete_Texture_View(gdi_context* Context, gdi_handle<gdi_textur
         }
         VK_Resource_Free(ResourceContext->TextureViews, TextureViewHandle);
     }
+}
+
+gdi_handle<gdi_texture> GDI_Context_Get_Texture(gdi_context* Context, gdi_handle<gdi_texture_view> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    vk_handle<vk_texture_view> TextureViewHandle(Handle.ID);
+    vk_texture_view* TextureView = VK_Resource_Get(ResourceContext->TextureViews, TextureViewHandle);
+    if(!TextureView) return {};
+
+    vk_texture* Texture = TextureView->References[0].Get_Texture();
+    if(!Texture) return {};
+
+    vk_handle<vk_texture> TextureHandle(Safe_U32(ResourceContext->Textures.Get_Index(Texture)), 
+                                        TextureView->References[0].Generation);
+    return gdi_handle<gdi_texture>(TextureHandle.ID);
 }
 
 gdi_handle<gdi_texture> GDI_Context_Create_Texture(gdi_context* Context, const gdi_texture_create_info& CreateInfo) {
@@ -1436,9 +1468,11 @@ s32 GDI_Context_Get_Swapchain_Texture_Index(gdi_context* Context, gdi_handle<gdi
         return -1;
     }
 
+    u64 FrameIndex = VK_Get_Current_Frame_Index(Context);
+
     if(Swapchain->TextureIndex == -1) {
         u32 ImageIndex;
-        VkResult SwapchainStatus = vkAcquireNextImageKHR(Context->Device, Swapchain->Handle, UINT64_MAX, Swapchain->AcquireLock, VK_NULL_HANDLE, &ImageIndex);
+        VkResult SwapchainStatus = vkAcquireNextImageKHR(Context->Device, Swapchain->Handle, UINT64_MAX, Swapchain->AcquireLocks[FrameIndex], VK_NULL_HANDLE, &ImageIndex);
         if(SwapchainStatus != VK_SUCCESS) {
             Swapchain->Status = SwapchainStatus == VK_SUBOPTIMAL_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_ERROR;
             return -1;
@@ -1486,11 +1520,22 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
             .renderPass = RenderPass->Handle,
             .framebuffer = Framebuffer->Handle
         };
-
         BeginInfo.pInheritanceInfo = &InheritanceInfo;
     }
 
     vkBeginCommandBuffer(CmdList->CmdBuffer, &BeginInfo);
+
+    if(!IsPrimary) {
+        VkRect2D Scissor = {{}, {Framebuffer->Width, Framebuffer->Height}};
+        VkViewport Viewport = {
+            .width = (f32)Framebuffer->Width,
+            .height = (f32)Framebuffer->Height,
+            .maxDepth = 1.0f
+        };
+        vkCmdSetScissor(CmdList->CmdBuffer, 0, 1, &Scissor);
+        vkCmdSetViewport(CmdList->CmdBuffer, 0, 1, &Viewport);
+    }
+
     return (gdi_cmd_list*)CmdList;
 }
 
@@ -1500,18 +1545,22 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     array<VkCommandBuffer> CmdBuffers(&Scratch);
     
+    VkCommandBufferBeginInfo BeginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    vkBeginCommandBuffer(FrameContext->CopyCmdBuffer, &BeginInfo);
+    
     VK_Thread_Context_Manager_Copy_Data(&Context->ThreadContextManager);
     
     vkEndCommandBuffer(FrameContext->CopyCmdBuffer);
     Array_Push(&CmdBuffers, FrameContext->CopyCmdBuffer);
 
+    u64 FrameIndex = VK_Get_Current_Frame_Index(Context);
+
     vk_thread_context* ThreadContext = (vk_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Context->ThreadContextManager.List);
     while(ThreadContext) {
         vk_cmd_pool* CmdPool = VK_Get_Current_Cmd_Pool(&Context->ThreadContextManager, ThreadContext);
-        
-        for(vk_cmd_list* CmdList = CmdPool->SecondaryCmds.Head; CmdList; CmdList = CmdList->Next) {
-            vkEndCommandBuffer(CmdList->CmdBuffer);
-        }
         
         for(vk_cmd_list* CmdList = CmdPool->PrimaryCmds.Head; CmdList; CmdList = CmdList->Next) {
             vkEndCommandBuffer(CmdList->CmdBuffer);
@@ -1530,15 +1579,15 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
     for(uptr i = 0; i < PresentInfos.Count; i++) {
         vk_handle<vk_swapchain> SwapchainHandle(PresentInfos[i].Swapchain.ID);
         vk_swapchain* Swapchain = VK_Resource_Get(ResourceContext->Swapchains, SwapchainHandle);
-        if(Swapchain || Swapchain->TextureIndex < 0) {
+        if(!Swapchain || Swapchain->TextureIndex < 0) {
             //todo: Error logging
             Swapchain->Status = GDI_SWAPCHAIN_STATUS_ERROR;
             return false;
         }
 
         SubmitWaitStages[i]      = VK_Get_Pipeline_Stage_Flags(PresentInfos[i].InitialState);
-        SubmitSemaphores[i]      = Swapchain->AcquireLock;
-        PresentSemaphores[i]     = Swapchain->ExecuteLock;
+        SubmitSemaphores[i]      = Swapchain->AcquireLocks[FrameIndex];
+        PresentSemaphores[i]     = Swapchain->ExecuteLocks[FrameIndex];
         SwapchainImageIndices[i] = (u32)Swapchain->TextureIndex;
         Swapchains[i]            = Swapchain->Handle;
         SwapchainPtrs[i]         = Swapchain;
@@ -1579,7 +1628,7 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
         VkResult PresentStatus = vkQueuePresentKHR(Context->PresentQueue, &PresentInfo);
         if(PresentStatus == VK_ERROR_OUT_OF_DATE_KHR) {
             for(u32 i = 0; i < Swapchains.Count; i++) {
-                SwapchainPtrs[i]->Status = Results[i] == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_ERROR : GDI_SWAPCHAIN_STATUS_OK;
+                SwapchainPtrs[i]->Status = Results[i] == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_OK;
             }
             return false;
         } else if(PresentStatus != VK_SUCCESS) {
@@ -1720,17 +1769,7 @@ void GDI_Cmd_List_Begin_Render_Pass(gdi_cmd_list* _CmdList, const gdi_render_pas
         .pClearValues = ClearValues.Ptr
     };
 
-    vkCmdBeginRenderPass(CmdList->CmdBuffer, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    VkRect2D Scissor = {{}, {Framebuffer->Width, Framebuffer->Height}};
-    VkViewport Viewport = {
-        .width = (f32)Framebuffer->Width,
-        .height = (f32)Framebuffer->Height,
-        .maxDepth = 1.0f
-    };
-
-    vkCmdSetScissor(CmdList->CmdBuffer, 0, 1, &Scissor);
-    vkCmdSetViewport(CmdList->CmdBuffer, 0, 1, &Viewport);
+    vkCmdBeginRenderPass(CmdList->CmdBuffer, &RenderPassBeginInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
     VK_Resource_Record_Frame(RenderPass);
     VK_Resource_Record_Frame(Framebuffer);
@@ -1884,6 +1923,20 @@ void GDI_Cmd_List_Draw_Instance(gdi_cmd_list* _CmdList, u32 VtxCount, u32 Instan
 void GDI_Cmd_List_Draw_Indexed_Instance(gdi_cmd_list* _CmdList, u32 IdxCount, u32 IdxOffset, u32 VtxOffset, u32 InstanceCount, u32 InstanceOffset) {
     vk_cmd_list* CmdList = (vk_cmd_list*)_CmdList;
     vkCmdDrawIndexed(CmdList->CmdBuffer, IdxCount, InstanceCount, IdxOffset, (s32)VtxOffset, InstanceOffset);
+}
+
+void GDI_Cmd_List_Execute_Cmds(gdi_cmd_list* _MainCmdList, span<gdi_cmd_list*> CmdLists) {
+    vk_cmd_list* MainCmdList = (vk_cmd_list*)_MainCmdList;
+    scratch Scratch = Scratch_Get();
+
+    fixed_array<VkCommandBuffer> CmdBuffers(&Scratch, CmdLists.Count);
+    for(uptr i = 0; i < CmdLists.Count; i++) {
+        vk_cmd_list* CmdList = (vk_cmd_list*)CmdLists[i];
+        CmdBuffers[i] = CmdList->CmdBuffer;
+        vkEndCommandBuffer(CmdList->CmdBuffer);
+    }
+
+    vkCmdExecuteCommands(MainCmdList->CmdBuffer, Safe_U32(CmdBuffers.Count), CmdBuffers.Ptr);
 }
 
 #include "vk_thread_context.cpp"

@@ -256,6 +256,9 @@ typedef int64_t   s64;
 typedef s16 b16;
 typedef s32 b32; 
 
+#define true32 ((b32)true)
+#define false32 ((b32)false)
+
 typedef float     f32;
 typedef double    f64;
 typedef uintptr_t uptr;
