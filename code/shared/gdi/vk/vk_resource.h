@@ -94,6 +94,12 @@ struct vk_resource_base {
     void Add_Reference(gdi_context* Context, vk_resource_base* Resource, vk_resource_type Type);
 };
 
+//Hack struct to make sure we can find out the valid offset
+//in the base class to clear resource data
+struct vk_resource_base_offset : public vk_resource_base {
+    u32 Offset;
+};
+
 template <typename type>
 union vk_handle {
     u64 ID;
@@ -153,6 +159,7 @@ void VK_Resource_Update_Last_Frame_Indices(vk_resource_context* ResourceContext)
 bool VK_Resource_Should_Delete(gdi_context* Context, vk_resource_base* Resource, u64* OutDeleteFrameIndex);
 void VK_Resource_Context_Create(gdi_context* Context, vk_resource_context* ResourceContext, const gdi_context_create_info& CreateInfo);
 void VK_Resource_Context_Delete(vk_resource_context* ResourceContext);
+void VK_Resource_Free_Internal(ak_async_stack_index32* FreeIndices, vk_resource_base* Resource, u32 Index, u32 Generation, uptr ResourceSize);
 
 template <typename type>
 inline vk_handle<type> VK_Resource_Alloc(vk_resource_pool<type>& Pool) {
@@ -179,21 +186,9 @@ inline type* VK_Resource_Get(vk_resource_pool<type>& Pool, vk_handle<type> Handl
 
 template <typename type>
 inline void VK_Resource_Free(vk_resource_pool<type>& Pool, vk_handle<type> Handle) {
-    if(!Handle.Generation) return;
-    u32 NextGeneration = Handle.Generation+1;
-    if(!NextGeneration) NextGeneration = 1;
     Assert(Handle.Index < Pool.FreeIndices.Capacity);
     type* Resource = Pool.Resources + Handle.Index;
-
-    if(AK_Atomic_Compare_Exchange_Bool_U32(&Resource->Generation, Handle.Generation, NextGeneration, AK_ATOMIC_MEMORY_ORDER_ACQ_REL)) {
-        Resource->LastUsedFrameIndex = (u64)-1;
-        AK_Atomic_Store_U32_Relaxed(&Resource->InUse, false);
-        Array_Free(&Resource->References);
-        Resource->Handle = VK_NULL_HANDLE;
-        AK_Async_Stack_Index32_Push(&Pool.FreeIndices, Handle.Index);
-    } else {
-        Assert(false); //Tried to delete an invalid slot!
-    }
+    VK_Resource_Free_Internal(&Pool.FreeIndices, Resource, Handle.Index, Handle.Generation, sizeof(type));
 }
 
 #endif

@@ -1,20 +1,6 @@
 #ifndef VK_GDI_H
 #define VK_GDI_H
 
-/*
-TODOS: Some improvements todos for the vulkan layer
-      -Command lists need a rework before we start the rendering system
-        -There are so many problems:
-            1. Swapchain logic is confusing to determine whether the command buffer is primary or secondary.
-               Probably can just use a StartList() NextList()
-            2. Got a random null reference exception that I can only assume came from GDI_Context_Begin_Cmd_List 
-               with a swapchain that became out of date. This will require a refactor to determine whether it needs
-               to resize
-            3. Not easy to work with multithreading. A command pool per buffer is overkill, need a smarter way of only
-               using one pool per thread and then buffers will always be relative to the thread. Probably can utilize TLS
-      -
-*/
-
 #include <core/core.h>
 #include <gdi/gdi.h>
 

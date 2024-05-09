@@ -1406,7 +1406,6 @@ void GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain
             vk_delete_context* DeleteContext = VK_Get_Delete_Context(&Context->ThreadContextManager);
             VK_Delete_Context_Add(DeleteContext, DeleteContext->SwapchainList, Swapchain, FrameIndex);
         }
-        Swapchain->Surface = VK_NULL_HANDLE;
         VK_Resource_Free(ResourceContext->Swapchains, SwapchainHandle);
     }
 }
@@ -1521,6 +1520,12 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
             .framebuffer = Framebuffer->Handle
         };
         BeginInfo.pInheritanceInfo = &InheritanceInfo;
+
+        //todo: Should we record renderpass and framebuffers here. Not sure
+        //if the driver thinks these resources are in use from just 
+        //vkBeginCommandBuffer        
+        // VK_Resource_Record_Frame(RenderPass);
+        // VK_Resource_Record_Frame(Framebuffer);
     }
 
     vkBeginCommandBuffer(CmdList->CmdBuffer, &BeginInfo);
@@ -1539,6 +1544,10 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
     return (gdi_cmd_list*)CmdList;
 }
 
+//todo: If we fail to submit the command buffer and we want to retry next frame
+//the command list don't get cleaned up and reused and will leak. Currently
+//VK_Thread_Context_Manager_New_Frame will recycle old command buffers, but we need
+//a way to recycle them in this case
 bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> PresentInfos) {
     scratch Scratch = Scratch_Get();
     vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
@@ -1581,6 +1590,7 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
         vk_swapchain* Swapchain = VK_Resource_Get(ResourceContext->Swapchains, SwapchainHandle);
         if(!Swapchain || Swapchain->TextureIndex < 0) {
             //todo: Error logging
+            //todo: See todo above the function
             Swapchain->Status = GDI_SWAPCHAIN_STATUS_ERROR;
             return false;
         }
@@ -1608,11 +1618,17 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
 
         if(vkQueueSubmit(Context->GraphicsQueue, 1, &SubmitInfo, FrameContext->Fence) != VK_SUCCESS) {
             Assert(false);
+            //todo: See todo above the function
             return false;
         }
     }
 
-    gdi_execute_status Result = GDI_EXECUTE_STATUS_NONE;
+    //If we fail to submit a swapchain for presentation. This is an error
+    //however, the command buffers have been submitted, and therefore they must
+    //be processed as a normal frame, we just won't be able to present the image
+    //while the swapchain is resizing or it has been destroyed! So we need to actually
+    //finish the rest of the function regardless and switch to the next frame
+    bool Result = true;
     if(Swapchains.Count > 0) {
         fixed_array<VkResult> Results(&Scratch, Swapchains.Count);
         VkPresentInfoKHR PresentInfo = {
@@ -1630,18 +1646,22 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
             for(u32 i = 0; i < Swapchains.Count; i++) {
                 SwapchainPtrs[i]->Status = Results[i] == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_OK;
             }
-            return false;
+            //While this is an error case. Command buffers
+            Result = false;
         } else if(PresentStatus != VK_SUCCESS) {
             Assert(false);
             for(u32 i = 0; i < Swapchains.Count; i++) {
                 SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_ERROR;
             }
-            return false;
+            //todo: See todo above the function
+            Result = false;
         }
 
-        for(u32 i = 0; i < Swapchains.Count; i++) {
-            SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_OK;
-            SwapchainPtrs[i]->TextureIndex = -1;
+        if(PresentStatus == VK_SUCCESS) {
+            for(u32 i = 0; i < Swapchains.Count; i++) {
+                SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_OK;
+                SwapchainPtrs[i]->TextureIndex = -1;
+            }
         }
     }
 

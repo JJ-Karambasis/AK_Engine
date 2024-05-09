@@ -334,6 +334,12 @@ void VK_Thread_Context_Manager_Delete(vk_thread_context_manager* Manager) {
 
         for(vk_upload_buffer& UploadBuffer : ThreadContext->UploadBuffers) {
             VK_Upload_Buffer_Delete(&UploadBuffer);
+            Zero_Struct(&UploadBuffer);
+        }
+
+        for(vk_cmd_pool& CmdPool : ThreadContext->CmdPools) {
+            vkDestroyCommandPool(Context->Device, CmdPool.CommandPool, Context->VKAllocator);
+            Zero_Struct(&CmdPool);            
         }
 
         Arena_Delete(ThreadContext->Arena);

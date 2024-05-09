@@ -243,6 +243,7 @@ do { \
 #define Align_Pow2(value, alignment) (((value) + (alignment)-1) & ~((alignment)-1))
 #define _Stringify(x) #x
 #define Stringify(x) _Stringify(x)
+#define Byte_Offset(ptr, offset) ((u8*)(ptr) + (offset))
 
 typedef uint8_t   u8;
 typedef uint16_t  u16;

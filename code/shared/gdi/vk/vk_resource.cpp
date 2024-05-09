@@ -163,6 +163,29 @@ void VK_Resource_Context_Delete(vk_resource_context* ResourceContext) {
     }
 }
 
+void VK_Resource_Free_Internal(ak_async_stack_index32* FreeIndices, vk_resource_base* Resource, u32 Index, u32 Generation, uptr ResourceSize) {
+    if(!Generation) return;
+    u32 NextGeneration = Generation+1;
+    if(!NextGeneration) NextGeneration = 1;
+
+    if(AK_Atomic_Compare_Exchange_Bool_U32(&Resource->Generation, Generation, NextGeneration, AK_ATOMIC_MEMORY_ORDER_ACQ_REL)) {
+        Resource->LastUsedFrameIndex = (u64)-1;
+        AK_Atomic_Store_U32_Relaxed(&Resource->InUse, false);
+        Array_Free(&Resource->References);
+
+        //We want to clear all the memory here so the next resource has an empty slate
+        //for the resource and so that the delete context won't double free entries
+        //However we don't want to delete the base class data (generation and tracking data)
+        uptr ResourceOffset = offsetof(vk_resource_base_offset, Offset);
+        Assert(ResourceSize > ResourceOffset);
+        Memory_Clear(Byte_Offset(Resource, ResourceOffset), ResourceSize-ResourceOffset);
+
+        AK_Async_Stack_Index32_Push(FreeIndices, Index);
+    } else {
+        Assert(false); //Tried to delete an invalid slot!
+    }
+}
+
 #include "vk_swapchain.cpp"
 #include "vk_buffer.cpp"
 #include "vk_texture.cpp"
