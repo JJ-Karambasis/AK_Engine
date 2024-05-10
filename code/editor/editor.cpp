@@ -128,17 +128,28 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
     //so at some point we will need to implement a workaround for this
     Assert(GDI_Get_SRGB_Format(Window->SwapchainFormat) != GDI_FORMAT_NONE);
 
-    Window->UI = UI_Create({.Allocator = Window->Arena}); 
-
     if(Editor->UIRenderPass.RenderPass.Is_Null()) {
-        Editor->UIRenderPass = UI_Render_Pass_Create(Editor->Renderer, Window->SwapchainFormat);
+        //Make sure no threads can duplicate the same render pass
+        scoped_lock Lock(&Editor->WindowLock);
+        if(Editor->UIRenderPass.RenderPass.Is_Null()) {
+            Editor->UIRenderPass = UI_Render_Pass_Create(Editor->Renderer, Window->SwapchainFormat);
+        }
     }
 
     if(Editor->UIPipeline.Pipeline.Is_Null()) {
-        Editor->UIPipeline = UI_Pipeline_Create(Editor->Renderer, Editor->Packages, &Editor->UIRenderPass);
+        //Make sure no threads can duplicate the same pipeline
+        scoped_lock Lock(&Editor->WindowLock);
+        if(Editor->UIPipeline.Pipeline.Is_Null()) {
+            Editor->UIPipeline = UI_Pipeline_Create(Editor->Renderer, Editor->Packages, &Editor->UIRenderPass);
+        }
     }
 
-    UI_Renderer_Create(&Window->UIRenderer, Editor->Renderer, &Editor->UIPipeline, Window->UI);
+    Window->UI = UI_Create({
+        .Allocator = Window->Arena, 
+        .GlyphCache = Editor->GlyphCache, 
+        .Renderer = Editor->Renderer, 
+        .Pipeline = &Editor->UIPipeline
+    }); 
 
     return window_handle(Window);
 }
@@ -528,6 +539,7 @@ bool Editor_Main() {
         Fatal_Error_Message();
         return false;
     }
+
     Log_Info(modules::Editor, "Finished creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
     
     editor_input_manager* InputManager = &Editor.InputManager;
@@ -538,6 +550,7 @@ bool Editor_Main() {
         .Renderer = Editor.Renderer
     });
 
+    AK_Mutex_Create(&Editor.WindowLock);
     uvec2 MonitorResolution = OS_Get_Monitor_Resolution(MonitorID);
     window_handle MainWindowID = Window_Open(&Editor, MonitorID, {}, MonitorResolution, 5, String_Lit("AK_Engine"));
     window* MainWindow = Window_Get(MainWindowID);
@@ -616,7 +629,7 @@ bool Editor_Main() {
 
             Assert(Texture >= 0);
 
-            ui_renderer* UIRenderer = &Window->UIRenderer;
+            ui_renderer* UIRenderer = &Window->UI->Renderer;
 
             Render_Task_Attach_Render_Pass(Editor.Renderer, UIRenderer->RenderTask, {
                 .RenderPass = Editor.UIRenderPass.RenderPass,
@@ -630,7 +643,7 @@ bool Editor_Main() {
             Array_Push(&Windows, window_handle(Window));
             Array_Push(&Swapchains, Window->Swapchain);
 
-            Render_Graph_Add_Task(RenderGraph, Window->UIRenderer.RenderTask, 0);
+            Render_Graph_Add_Task(RenderGraph, UIRenderer->RenderTask, 0);
         }
         
         Glyph_Cache_Update(Editor.GlyphCache);
@@ -712,7 +725,6 @@ int main() {
 }
 
 //#include "level_editor/level_editor.cpp"
-#include "editor_renderers/editor_renderers.cpp"
 #include "ui/ui.cpp"
 #include "editor_input.cpp"
 #include <engine_source.cpp>

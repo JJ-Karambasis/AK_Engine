@@ -9,8 +9,7 @@ struct ps_input {
 
 Texture2D<vec4> Texture : register(TEXTURE(0), SPACE(0));
 sampler Sampler         : register(SAMPLER(1), SPACE(0));
-
-ConstantBuffer<ui_box_shader_info> ShaderInfo : register(BUFFER(0), SPACE(RENDERER_DYN_OFFSET));
+ConstantBuffer<ui_box_shader_info> ShaderInfo : register(BUFFER(0), SPACE(1));
 
 ps_input VS_Main(ui_box_shader_box Box, u32 VertexID : SV_VertexID, u32 InstanceID : SV_InstanceID) {
     static const vec2 Vertices[] = {

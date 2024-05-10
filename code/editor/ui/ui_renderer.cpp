@@ -1,7 +1,7 @@
-local_persist DRAW_CALLBACK(UI_Renderer_Update) {
-    ui_renderer* Renderer = (ui_renderer*)UserData;
+internal DRAW_CALLBACK(UI_Renderer_Update) {
+    ui* UI = (ui*)UserData;
+    ui_renderer* Renderer = &UI->Renderer;
     scratch Scratch = Scratch_Get();
-    ui* UI = Renderer->UI;
 
     array<ui_box_instance>  BoxInstances(&Scratch);
     array<ui_box_shader_box> DrawBoxes(&Scratch, UI->RenderBoxCount);
@@ -35,8 +35,15 @@ local_persist DRAW_CALLBACK(UI_Renderer_Update) {
         InstanceCount++;
     }
 
+    if(InstanceCount > 0) {
+        Assert(BoxInstances.Count > 0);
+        ui_box_instance* Instance = &Array_Last(&BoxInstances);
+        Instance->InstanceCount = InstanceCount;
+        InstanceCount = 0;
+    }
+
     //If we don't have any boxes to render we can just early skip
-    if(!DrawBoxes.Count || BoxInstances.Count) return;
+    if(!DrawBoxes.Count || !BoxInstances.Count) return;
     
     if(DrawBoxes.Count > Renderer->InstanceCount) {
         if(!Renderer->InstanceBuffer.Is_Null()) {
@@ -232,6 +239,5 @@ ui_pipeline UI_Pipeline_Create(renderer* Renderer, packages* Packages, ui_render
 
 void UI_Renderer_Create(ui_renderer* UIRenderer, renderer* Renderer, ui_pipeline* Pipeline, ui* UI) {    
     UIRenderer->Pipeline = *Pipeline;
-    UIRenderer->UI = UI;
-    UIRenderer->RenderTask = Renderer_Create_Draw_Task(Renderer, UI_Renderer_Update, UIRenderer);
+    UIRenderer->RenderTask = Renderer_Create_Draw_Task(Renderer, UI_Renderer_Update, UI);
 }

@@ -16,7 +16,6 @@ struct window_handle {
 
 #include "editor_input.h"
 #include "ui/ui.h"
-#include "editor_renderers/editor_renderers.h"
 
 // #include "level_editor/level_editor.h"
 
@@ -54,7 +53,6 @@ struct window {
     array<gdi_handle<gdi_framebuffer>>  Framebuffers;
     ui*                                 UI;
     uvec2                               Size;
-    ui_renderer                         UIRenderer;
 
     //Window links
     window* Prev;
@@ -76,9 +74,10 @@ struct editor {
     const_buffer                      MainFontBuffer;
     font_id                           MainFont;
     
-    window* FirstWindow;
-    window* LastWindow;
-    window* FreeWindows;
+    ak_mutex WindowLock;
+    window*  FirstWindow;
+    window*  LastWindow;
+    window*  FreeWindows;
 
     panel* FreePanels;
     view*  FreeViews;

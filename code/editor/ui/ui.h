@@ -1,14 +1,18 @@
 #ifndef UI_H
 #define UI_H
 
+struct ui;
+
 #include "ui_common.h"
 #include "ui_stack.h"
+#include "ui_renderer.h"
 
 typedef u32 ui_box_flags;
 
 enum {
     UI_BOX_FLAG_FIXED_WIDTH_BIT  = (1 << 0),
-    UI_BOX_FLAG_FIXED_HEIGHT_BIT = (1 << 1)
+    UI_BOX_FLAG_FIXED_HEIGHT_BIT = (1 << 1),
+    UI_BOX_FLAG_DRAW_TEXT        = (1 << 2)
 };
 
 struct ui_render_box {
@@ -21,6 +25,17 @@ struct ui_render_box {
 
 struct ui_render_box_entry : ui_render_box {
     ui_render_box_entry* Next;
+};
+
+struct ui_text_glyph {
+    rect2 ScreenRect;
+    rect2 AtlasRect;
+};
+
+struct ui_text {
+    uptr           Count;
+    ui_text_glyph* Glyphs;
+    string         Text;
 };
 
 struct ui;
@@ -52,6 +67,8 @@ struct ui_box {
     ui_axis2               ChildLayoutAxis;
     vec4                   BackgroundColor;
     rect2                  Rect;
+    font_id                FontID;
+    ui_text                Text;
     ui_custom_render_func* CustomRenderFunc;
     void*                  RenderFuncUserData;
 };
@@ -59,6 +76,8 @@ struct ui_box {
 struct ui_create_info {
     allocator*   Allocator;
     glyph_cache* GlyphCache;
+    renderer*    Renderer;
+    ui_pipeline* Pipeline;
 };
 
 struct ui {
@@ -67,13 +86,14 @@ struct ui {
 
     //Dependencies
     glyph_cache* GlyphCache;
+    ui_renderer  Renderer;
 
     //Build arenas
     u64    BuildIndex;
     arena* BuildArenas[2];
 
     //Box cache
-    ui_box*                  FirstFreeBox;
+    ui_box* FirstFreeBox;
     hashmap<ui_key, ui_box*> BoxHashTable;
 
     //Build Hierarchy
@@ -105,8 +125,12 @@ ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key);
 ui_box* UI_Build_Box_From_String(ui* UI, ui_box_flags Flags, string String);
 ui_box* UI_Build_Box_From_StringF(ui* UI, ui_box_flags Flags, const char* Format, ...);
 
-//Box attachments API
+//Box set attachments API
 void UI_Box_Attach_Custom_Render(ui_box* Box, ui_custom_render_func* RenderFunc, void* UserData);
+void UI_Box_Attach_Display_Text(ui_box* Box, string Text);
+
+//Box get attachments API
+const ui_text* UI_Box_Get_Display_Text(ui_box* Box);
 
 //Rendering API
 ui_render_box* UI_Begin_Render_Box(ui* UI);

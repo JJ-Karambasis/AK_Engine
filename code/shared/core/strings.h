@@ -38,6 +38,7 @@ struct string {
 bool operator==(string A, string B);
 bool String_Equals(string A, string B, str_case Case = str_case::Sensitive);
 
+bool   String_Is_Null_Or_Empty(string String);
 string String_Concat(allocator* Allocator, string StringA, string StringB);
 string String_Concat(allocator* Allocator, const span<string>& Strings);
 string String_Substr(string String, uptr FirstIndex, uptr LastIndex);

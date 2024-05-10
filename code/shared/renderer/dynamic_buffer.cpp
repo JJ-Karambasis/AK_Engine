@@ -57,7 +57,7 @@ dynamic_binding Dynamic_Buffer_Push(dynamic_buffer* Buffer, uptr Size) {
     dynamic_buffer_block* Block = Dynamic_Buffer_Get_Current_Block(Buffer, Size);
     if(!Block) {
         uptr BlockSize = 0;
-        if(!Buffer->Last) {
+        if(Buffer->Last) {
             BlockSize = Buffer->Last->Size*2;
         }
 

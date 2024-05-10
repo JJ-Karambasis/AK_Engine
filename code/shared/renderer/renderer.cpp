@@ -245,7 +245,7 @@ renderer* Renderer_Create(const renderer_create_info& CreateInfo) {
                 .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
                 .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT
             }, {
-                .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
+                .Type = GDI_BIND_GROUP_TYPE_SAMPLER,
                 .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT,
                 .ImmutableSamplers = {Renderer->DefaultSampler}
             }
@@ -310,6 +310,7 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
     draw_state DrawState = {};
     gdi_handle<gdi_buffer> IdxBuffer = {};
     gdi_format IdxFormat = GDI_FORMAT_NONE;
+    u32 MaxBindGroupCount = 0;
     gdi_handle<gdi_bind_group> DynBindGroups[RENDERER_MAX_DYN_BIND_GROUP] = {};
     u32 DynBindGroupOffsets[RENDERER_MAX_DYN_BIND_GROUP] = {};
 
@@ -319,12 +320,15 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
         if(DirtyFlag & draw_bits::Pipeline) {
             gdi_handle<gdi_pipeline> Pipeline = Memory_Stream_Consume<gdi_handle<gdi_pipeline>>(&MemoryStream); 
             GDI_Cmd_List_Set_Pipeline(CmdList, Pipeline);
+            MaxBindGroupCount = 0;
         }
 
         for(uptr i = 0; i < RENDERER_MAX_BIND_GROUP; i++) {
             if(DirtyFlag & draw_bits::BindGroups[i]) {
                 gdi_handle<gdi_bind_group> BindGroup = Memory_Stream_Consume<gdi_handle<gdi_bind_group>>(&MemoryStream); 
                 GDI_Cmd_List_Set_Bind_Groups(CmdList, Safe_U32(i), {BindGroup});
+                u32 BindGroupCount = Safe_U32(i+1);
+                MaxBindGroupCount = Max(MaxBindGroupCount, BindGroupCount);
             }
         }
 
@@ -401,7 +405,7 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
                 //Use the current bind group state to update
                 //Dynamic bind groups start after the regular bind groups so make sure the index has
                 //the correct offset
-                u32 Index = Safe_U32(RENDERER_MAX_BIND_GROUP+i);
+                u32 Index = Safe_U32(MaxBindGroupCount+i);
                 GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, Index, {DynBindGroups[i]}, {DynBindGroupOffsets[i]});
             }
         }

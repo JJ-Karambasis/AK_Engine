@@ -6,6 +6,7 @@ internal arena* UI_Build_Arena(ui* UI) {
 u32 UI_Hash_From_String(u32 Seed, string String) {
     u32 Result = Seed;
     for(uptr i = 0; i < String.Size; i++) {
+        //confirm: Is this hash function good enough?
         Result = ((Result << 5) + Result) + String[i];
     }
     return Result;

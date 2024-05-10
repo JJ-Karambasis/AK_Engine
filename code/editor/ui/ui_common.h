@@ -7,6 +7,12 @@ enum ui_axis2 {
     UI_AXIS2_COUNT
 };
 
+//todo: At some point we need to turn this into a u64 so we don't get any
+//collisions (or they will be so rare its basically never). CRC hash is 
+//pretty good, but the u32 conversion could make it more possible for collisions
+//to occur. This likely won't happen, but just for reliability purposes this
+//should be converted to u64 and a custom hash table will need to be implemented
+//so that we can hash with 64 bit values (library hash table uses u32 hashes)
 typedef u32 ui_key;
 
 u32    UI_Hash_From_String(u32 Seed, string String);

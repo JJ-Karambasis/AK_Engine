@@ -18,7 +18,6 @@ struct ui_box_instance {
 struct ui_renderer {
     //Globals that are set on creation
     ui_pipeline            Pipeline;
-    ui*                    UI;
     gdi_handle<gdi_buffer> InstanceBuffer;
     uptr                   InstanceCount;
     render_task_id         RenderTask;

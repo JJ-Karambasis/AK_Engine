@@ -91,7 +91,7 @@ void Draw_Stream_Set_Pipeline(draw_stream* Stream, gdi_handle<gdi_pipeline> Pipe
 }
 
 void Draw_Stream_Set_Bind_Groups(draw_stream* Stream, span<gdi_handle<gdi_bind_group>> BindGroups) {
-    Assert(BindGroups.Count < RENDERER_MAX_BIND_GROUP);
+    Assert(BindGroups.Count <= RENDERER_MAX_BIND_GROUP);
     for(uptr i = 0; i < BindGroups.Count; i++) {
         if(Stream->Draw.BindGroups[i] != BindGroups[i]) {
             Stream->DirtyFlag |= draw_bits::BindGroups[i];
@@ -101,8 +101,8 @@ void Draw_Stream_Set_Bind_Groups(draw_stream* Stream, span<gdi_handle<gdi_bind_g
 }
 
 void Draw_Stream_Set_Dynamic_Bind_Groups(draw_stream* Stream, span<gdi_handle<gdi_bind_group>> BindGroups, span<u32> Offsets) {
-    Assert(BindGroups.Count < RENDERER_MAX_DYN_BIND_GROUP);
-    Assert(Offsets.Count < BindGroups.Count);
+    Assert(BindGroups.Count <= RENDERER_MAX_DYN_BIND_GROUP);
+    Assert(Offsets.Count == BindGroups.Count);
 
     for(uptr i = 0; i < BindGroups.Count; i++) {
         if(Stream->Draw.DynBindGroup[i] != BindGroups[i]) {

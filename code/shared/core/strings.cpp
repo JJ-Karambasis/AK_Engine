@@ -232,6 +232,10 @@ bool String_Equals(string A, string B, str_case Case) {
     return true;
 }
 
+inline bool String_Is_Null_Or_Empty(string String) {
+    return !String.Size || !String.Str;
+}
+
 string String_Concat(allocator* Allocator, string StringA, string StringB) {
     uptr TotalSize = StringA.Size+StringB.Size;
     char* Buffer = (char*)Allocator_Allocate_Memory(Allocator, (TotalSize+1)*sizeof(char));

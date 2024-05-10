@@ -147,6 +147,16 @@ internal void UI_Render_Root(ui* UI, ui_box* Root) {
     }
 
     //todo: Render box here
+    const renderer_texture* Texture = Glyph_Cache_Get_Atlas(UI->GlyphCache);
+
+    ui_render_box* RenderBox = UI_Begin_Render_Box(UI);
+    RenderBox->ScreenRect = Root->Rect;
+    RenderBox->UVRect = {};
+    RenderBox->Color  = Root->BackgroundColor;
+    RenderBox->TextureDim = Texture->Dim;
+    RenderBox->Texture    = Texture->BindGroup; 
+
+    UI_End_Render_Box(UI);
 
     for(ui_box* Child = Root->FirstChild; Child; Child = Child->NextSibling) {
         UI_Render_Root(UI, Child);
@@ -158,6 +168,7 @@ ui* UI_Create(const ui_create_info& CreateInfo) {
     ui* UI = Arena_Push_Struct(Arena, ui);
     UI->Arena = Arena;
     UI->GlyphCache = CreateInfo.GlyphCache;
+    UI_Renderer_Create(&UI->Renderer, CreateInfo.Renderer, CreateInfo.Pipeline, UI);
 
     UI->BuildArenas[0] = Arena_Create(UI->Arena);
     UI->BuildArenas[1] = Arena_Create(UI->Arena);
@@ -292,6 +303,11 @@ ui_box* UI_Build_Box_From_String(ui* UI, ui_box_flags Flags, string String) {
 
     ui_key Key = UI_Key_From_String(ParentKey, String);
     ui_box* Box = UI_Build_Box_From_Key(UI, Flags, Key);
+
+    if(Flags & UI_BOX_FLAG_DRAW_TEXT) {
+        UI_Box_Attach_Display_Text(Box, String);
+    }
+
     return Box;
 }
 
@@ -312,6 +328,16 @@ void UI_Box_Attach_Custom_Render(ui_box* Box, ui_custom_render_func* RenderFunc,
     Box->RenderFuncUserData = UserData;
 }
 
+void UI_Box_Attach_Display_Text(ui_box* Box, string Text) {
+
+
+}
+
+const ui_text* UI_Box_Get_Display_Text(ui_box* Box) {
+    Assert(!String_Is_Null_Or_Empty(Box->Text.Text));
+    return &Box->Text;
+}
+
 ui_render_box* UI_Begin_Render_Box(ui* UI) {
     Assert(!UI->CurrentRenderBox);
     ui_render_box_entry* Result = Arena_Push_Struct(UI_Build_Arena(UI), ui_render_box_entry);
@@ -323,6 +349,7 @@ void UI_End_Render_Box(ui* UI) {
     Assert(UI->CurrentRenderBox);
     SLL_Push_Back(UI->FirstRenderBox, UI->LastRenderBox, UI->CurrentRenderBox);
     UI->RenderBoxCount++;
+    UI->CurrentRenderBox = nullptr;
 }
 
 #define UI_Current_Stack_Entry(constant, type) (type*)(UI->Stacks[constant].Last)
@@ -453,3 +480,5 @@ ui_stack_pref_height* UI_Current_Pref_Height(ui* UI) {
 ui_stack_background_color* UI_Current_Background_Color(ui* UI) {
     return UI_Current_Stack_Entry(UI_STACK_TYPE_BACKGROUND_COLOR, ui_stack_background_color);
 }
+
+#include "ui_renderer.cpp"
