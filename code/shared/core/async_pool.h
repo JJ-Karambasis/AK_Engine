@@ -52,6 +52,11 @@ inline type* Async_Pool_Get(async_pool<type>* Pool, async_handle<type> Handle) {
 }
 
 template <typename type>
+inline bool Async_Pool_Valid_Handle(async_pool<type>* Pool, async_handle<type> Handle) {
+    return AK_Async_Slot_Map64_Is_Allocated(&Pool->SlotMap, Handle.ID);
+}
+
+template <typename type>
 inline async_handle<type> Async_Pool_Allocate(async_pool<type>* Pool) {
     ak_slot64 SlotID = AK_Async_Slot_Map64_Alloc_Slot(&Pool->SlotMap);
     if(!SlotID) { 

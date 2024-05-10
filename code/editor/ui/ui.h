@@ -28,14 +28,15 @@ struct ui_render_box_entry : ui_render_box {
 };
 
 struct ui_text_glyph {
+    u32   Codepoint;
     rect2 ScreenRect;
-    rect2 AtlasRect;
 };
 
 struct ui_text {
     uptr           Count;
     ui_text_glyph* Glyphs;
     string         Text;
+    ui_font        Font;
 };
 
 struct ui;
@@ -66,8 +67,9 @@ struct ui_box {
     ui_size                PrefSize[UI_AXIS2_COUNT];
     ui_axis2               ChildLayoutAxis;
     vec4                   BackgroundColor;
+    vec4                   TextColor;
     rect2                  Rect;
-    font_id                FontID;
+    ui_font                Font;
     ui_text                Text;
     ui_custom_render_func* CustomRenderFunc;
     void*                  RenderFuncUserData;
@@ -127,7 +129,7 @@ ui_box* UI_Build_Box_From_StringF(ui* UI, ui_box_flags Flags, const char* Format
 
 //Box set attachments API
 void UI_Box_Attach_Custom_Render(ui_box* Box, ui_custom_render_func* RenderFunc, void* UserData);
-void UI_Box_Attach_Display_Text(ui_box* Box, string Text);
+void UI_Box_Attach_Display_Text(ui* UI, ui_box* Box, string Text);
 
 //Box get attachments API
 const ui_text* UI_Box_Get_Display_Text(ui_box* Box);
@@ -144,6 +146,8 @@ void UI_Push_Fixed_Height(ui* UI, f32 Height);
 void UI_Push_Pref_Width(ui* UI, ui_size Size);
 void UI_Push_Pref_Height(ui* UI, ui_size Size);
 void UI_Push_Background_Color(ui* UI, vec4 Color);
+void UI_Push_Font(ui* UI, ui_font Font);
+void UI_Push_Text_Color(ui* UI, vec4 Color);
 
 //UI pop stack API
 void UI_Pop_Parent(ui* UI);
@@ -153,6 +157,8 @@ void UI_Pop_Fixed_Height(ui* UI);
 void UI_Pop_Pref_Width(ui* UI);
 void UI_Pop_Pref_Height(ui* UI);
 void UI_Pop_Background_Color(ui* UI);
+void UI_Pop_Font(ui* UI);
+void UI_Pop_Text_Color(ui* UI);
 
 //UI autopop api
 void UI_Set_Next_Parent(ui* UI, ui_box* Box);
@@ -162,6 +168,8 @@ void UI_Set_Next_Fixed_Height(ui* UI, f32 Height);
 void UI_Set_Next_Pref_Width(ui* UI, ui_size Size);
 void UI_Set_Next_Pref_Height(ui* UI, ui_size Size);
 void UI_Set_Next_Background_Color(ui* UI, vec4 Color);
+void UI_Set_Next_Font(ui* UI, ui_font Font);
+void UI_Set_Next_Text_Color(ui* UI, vec4 Color);
 
 //UI get most recent stack api
 ui_stack_parent*            UI_Current_Parent(ui* UI);
@@ -171,6 +179,7 @@ ui_stack_fixed_height*      UI_Current_Fixed_Height(ui* UI);
 ui_stack_pref_width*        UI_Current_Pref_Width(ui* UI);
 ui_stack_pref_height*       UI_Current_Pref_Height(ui* UI);
 ui_stack_background_color*  UI_Current_Background_Color(ui* UI);
-
+ui_stack_font*              UI_Current_Font(ui* UI);    
+ui_stack_text_color*        UI_Current_Text_Color(ui* UI);             
 
 #endif

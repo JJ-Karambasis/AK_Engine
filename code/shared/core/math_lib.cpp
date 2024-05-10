@@ -367,8 +367,17 @@ rect2 Rect2(vec2 P1, vec2 P2) {
     return Result;
 }
 
+rect2 Rect2(rect2u Rect) {
+    rect2 Result = Rect2(Rect.Min, Rect.Max);
+    return Result;
+}
+
 rect2 Rect2_From_Dim(vec2 Dim) {
     return Rect2(vec2(), Dim);
+}
+
+rect2 Rect2_Translate(rect2 Rect, vec2 Offset) {
+    return Rect2(Rect.Min+Offset, Rect.Max+Offset);
 }
 
 vec2 Rect2_Get_Dim(rect2 Rect) {

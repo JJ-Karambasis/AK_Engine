@@ -13,6 +13,11 @@ struct font_manager {
     async_pool<font> FontPool;
 };
 
+bool font_id::Is_Valid() const {
+    if(!ID || !Manager) return false;    
+    return Async_Pool_Valid_Handle(&Manager->FontPool, async_handle<font>(ID));
+}
+
 internal font* Font_Get(font_id FontID) {
     if(!FontID.ID || !FontID.Manager) return nullptr;    
     font_manager* FontManager = FontID.Manager;

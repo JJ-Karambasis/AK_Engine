@@ -141,22 +141,128 @@ internal void UI_Layout_Root(ui* UI, ui_box* Root, ui_axis2 Axis) {
     UI_Layout_Positions(UI, Root, Axis);
 }
 
+internal bool UI_Font_Is_Different(ui_font* FontA, ui_font* FontB) {
+    return (FontA->Font != FontB->Font || 
+            FontA->Direction != FontB->Direction || 
+            FontA->Script != FontB->Script || 
+            FontA->Language != FontB->Language);
+}
+
+internal bool UI_Font_Is_Valid(ui_font* Font) {
+    return (Font->Font.Is_Valid() && 
+            Font->Direction != UBA_DIRECTION_INVALID && 
+            Font->Script != UBA_SCRIPT_NONE);
+}
+
+internal bool UI_Text_Is_Valid(ui_box* Box, ui_text* Text) {
+    return (!String_Is_Null_Or_Empty(Text->Text) &&
+            UI_Font_Is_Valid(&Box->Font) &&
+            Text->Count && Text->Glyphs);
+}
+
+internal void UI_Copy_Text(ui* UI, ui_box* Box, string Text) {
+    ui_text* DisplayText = &Box->Text;
+    Assert(DisplayText->Count > 0);
+
+    DisplayText->Text = string(UI_Build_Arena(UI), Text);
+    ui_text_glyph* Glyphs = Arena_Push_Array(UI_Build_Arena(UI), DisplayText->Count, ui_text_glyph);
+
+    for(uptr i = 0; i < DisplayText->Count; i++) {
+        Glyphs[i] = DisplayText->Glyphs[i];
+    }
+
+    DisplayText->Glyphs = Glyphs;
+}
+
+internal void UI_Shape(ui* UI, ui_box* Box, string Text) {
+    scratch Scratch = Scratch_Get();
+    ui_text* DisplayText = &Box->Text;
+
+    DisplayText->Text = string(UI_Build_Arena(UI), Text);
+    DisplayText->Font = Box->Font;
+    Assert(UI_Font_Is_Valid(&DisplayText->Font));
+
+    ui_font* Font = &DisplayText->Font;
+    
+    u32 Ascender = Font_Get_Metrics(Font->Font)->Ascender;
+    text_shape_result ShapeResult = Font_Shape(Font->Font, {
+        .Allocator = &Scratch,
+        .Text = DisplayText->Text,
+        .Properties = {
+            .Direction = Font->Direction,
+            .Script = Font->Script,
+            .Language = Font->Language
+        }
+    });
+
+    DisplayText->Count = ShapeResult.GlyphCount;
+    DisplayText->Glyphs = Arena_Push_Array(UI_Build_Arena(UI), DisplayText->Count, ui_text_glyph);
+    
+    const text_glyph_info* Glyphs = ShapeResult.Glyphs;
+    const text_shape_pos* Positions = ShapeResult.Positions;
+
+    vec2 Cursor = {};
+    for(u32 i = 0; i < ShapeResult.GlyphCount; i++) {
+        glyph_metrics Metrics = Font_Get_Glyph_Metrics(Font->Font, Glyphs[i].Codepoint);
+
+        if(i != 0) {
+            svec2 Kerning = Font_Get_Kerning(Font->Font, Glyphs[i-1].Codepoint, Glyphs[i].Codepoint);
+            Cursor.x += (f32)Kerning.x;
+        }
+
+        ui_text_glyph* Glyph = DisplayText->Glyphs + i;
+        //todo: Not sure if our offsets are properly calculated when the
+        //text shaper offsets are not zero
+        vec2 Offset = vec2(Positions[i].Offset + Metrics.Offset);
+        Offset.y = (f32)Ascender - Offset.y;
+        vec2 PixelP = Cursor + Offset;
+
+        Glyph->Codepoint = Glyphs[i].Codepoint;
+        Glyph->ScreenRect = Rect2(PixelP, PixelP+Metrics.Dim);
+
+        Cursor.x += (f32)Metrics.Advance.x;
+    } 
+}
+
 internal void UI_Render_Root(ui* UI, ui_box* Root) {
     if(Root->CustomRenderFunc) {
         Root->CustomRenderFunc(UI, Root, Root->RenderFuncUserData);
     }
 
     //todo: Render box here
-    const renderer_texture* Texture = Glyph_Cache_Get_Atlas(UI->GlyphCache);
+    const renderer_texture* AtlasTexture = Glyph_Cache_Get_Atlas(UI->GlyphCache);
 
     ui_render_box* RenderBox = UI_Begin_Render_Box(UI);
     RenderBox->ScreenRect = Root->Rect;
     RenderBox->UVRect = {};
     RenderBox->Color  = Root->BackgroundColor;
-    RenderBox->TextureDim = Texture->Dim;
-    RenderBox->Texture    = Texture->BindGroup; 
-
+    RenderBox->TextureDim = AtlasTexture->Dim;
+    RenderBox->Texture    = AtlasTexture->BindGroup; 
     UI_End_Render_Box(UI);
+
+    if(Root->Flags & UI_BOX_FLAG_DRAW_TEXT) {
+        ui_text* Text = &Root->Text;
+
+        if(UI_Text_Is_Valid(Root, Text)) {
+            //If the text is different, or if the font is different
+            //we will reshape
+
+            vec2 Offset = Root->Rect.Min;
+            for(u32 i = 0; i < Text->Count; i++) {
+                ui_text_glyph* Glyph = Text->Glyphs + i;
+                const glyph_entry* CacheGlyph = Glyph_Cache_Get(UI->GlyphCache, Text->Font.Font, Glyph->Codepoint);
+                if(CacheGlyph) {
+                    RenderBox = UI_Begin_Render_Box(UI);
+                    RenderBox->ScreenRect = Rect2_Translate(Glyph->ScreenRect, Offset);
+                    RenderBox->UVRect = Rect2(CacheGlyph->AtlasRect);
+                    RenderBox->Color  = Root->TextColor;
+                    RenderBox->TextureDim = AtlasTexture->Dim;
+                    RenderBox->Texture = AtlasTexture->BindGroup;
+                    UI_End_Render_Box(UI);
+                }
+            }
+        }
+    }
 
     for(ui_box* Child = Root->FirstChild; Child; Child = Child->NextSibling) {
         UI_Render_Root(UI, Child);
@@ -229,7 +335,7 @@ void UI_End_Build(ui* UI) {
 
     UI_Render_Root(UI, UI->Root);
 
-    UI->BuildIndex = UI->BuildIndex++;
+    UI->BuildIndex++;
     Arena_Clear(UI_Build_Arena(UI));
 }
 
@@ -287,6 +393,15 @@ ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key) {
             Box->PrefSize[UI_AXIS2_Y] = PrefHeight->Value;
         }
 
+        if(Box->Flags & UI_BOX_FLAG_DRAW_TEXT) {
+            Box->TextColor = UI_Current_Text_Color(UI)->Value;
+
+            ui_stack_font* Font = UI_Current_Font(UI);
+            if(Font) {
+                Box->Font = Font->Value;
+            }
+        }
+
         Box->BackgroundColor = UI_Current_Background_Color(UI)->Value;
     }
 
@@ -305,7 +420,8 @@ ui_box* UI_Build_Box_From_String(ui* UI, ui_box_flags Flags, string String) {
     ui_box* Box = UI_Build_Box_From_Key(UI, Flags, Key);
 
     if(Flags & UI_BOX_FLAG_DRAW_TEXT) {
-        UI_Box_Attach_Display_Text(Box, String);
+        string DisplayPart = UI_Display_Part_From_String(String);
+        UI_Box_Attach_Display_Text(UI, Box, DisplayPart);
     }
 
     return Box;
@@ -328,9 +444,36 @@ void UI_Box_Attach_Custom_Render(ui_box* Box, ui_custom_render_func* RenderFunc,
     Box->RenderFuncUserData = UserData;
 }
 
-void UI_Box_Attach_Display_Text(ui_box* Box, string Text) {
+void UI_Box_Attach_Display_Text(ui* UI, ui_box* Box, string Text) {
+    //First make sure the font that is attached to the box is valid
+    ui_font* Font = &Box->Font;
+    if(!UI_Font_Is_Valid(Font)) {
+        Assert(false);
+        return;
+    }
 
+    //Then, we are going to be setting properties on the 
+    //display text to see if we need to reshape or not
+    ui_text* DisplayText = &Box->Text;
+    bool Reshape = false;
 
+    //The normal text is first    
+    if(DisplayText->Text != Text) {
+        Reshape = true;
+    }
+
+    //Then if the font is different we also have to reshape
+    if(UI_Font_Is_Different(Font, &DisplayText->Font)) {
+        Reshape = true;
+    }
+
+    //Reshape or copy the text
+    if(Reshape) {
+        UI_Shape(UI, Box, Text);
+    } else {
+        //If we don't need to reshape, copy the text next frame
+        UI_Copy_Text(UI, Box, Text);
+    }
 }
 
 const ui_text* UI_Box_Get_Display_Text(ui_box* Box) {
@@ -394,6 +537,14 @@ void UI_Push_Background_Color(ui* UI, vec4 Color) {
     UI_Push_Type(UI_STACK_TYPE_BACKGROUND_COLOR, ui_stack_background_color, Color);
 }
 
+void UI_Push_Font(ui* UI, ui_font Font) {
+    UI_Push_Type(UI_STACK_TYPE_FONT, ui_stack_font, Font);
+}
+
+void UI_Push_Text_Color(ui* UI, vec4 Color) {
+    UI_Push_Type(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color, Color);
+}
+
 //UI pop stack API
 void UI_Pop_Parent(ui* UI) {
     UI_Pop_Type_Safe(UI_STACK_TYPE_PARENT);
@@ -421,6 +572,14 @@ void UI_Pop_Pref_Height(ui* UI) {
 
 void UI_Pop_Background_Color(ui* UI) {
     UI_Pop_Type_Safe(UI_STACK_TYPE_BACKGROUND_COLOR);
+}
+
+void UI_Pop_Font(ui* UI) {
+    UI_Pop_Type(UI_STACK_TYPE_FONT);
+}
+
+void UI_Pop_Text_Color(ui* UI) {
+    UI_Pop_Type_Safe(UI_STACK_TYPE_TEXT_COLOR);
 }
 
 //UI autopop api
@@ -452,6 +611,14 @@ void UI_Set_Next_Background_Color(ui* UI, vec4 Color) {
     UI_Autopush_Type(UI_STACK_TYPE_BACKGROUND_COLOR, ui_stack_background_color, Color);
 }
 
+void UI_Set_Next_Font(ui* UI, ui_font Font) {
+    UI_Autopush_Type(UI_STACK_TYPE_FONT, ui_stack_font, Font);
+}
+
+void UI_Set_Next_Text_Color(ui* UI, vec4 Color) {
+    UI_Autopush_Type(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color, Color);
+}
+
 //UI get most recent stack api
 ui_stack_parent* UI_Current_Parent(ui* UI) {
     return UI_Current_Stack_Entry(UI_STACK_TYPE_PARENT, ui_stack_parent);
@@ -479,6 +646,14 @@ ui_stack_pref_height* UI_Current_Pref_Height(ui* UI) {
 
 ui_stack_background_color* UI_Current_Background_Color(ui* UI) {
     return UI_Current_Stack_Entry(UI_STACK_TYPE_BACKGROUND_COLOR, ui_stack_background_color);
+}
+
+ui_stack_font* UI_Current_Font(ui* UI) {
+    return UI_Current_Stack_Entry(UI_STACK_TYPE_FONT, ui_stack_font);
+}
+
+ui_stack_text_color* UI_Current_Text_Color(ui* UI) {
+    return UI_Current_Stack_Entry(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color);
 }
 
 #include "ui_renderer.cpp"

@@ -37,4 +37,12 @@ struct ui_size {
 
 #define UI_Pixels(value, strictness) ui_size(UI_SIZE_TYPE_PIXELS, value, strictness)
 
+struct ui_font {
+    font_id        Font;
+    uba_direction  Direction = UBA_DIRECTION_LTR;
+    uba_script     Script;
+    text_language  Language = TEXT_LANGUAGE_UNKNOWN;
+};
+
+
 #endif

@@ -6,7 +6,9 @@ internal uptr UI_Get_Stack_Entry_Size(ui_stack_type Type) {
         sizeof(ui_stack_fixed_height),
         sizeof(ui_stack_pref_width),
         sizeof(ui_stack_pref_height),
-        sizeof(ui_stack_background_color)
+        sizeof(ui_stack_background_color),
+        sizeof(ui_stack_font),
+        sizeof(ui_stack_text_color)
     };
     static_assert(Array_Count(Sizes) == UI_STACK_TYPE_COUNT);
     Assert(Type < UI_STACK_TYPE_COUNT);
@@ -50,8 +52,10 @@ internal void UI_Reset_Stacks(ui* UI) {
     UI_Push_Pref_Width(UI, UI_Pixels(250.0f, 1.0f));
     UI_Push_Pref_Height(UI, UI_Pixels(30.0f, 1.0f));
     UI_Push_Background_Color(UI, vec4(1.0f, 0.0f, 1.0f, 1.0f));
+    UI_Push_Text_Color(UI, vec4(1.0f, 0.0f, 1.0f, 1.0f));
 }
 
+#ifdef DEBUG_BUILD
 internal void UI_Validate_Stacks(ui* UI) {
     local_persist const bool DebugSingleValidate[] = {
         true,
@@ -60,6 +64,8 @@ internal void UI_Validate_Stacks(ui* UI) {
         false,
         true, 
         true,
+        true,
+        false,
         true
     };
     static_assert(Array_Count(DebugSingleValidate) == UI_STACK_TYPE_COUNT);
@@ -75,6 +81,9 @@ internal void UI_Validate_Stacks(ui* UI) {
         }
     }
 }
+#else
+#define UI_Validate_Stacks(...)
+#endif
 
 internal void UI_Autopop_Stacks(ui* UI) {
     for(u32 i = 0; i < UI_STACK_TYPE_COUNT; i++) {

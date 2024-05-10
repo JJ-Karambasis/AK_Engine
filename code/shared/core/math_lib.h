@@ -215,7 +215,9 @@ struct rect2 {
 
 rect2 Rect2_Empty();
 rect2 Rect2(vec2 Min, vec2 Max);
+rect2 Rect2(rect2u Rect);
 rect2 Rect2_From_Dim(vec2 Dim);
+rect2 Rect2_Translate(rect2 Rect, vec2 Offset);
 vec2  Rect2_Get_Dim(rect2 Rect);
 bool  Rect2_Is_Empty(rect2 Rect);
 f32   Rect2_Area(rect2 Rect);

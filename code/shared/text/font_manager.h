@@ -10,6 +10,11 @@ struct font_manager_create_info {
 struct font_id {
     u64 ID;
     font_manager* Manager;
+    bool Is_Valid() const;
+
+    inline bool operator!=(const font_id& Other) const {
+        return ID != Other.ID || Manager != Other.Manager;
+    }
 };
 
 font_manager* Font_Manager_Create(const font_manager_create_info& CreateInfo);

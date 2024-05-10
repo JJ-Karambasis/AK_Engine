@@ -11,6 +11,8 @@ enum ui_stack_type {
     UI_STACK_TYPE_PREF_WIDTH,
     UI_STACK_TYPE_PREF_HEIGHT,
     UI_STACK_TYPE_BACKGROUND_COLOR,
+    UI_STACK_TYPE_FONT,
+    UI_STACK_TYPE_TEXT_COLOR,
     UI_STACK_TYPE_COUNT
 };
 
@@ -50,6 +52,14 @@ struct ui_stack_pref_height : ui_stack_entry {
 };
 
 struct ui_stack_background_color : ui_stack_entry {
+    vec4 Value;
+};
+
+struct ui_stack_font : ui_stack_entry {
+    ui_font Value;
+};
+
+struct ui_stack_text_color : ui_stack_entry {
     vec4 Value;
 };
 
