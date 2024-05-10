@@ -6,10 +6,9 @@
 #include <input/input.h>
 #include <text/text.h>
 #include <packages/packages.h>
-#include <assets/assets.h>
+#include <renderer/renderer.h>
 #include <atlas/atlas.h>
 #include <glyph_cache/glyph_cache.h>
-#include <renderer/renderer.h>
 
 #include "modules.h"
 #include "camera.h"

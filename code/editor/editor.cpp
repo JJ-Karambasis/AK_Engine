@@ -138,7 +138,7 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
         Editor->UIPipeline = UI_Pipeline_Create(Editor->Renderer, Editor->Packages, &Editor->UIRenderPass);
     }
 
-    UI_Renderer_Create(&Window->UIRenderer, Editor->Renderer, &Editor->UIRenderPass, &Editor->UIPipeline, Window->UI, Editor->GlyphCache);
+    UI_Renderer_Create(&Window->UIRenderer, Editor->Renderer, &Editor->UIPipeline, Window->UI);
 
     return window_handle(Window);
 }
@@ -508,7 +508,10 @@ bool Editor_Main() {
 
     Editor.Renderer = Renderer_Create({
         .JobSystem = Editor.JobSystemHigh,
-        .Context = Context
+        .Context = Context,
+        .DefaultSamplerInfo = {
+            .Filter = GDI_FILTER_LINEAR
+        }
     });
     if(!Editor.Renderer) {
         Fatal_Error_Message();
@@ -532,7 +535,7 @@ bool Editor_Main() {
     os_monitor_id MonitorID = OS_Get_Primary_Monitor();
     
     Editor.GlyphCache = Glyph_Cache_Create({
-        .Context = Context
+        .Renderer = Editor.Renderer
     });
 
     uvec2 MonitorResolution = OS_Get_Monitor_Resolution(MonitorID);

@@ -71,11 +71,8 @@ struct editor {
     glyph_cache*                      GlyphCache;
     ui_render_pass                    UIRenderPass;
     ui_pipeline                       UIPipeline;
-    gdi_handle<gdi_bind_group_layout> GlobalBindGroupLayout;
-    gdi_handle<gdi_bind_group_layout> DynamicBindGroupLayout;
-    gdi_handle<gdi_bind_group_layout> LinearSamplerBindGroupLayout;
     editor_input_manager              InputManager;
-    gpu_texture                       DefaultTexture;
+    renderer_texture                  DefaultTexture;
     const_buffer                      MainFontBuffer;
     font_id                           MainFont;
     

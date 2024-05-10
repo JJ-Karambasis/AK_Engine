@@ -290,7 +290,7 @@ void* Arena_Push(arena* Arena, uptr Size, uptr Alignment, allocator_clear_flag C
             BlockSize = Ceil_Pow2(Size+Mask);
         }
 
-        //If the blocksize is less than the minimum block size we will truncate up
+        //If the blocksize is less than the minimum block size we will round up
         BlockSize = Max(BlockSize, Arena->MinimumBlockSize);
 
         Block = Arena__Allocate_Block(Arena, BlockSize);

@@ -34,7 +34,7 @@ struct gdi_handle {
     u64 ID = 0;
     gdi_handle() = default;
     inline gdi_handle(u64 _ID) : ID(_ID) { }
-    inline bool Is_Null() { return ID == 0; }
+    inline bool Is_Null() const { return ID == 0; }
 
     inline bool operator!=(gdi_handle<type> Other) const {
         return ID != Other.ID;
@@ -162,6 +162,7 @@ enum {
     GDI_SHADER_STAGE_VERTEX_BIT = (1 << 0),
     GDI_SHADER_STAGE_PIXEL_BIT  = (1 << 1),
 };
+#define GDI_SHADER_STAGE_ALL (GDI_SHADER_STAGE_VERTEX_BIT|GDI_SHADER_STAGE_PIXEL_BIT)
 typedef u32 gdi_shader_stage_flags;
 
 struct gdi_bind_group_layout_binding {

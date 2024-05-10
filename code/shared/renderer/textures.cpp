@@ -1,4 +1,5 @@
-gpu_texture GPU_Texture_Create(gdi_context* Context, const gpu_texture_create_info& CreateInfo) {
+renderer_texture Renderer_Texture_Create(renderer* Renderer, const renderer_texture_create_info& CreateInfo) {
+    gdi_context* Context = Renderer->Context;
     gdi_handle<gdi_texture> Texture = GDI_Context_Create_Texture(Context, {
         .Format = CreateInfo.Format,
         .Width  = CreateInfo.Dim.w,
@@ -22,7 +23,7 @@ gpu_texture GPU_Texture_Create(gdi_context* Context, const gpu_texture_create_in
     }
 
     gdi_handle<gdi_bind_group> BindGroup = GDI_Context_Create_Bind_Group(Context, {
-        .Layout = CreateInfo.BindGroupLayout,
+        .Layout = Renderer->TextureLayout,
         .WriteInfo = {
             .Bindings = { { 
                     .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
@@ -49,4 +50,4 @@ gpu_texture GPU_Texture_Create(gdi_context* Context, const gpu_texture_create_in
     };
 }
 
-void        GPU_Texture_Delete(gdi_context* Context, gpu_texture* Texture);
+void Renderer_Texture_Delete(renderer* Renderer, renderer_texture* Texture);

@@ -7,9 +7,27 @@
 typedef u32 ui_box_flags;
 
 enum {
-    UI_BOX_FLAG_FIXED_WIDTH_BIT = (1 << 0),
+    UI_BOX_FLAG_FIXED_WIDTH_BIT  = (1 << 0),
     UI_BOX_FLAG_FIXED_HEIGHT_BIT = (1 << 1)
 };
+
+struct ui_render_box {
+    rect2                      ScreenRect;
+    rect2                      UVRect;
+    vec4                       Color;
+    vec2                       TextureDim;
+    gdi_handle<gdi_bind_group> Texture;
+};
+
+struct ui_render_box_entry : ui_render_box {
+    ui_render_box_entry* Next;
+};
+
+struct ui;
+struct ui_box;
+
+#define UI_CUSTOM_RENDER_FUNC_DEFINE(name) void name(ui* UI, ui_box* Box, void* UserData)
+typedef UI_CUSTOM_RENDER_FUNC_DEFINE(ui_custom_render_func);
 
 struct ui_box {
     //Hash state
@@ -25,25 +43,30 @@ struct ui_box {
     u32     ChildCount;
 
     //Per build info
-    ui_key       Key;
-    ui_box_flags Flags;
-    u64          LastUsedBuildIndex;
-    vec2         FixedSize;
-    vec2         FixedPosition;
-    ui_size      PrefSize[UI_AXIS2_COUNT];
-    ui_axis2     ChildLayoutAxis;
-    vec4         BackgroundColor;
-    rect2        Rect;
-
+    ui_key                 Key;
+    ui_box_flags           Flags;
+    u64                    LastUsedBuildIndex;
+    vec2                   FixedSize;
+    vec2                   FixedPosition;
+    ui_size                PrefSize[UI_AXIS2_COUNT];
+    ui_axis2               ChildLayoutAxis;
+    vec4                   BackgroundColor;
+    rect2                  Rect;
+    ui_custom_render_func* CustomRenderFunc;
+    void*                  RenderFuncUserData;
 };
 
 struct ui_create_info {
-    allocator*    Allocator;
+    allocator*   Allocator;
+    glyph_cache* GlyphCache;
 };
 
 struct ui {
     //Main arena
     arena*  Arena;
+
+    //Dependencies
+    glyph_cache* GlyphCache;
 
     //Build arenas
     u64    BuildIndex;
@@ -55,6 +78,12 @@ struct ui {
 
     //Build Hierarchy
     ui_box* Root;
+
+    //Rendering
+    u32                  RenderBoxCount;
+    ui_render_box_entry* FirstRenderBox;
+    ui_render_box_entry* LastRenderBox;
+    ui_render_box_entry* CurrentRenderBox;
 
     //Stacks
     ui_stack_list Stacks[UI_STACK_TYPE_COUNT];
@@ -75,6 +104,13 @@ ui_box* UI_Box_From_Key(ui* UI, ui_key Key);
 ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key);
 ui_box* UI_Build_Box_From_String(ui* UI, ui_box_flags Flags, string String);
 ui_box* UI_Build_Box_From_StringF(ui* UI, ui_box_flags Flags, const char* Format, ...);
+
+//Box attachments API
+void UI_Box_Attach_Custom_Render(ui_box* Box, ui_custom_render_func* RenderFunc, void* UserData);
+
+//Rendering API
+ui_render_box* UI_Begin_Render_Box(ui* UI);
+void           UI_End_Render_Box(ui* UI);
 
 //UI push stack API
 void UI_Push_Parent(ui* UI, ui_box* Box);

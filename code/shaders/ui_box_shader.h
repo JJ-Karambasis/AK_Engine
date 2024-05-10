@@ -1,7 +1,7 @@
 #ifndef UI_BOX_SHADER_H
 #define UI_BOX_SHADER_H
 
-struct ui_box_shader_global {
+struct ui_box_shader_info {
     vec2 InvRes;
     vec2 InvTexRes;
 };

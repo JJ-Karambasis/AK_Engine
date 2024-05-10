@@ -18,21 +18,16 @@ struct comparer<glyph_cache_key> {
 glyph_cache* Glyph_Cache_Create(const glyph_cache_create_info& CreateInfo) {
     arena* Arena = Arena_Create(CreateInfo.Allocator);
     glyph_cache* Result = Arena_Push_Struct(Arena, glyph_cache);
-    Result->Arena       = Arena;
-    Result->Context     = CreateInfo.Context;
-    Result->AtlasLayout = GDI_Context_Create_Bind_Group_Layout(Result->Context, {
-        .Bindings = { { 
-                .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE
-            }
-        }
-    });
+    Result->Arena    = Arena;
+    Result->Renderer = CreateInfo.Renderer;
 
-    Result->Atlas       = GPU_Texture_Create(Result->Context, {
+    Result->Atlas = Renderer_Texture_Create(Result->Renderer, {
         .IsSRGB          = true,
         .Format          = GDI_FORMAT_R8G8B8A8_UNORM,
         .Dim             = CreateInfo.AtlasDim,
-        .BindGroupLayout = Result->AtlasLayout
     });
+
+    gdi_context* Context = Renderer_Get_Context(Result->Renderer);
 
     Result->AtlasAllocator = Atlas_Allocator_Create({
         .Allocator = Result->Arena, 
@@ -44,7 +39,7 @@ glyph_cache* Glyph_Cache_Create(const glyph_cache_create_info& CreateInfo) {
         0xFFFFFFFF, 0xFFFFFFFF,
         0xFFFFFFFF, 0xFFFFFFFF
     };
-    GDI_Context_Upload_Texture(Result->Context, Result->Atlas.Handle, {
+    GDI_Context_Upload_Texture(Context, Result->Atlas.Handle, {
         { const_buffer(Texels), 0, 0, 2, 2}
     });
 
@@ -65,6 +60,10 @@ glyph_cache* Glyph_Cache_Create(const glyph_cache_create_info& CreateInfo) {
 }
 
 void               Glyph_Cache_Delete(glyph_cache* Cache);
+
+const renderer_texture* Glyph_Cache_Get_Atlas(glyph_cache* Cache) {
+    return &Cache->Atlas;
+}
 
 const glyph_entry* Glyph_Cache_Get(glyph_cache* Cache, font_id Font, u32 Codepoint) {
     //Hash by the font buffer instead of faces because, we may duplicate faces
@@ -251,7 +250,8 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
         AK_Async_Slot_Map64_Free_Slot(&Cache->CreateEntrySlots, Slot);
     }
     if(TextureCopies.Count) {
-        GDI_Context_Upload_Texture(Cache->Context, Cache->Atlas.Handle, TextureCopies);
+        gdi_context* Context = Renderer_Get_Context(Cache->Renderer);
+        GDI_Context_Upload_Texture(Context, Cache->Atlas.Handle, TextureCopies);
     }
 
     AK_Atomic_Store_Ptr_Relaxed(&Cache->GlyphsToCreateList, nullptr);

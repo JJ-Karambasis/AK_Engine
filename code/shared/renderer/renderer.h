@@ -3,12 +3,16 @@
 
 struct renderer;
 
+#include <render_options.h>
 #include "draw_stream.h"
+#include "dynamic_buffer.h"
+#include "textures.h"
 
 struct renderer_create_info {
-    allocator*     Allocator = Core_Get_Base_Allocator();
-    ak_job_system* JobSystem;
-    gdi_context*   Context;
+    allocator*              Allocator = Core_Get_Base_Allocator();
+    ak_job_system*          JobSystem;
+    gdi_context*            Context;
+    gdi_sampler_create_info DefaultSamplerInfo;
 };
 
 typedef u64 render_task_id;
@@ -18,7 +22,7 @@ struct render_graph_id {
     struct render_graph* Graph;
 };
 
-#define DRAW_CALLBACK(name) void name(ak_job_system* JobSystem, gdi_context* Context, draw_stream* DrawStream, vec2 Resolution, void* UserData)
+#define DRAW_CALLBACK(name) void name(ak_job_system* JobSystem, gdi_context* Context, draw_stream* DrawStream, dynamic_buffer* DynamicBuffer, vec2 Resolution, void* UserData)
 typedef DRAW_CALLBACK(draw_callback_func);
 
 struct draw_callback_data {
@@ -30,6 +34,8 @@ renderer* Renderer_Create(const renderer_create_info& CreateInfo);
 void      Renderer_Delete(renderer* Renderer);
 bool      Renderer_Execute(renderer* Renderer, render_graph_id RenderGraph, span<gdi_handle<gdi_swapchain>> Swapchains);
 gdi_context* Renderer_Get_Context(renderer* Renderer);
+gdi_handle<gdi_bind_group_layout> Renderer_Get_Dynamic_Layout(renderer* Renderer);
+gdi_handle<gdi_bind_group_layout> Renderer_Get_Texture_Layout(renderer* Renderer);
 
 //todo: Draw indirect tasks for consoles and pcs (gpu driven)
 //todo: Computer shaders to take advantage of async compute (skinning)

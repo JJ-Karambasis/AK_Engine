@@ -2,6 +2,7 @@
 #define SHADER_COMMON_H
 
 #ifndef __cplusplus
+#include <render_options.h>
 #define u32 uint
 #define b32 int
 #define f32 float

@@ -141,10 +141,23 @@ internal void UI_Layout_Root(ui* UI, ui_box* Root, ui_axis2 Axis) {
     UI_Layout_Positions(UI, Root, Axis);
 }
 
+internal void UI_Render_Root(ui* UI, ui_box* Root) {
+    if(Root->CustomRenderFunc) {
+        Root->CustomRenderFunc(UI, Root, Root->RenderFuncUserData);
+    }
+
+    //todo: Render box here
+
+    for(ui_box* Child = Root->FirstChild; Child; Child = Child->NextSibling) {
+        UI_Render_Root(UI, Child);
+    }
+}
+
 ui* UI_Create(const ui_create_info& CreateInfo) {
     arena* Arena = Arena_Create(CreateInfo.Allocator, KB(64));
     ui* UI = Arena_Push_Struct(Arena, ui);
     UI->Arena = Arena;
+    UI->GlyphCache = CreateInfo.GlyphCache;
 
     UI->BuildArenas[0] = Arena_Create(UI->Arena);
     UI->BuildArenas[1] = Arena_Create(UI->Arena);
@@ -202,6 +215,8 @@ void UI_End_Build(ui* UI) {
     for(u32 i = 0; i < UI_AXIS2_COUNT; i++) {
         UI_Layout_Root(UI, UI->Root, (ui_axis2)i);
     }
+
+    UI_Render_Root(UI, UI->Root);
 
     UI->BuildIndex = UI->BuildIndex++;
     Arena_Clear(UI_Build_Arena(UI));
@@ -290,6 +305,24 @@ ui_box* UI_Build_Box_From_StringF(ui* UI, ui_box_flags Flags, const char* Format
 
     ui_box* Box = UI_Build_Box_From_String(UI, Flags, String);
     return Box;   
+}
+
+void UI_Box_Attach_Custom_Render(ui_box* Box, ui_custom_render_func* RenderFunc, void* UserData) {
+    Box->CustomRenderFunc = RenderFunc;
+    Box->RenderFuncUserData = UserData;
+}
+
+ui_render_box* UI_Begin_Render_Box(ui* UI) {
+    Assert(!UI->CurrentRenderBox);
+    ui_render_box_entry* Result = Arena_Push_Struct(UI_Build_Arena(UI), ui_render_box_entry);
+    UI->CurrentRenderBox = Result;
+    return Result;
+}
+
+void UI_End_Render_Box(ui* UI) {
+    Assert(UI->CurrentRenderBox);
+    SLL_Push_Back(UI->FirstRenderBox, UI->LastRenderBox, UI->CurrentRenderBox);
+    UI->RenderBoxCount++;
 }
 
 #define UI_Current_Stack_Entry(constant, type) (type*)(UI->Stacks[constant].Last)

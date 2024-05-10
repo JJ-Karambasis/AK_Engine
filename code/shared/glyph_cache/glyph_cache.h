@@ -38,9 +38,8 @@ struct glyph_cache_update_entry {
 
 struct glyph_cache {
     arena*                                       Arena;
-    gdi_context*                                 Context;
-    gdi_handle<gdi_bind_group_layout>            AtlasLayout;
-    gpu_texture                                  Atlas;
+    renderer*                                    Renderer;
+    renderer_texture                             Atlas;
     atlas_allocator*                             AtlasAllocator;
     ak_async_slot_map64                          CreateEntrySlots;
     glyph_cache_create_entry*                    CreateEntries;
@@ -56,15 +55,16 @@ struct glyph_cache {
 };
 
 struct glyph_cache_create_info {
-    gdi_context*                      Context;
-    allocator*                        Allocator             = Core_Get_Base_Allocator();
-    uvec2                             AtlasDim              = uvec2(1024, 1024);
-    u32                               MaxUpdateEntryCount   = 1024;
-    u32                               MaxCreateEntryCount   = 1024;
+    renderer*  Renderer;
+    allocator* Allocator           = Core_Get_Base_Allocator();
+    uvec2      AtlasDim            = uvec2(1024, 1024);
+    u32        MaxUpdateEntryCount = 1024;
+    u32        MaxCreateEntryCount = 1024;
 };
 
 glyph_cache*       Glyph_Cache_Create(const glyph_cache_create_info& CreateInfo);
 void               Glyph_Cache_Delete(glyph_cache* Cache);
+const renderer_texture* Glyph_Cache_Get_Atlas(glyph_cache* Cache);
 
 //Glyph_Cache_Get is threadsafe relative to other Glyph_Cache_Gets,
 //must call Glyph_Cache_Update when no more Glyph_Cache_Gets are being

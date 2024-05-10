@@ -74,11 +74,16 @@ struct render_graph {
 };
 
 struct renderer {
-    arena*           Arena;
-    ak_job_system*   JobSystem;
-    gdi_context*     Context;
-    render_task_pool TaskPools[RENDER_TASK_TYPE_COUNT];
-    render_graph*    FreeGraphs;
+    arena*                            Arena;
+    ak_job_system*                    JobSystem;
+    gdi_context*                      Context;
+    render_task_pool                  TaskPools[RENDER_TASK_TYPE_COUNT];
+    render_graph*                     FreeGraphs;
+    gdi_handle<gdi_sampler>           DefaultSampler;
+    gdi_handle<gdi_bind_group_layout> DynamicBufferLayout;
+    gdi_handle<gdi_bind_group_layout> TextureLayout;
+    ak_tls                            TLS;
+    ak_atomic_ptr                     ThreadList;
 };
 
 struct draw_state {
@@ -88,6 +93,15 @@ struct draw_state {
     u32 PrimCount;
     u32 InstCount;
     b32 IsVtxDraw;
+};
+
+#include "dynamic_buffer.cpp"
+#include "textures.cpp"
+
+struct renderer_thread_context {
+    arena*                   Arena;
+    dynamic_buffer           DynamicBuffer;
+    renderer_thread_context* Next;
 };
 
 template <typename type>
@@ -216,6 +230,30 @@ renderer* Renderer_Create(const renderer_create_info& CreateInfo) {
         Render_Task_Pool_Init(&Renderer->TaskPools[i], (render_task_type)i);
     }
 
+    Renderer->DefaultSampler = GDI_Context_Create_Sampler(Renderer->Context, CreateInfo.DefaultSamplerInfo);
+
+    Renderer->DynamicBufferLayout = GDI_Context_Create_Bind_Group_Layout(Renderer->Context, {
+        .Bindings = { { 
+                .Type = GDI_BIND_GROUP_TYPE_CONSTANT_DYNAMIC,
+                .StageFlags = GDI_SHADER_STAGE_ALL
+            }
+        }
+    });
+
+    Renderer->TextureLayout = GDI_Context_Create_Bind_Group_Layout(Renderer->Context, {
+        .Bindings = { { 
+                .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
+                .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT
+            }, {
+                .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
+                .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT,
+                .ImmutableSamplers = {Renderer->DefaultSampler}
+            }
+        }
+    });
+
+    AK_TLS_Create(&Renderer->TLS);
+
     return Renderer;
 }
 
@@ -227,19 +265,36 @@ void Renderer_Delete(renderer* Renderer) {
 }
 
 struct render_graph_draw_data {
-    gdi_context* Context;
+    renderer*    Renderer;
     render_task* Task;
 };
+
+internal renderer_thread_context* Renderer_Get_Thread_Context(renderer* Renderer) {
+    renderer_thread_context* Result = (renderer_thread_context*)AK_TLS_Get(&Renderer->TLS);
+    if(!Result) {
+        //Internal allocator needs to be thread safe
+        arena* Arena = Arena_Create(Core_Get_Base_Allocator());
+        Result = Arena_Push_Struct(Arena, renderer_thread_context);
+        Result->Arena = Arena;
+        SLL_Push_Front_Async(&Renderer->ThreadList, Result);
+
+        Result->DynamicBuffer = Dynamic_Buffer_Create(Renderer, Result->Arena, KB(64));
+        AK_TLS_Set(&Renderer->TLS, Result);
+    }
+    return Result;
+}
 
 internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
     render_graph_draw_data* RenderGraphDrawData = (render_graph_draw_data*)JobUserData;
     render_task* RenderTask = RenderGraphDrawData->Task;
-    gdi_context* Context = RenderGraphDrawData->Context;
+    renderer* Renderer = RenderGraphDrawData->Renderer;
+    gdi_context* Context = Renderer->Context;
+    renderer_thread_context* ThreadContext = Renderer_Get_Thread_Context(Renderer);
 
     uvec2 Resolution = GDI_Context_Get_Framebuffer_Resolution(Context, RenderTask->Framebuffer);
 
     draw_stream* DrawStream = &RenderTask->DrawStream;
-    RenderTask->Callback(JobSystem, Context, DrawStream, vec2(Resolution), RenderTask->UserData);
+    RenderTask->Callback(JobSystem, Context, DrawStream, &ThreadContext->DynamicBuffer, vec2(Resolution), RenderTask->UserData);
 
     scratch Scratch = Scratch_Get();
 
@@ -256,7 +311,7 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
     gdi_handle<gdi_buffer> IdxBuffer = {};
     gdi_format IdxFormat = GDI_FORMAT_NONE;
     gdi_handle<gdi_bind_group> DynBindGroups[RENDERER_MAX_DYN_BIND_GROUP] = {};
-    uptr DynBindGroupOffsets[RENDERER_MAX_DYN_BIND_GROUP] = {};
+    u32 DynBindGroupOffsets[RENDERER_MAX_DYN_BIND_GROUP] = {};
 
     while(Memory_Stream_Is_Valid(&MemoryStream)) {
         RENDERER_DIRTY_FLAG_TYPE DirtyFlag = Memory_Stream_Consume<RENDERER_DIRTY_FLAG_TYPE>(&MemoryStream);
@@ -344,7 +399,10 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
             if((DirtyFlag & draw_bits::DynBindGroups[i]) ||
                (DirtyFlag & draw_bits::DynOffsets[i])) {
                 //Use the current bind group state to update
-                GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, Safe_U32(i), {DynBindGroups[i]}, {DynBindGroupOffsets[i]});
+                //Dynamic bind groups start after the regular bind groups so make sure the index has
+                //the correct offset
+                u32 Index = Safe_U32(RENDERER_MAX_BIND_GROUP+i);
+                GDI_Cmd_List_Set_Dynamic_Bind_Groups(CmdList, Index, {DynBindGroups[i]}, {DynBindGroupOffsets[i]});
             }
         }
 
@@ -392,7 +450,7 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
         
         //Submit the job
         render_graph_draw_data DrawData = {
-            .Context = Renderer->Context,
+            .Renderer = Renderer,
             .Task = Task
         };
 
@@ -500,11 +558,28 @@ bool Renderer_Execute(renderer* Renderer, render_graph_id GraphID, span<gdi_hand
         Array_Clear(&Barriers);
     }
 
-    return GDI_Context_Execute(Renderer->Context, PresentInfo);    
+    bool Result = GDI_Context_Execute(Renderer->Context, PresentInfo);
+
+    //Once per update thread context update
+    renderer_thread_context* ThreadContext = (renderer_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Renderer->ThreadList);
+    while(ThreadContext) {
+        Dynamic_Buffer_Reset(&ThreadContext->DynamicBuffer);
+        ThreadContext = ThreadContext->Next;
+    }
+
+    return Result;    
 }
 
-gdi_context* Renderer_Get_Context(renderer* Renderer) {
+inline gdi_context* Renderer_Get_Context(renderer* Renderer) {
     return Renderer->Context;
+}
+
+inline gdi_handle<gdi_bind_group_layout> Renderer_Get_Dynamic_Layout(renderer* Renderer) {
+    return Renderer->DynamicBufferLayout;
+}
+
+inline gdi_handle<gdi_bind_group_layout> Renderer_Get_Texture_Layout(renderer* Renderer) {
+    return Renderer->TextureLayout;
 }
 
 render_task_id Renderer_Create_Draw_Task(renderer* Renderer, draw_callback_func* Callback, void* UserData) {

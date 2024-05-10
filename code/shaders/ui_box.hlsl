@@ -7,9 +7,10 @@ struct ps_input {
     vec4 Color  : COLOR0;
 };
 
-ConstantBuffer<ui_box_shader_global>  GlobalData : register(BUFFER(0), SPACE(0));
-Texture2D<vec4> Texture : register(TEXTURE(1), SPACE(0));
-sampler Sampler : register(SAMPLER(2), SPACE(0));
+Texture2D<vec4> Texture : register(TEXTURE(0), SPACE(0));
+sampler Sampler         : register(SAMPLER(1), SPACE(0));
+
+ConstantBuffer<ui_box_shader_info> ShaderInfo : register(BUFFER(0), SPACE(RENDERER_DYN_OFFSET));
 
 ps_input VS_Main(ui_box_shader_box Box, u32 VertexID : SV_VertexID, u32 InstanceID : SV_InstanceID) {
     static const vec2 Vertices[] = {
@@ -40,11 +41,11 @@ ps_input VS_Main(ui_box_shader_box Box, u32 VertexID : SV_VertexID, u32 Instance
     vec2 SrcVertex = UVs[VertexID]*SrcHalfSize + SrcCenter;
 
     ps_input Result = (ps_input)0;
-    Result.Vertex = vec4((2.0f * DstVertex.x * GlobalData.InvRes.x) - 1.0f, 
-                         (2.0f * DstVertex.y * GlobalData.InvRes.y) + 1.0f,
+    Result.Vertex = vec4((2.0f * DstVertex.x * ShaderInfo.InvRes.x) - 1.0f, 
+                         (2.0f * DstVertex.y * ShaderInfo.InvRes.y) + 1.0f,
                          0, 1);
 
-    Result.UV = SrcVertex*GlobalData.InvTexRes;
+    Result.UV = SrcVertex*ShaderInfo.InvTexRes;
 
     Result.Color = Box.Color;
     return Result;

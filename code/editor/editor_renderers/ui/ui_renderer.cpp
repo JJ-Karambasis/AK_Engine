@@ -2,27 +2,74 @@ local_persist DRAW_CALLBACK(UI_Renderer_Update) {
     ui_renderer* Renderer = (ui_renderer*)UserData;
     scratch Scratch = Scratch_Get();
     ui* UI = Renderer->UI;
-    array<ui_box_shader_box> DrawBoxes(&Scratch);
+
+    array<ui_box_instance>  BoxInstances(&Scratch);
+    array<ui_box_shader_box> DrawBoxes(&Scratch, UI->RenderBoxCount);
     
-    array<ui_box*> BoxStack(&Scratch, UI->BoxHashTable.Count);
-    if(UI->Root) {
-        Array_Push(&BoxStack, UI->Root);
-        while(!Array_Empty(&BoxStack)) {
-            ui_box* Box = Array_Pop(&BoxStack);
+    gdi_handle<gdi_bind_group> CurrentTexture;
+    u32 InstanceCount = 0;
 
-            if(!Rect2_Is_Empty(Box->Rect)) {
-                Array_Push(&DrawBoxes, {
-                    .DstP0 = Box->Rect.Min,
-                    .DstP1 = Box->Rect.Max,
-                    .Color = Box->BackgroundColor
-                });
-            }
+    for(ui_render_box_entry* RenderBox = UI->FirstRenderBox; RenderBox; RenderBox = RenderBox->Next) {
+        if(CurrentTexture != RenderBox->Texture) {
+            if(BoxInstances.Count) {
+                ui_box_instance* Instance = &Array_Last(&BoxInstances);
+                Instance->InstanceCount = InstanceCount;
+                InstanceCount = 0;
+            }   
 
-            for(ui_box* Child = Box->FirstChild; Child; Child = Child->NextSibling) {
-                Array_Push(&BoxStack, Child);
-            }
+            CurrentTexture = RenderBox->Texture; 
+            Array_Push(&BoxInstances, {
+                .BindGroup = CurrentTexture,
+                .Dim = RenderBox->TextureDim
+            });
         }
+
+        Array_Push(&DrawBoxes, {
+            .DstP0 = RenderBox->ScreenRect.Min,
+            .DstP1 = RenderBox->ScreenRect.Max,
+            .SrcP0 = RenderBox->UVRect.Min,
+            .SrcP1 = RenderBox->UVRect.Max,
+            .Color = RenderBox->Color
+        });
+
+        InstanceCount++;
     }
+
+    //If we don't have any boxes to render we can just early skip
+    if(!DrawBoxes.Count || BoxInstances.Count) return;
+    
+    if(DrawBoxes.Count > Renderer->InstanceCount) {
+        if(!Renderer->InstanceBuffer.Is_Null()) {
+            GDI_Context_Delete_Buffer(Context, Renderer->InstanceBuffer);
+            Renderer->InstanceBuffer = {};
+        }
+
+        Renderer->InstanceCount = DrawBoxes.Count;
+        Renderer->InstanceBuffer = GDI_Context_Create_Buffer(Context, {
+            .ByteSize   = Renderer->InstanceCount*sizeof(ui_box_shader_box),
+            .UsageFlags = GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_GPU_LOCAL_BUFFER_BIT 
+        });
+    }
+    GDI_Context_Buffer_Write(Context, Renderer->InstanceBuffer, const_buffer(span(DrawBoxes)));
+
+    Draw_Stream_Set_Pipeline(DrawStream, Renderer->Pipeline.Pipeline);
+    Draw_Stream_Set_Vtx_Buffers(DrawStream, {Renderer->InstanceBuffer});
+
+    u32 InstanceOffset = 0;
+    for(ui_box_instance Instance : BoxInstances) {
+        dynamic_binding InstanceData = Dynamic_Buffer_Push<ui_box_shader_info>(DynamicBuffer);
+        ui_box_shader_info* ShaderInfo = (ui_box_shader_info*)InstanceData.Data;
+        ShaderInfo->InvRes = 1.0f / vec2(Resolution);
+        ShaderInfo->InvTexRes = 1.0f / vec2(Instance.Dim);
+        
+        Draw_Stream_Set_Bind_Groups(DrawStream, {Instance.BindGroup});
+        Draw_Stream_Set_Dynamic_Bind_Groups(DrawStream, {InstanceData.BindGroup}, {InstanceData.Offset});
+
+        Draw_Stream_Draw_Vtx(DrawStream, 0, InstanceOffset, 4, Instance.InstanceCount);
+
+        InstanceOffset += Instance.InstanceCount;
+    }
+    Assert(InstanceOffset == DrawBoxes.Count);
 
     
 #if 0 
@@ -103,35 +150,6 @@ local_persist DRAW_CALLBACK(UI_Renderer_Update) {
         }
     }
 #endif
-
-    //If we don't have any boxes to render we can just early skip
-    if(!DrawBoxes.Count) return;
-    
-    if(DrawBoxes.Count > Renderer->InstanceCount) {
-        if(!Renderer->InstanceBuffer.Is_Null()) {
-            GDI_Context_Delete_Buffer(Context, Renderer->InstanceBuffer);
-            Renderer->InstanceBuffer = {};
-        }
-
-        Renderer->InstanceCount = DrawBoxes.Count;
-        Renderer->InstanceBuffer = GDI_Context_Create_Buffer(Context, {
-            .ByteSize   = Renderer->InstanceCount*sizeof(ui_box_shader_box),
-            .UsageFlags = GDI_BUFFER_USAGE_FLAG_VTX_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_DYNAMIC_BUFFER_BIT|GDI_BUFFER_USAGE_FLAG_GPU_LOCAL_BUFFER_BIT 
-        });
-    }
-
-    ui_box_shader_global ShaderGlobal = {
-        .InvRes = 1.0f / vec2(Resolution),
-        .InvTexRes = 1.0f / vec2(Renderer->GlyphCache->Atlas.Dim)
-    };
-
-    GDI_Context_Buffer_Write(Context, Renderer->GlobalBuffer, const_buffer(&ShaderGlobal));
-    GDI_Context_Buffer_Write(Context, Renderer->InstanceBuffer, const_buffer(span(DrawBoxes)));
-
-    Draw_Stream_Set_Pipeline(DrawStream, Renderer->Pipeline.Pipeline);
-    Draw_Stream_Set_Bind_Groups(DrawStream, {Renderer->GlobalBindGroup});
-    Draw_Stream_Set_Vtx_Buffers(DrawStream, {Renderer->InstanceBuffer});
-    Draw_Stream_Draw_Vtx(DrawStream, 0, 0, 4, Safe_U32(DrawBoxes.Count));
 }
 
 ui_render_pass UI_Render_Pass_Create(renderer* Renderer, gdi_format Format) {
@@ -148,24 +166,8 @@ ui_render_pass UI_Render_Pass_Create(renderer* Renderer, gdi_format Format) {
 
 ui_pipeline UI_Pipeline_Create(renderer* Renderer, packages* Packages, ui_render_pass* RenderPass) {
     gdi_context* Context = Renderer_Get_Context(Renderer);
-    gdi_handle<gdi_sampler> Sampler = GDI_Context_Create_Sampler(Context, {
-        .Filter = GDI_FILTER_LINEAR
-    });
-
-    gdi_handle<gdi_bind_group_layout> BindGroupLayout = GDI_Context_Create_Bind_Group_Layout(Context, {
-        .Bindings = { { 
-                .Type = GDI_BIND_GROUP_TYPE_CONSTANT,
-                .StageFlags = GDI_SHADER_STAGE_VERTEX_BIT
-            }, {
-                .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
-                 .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT
-            }, {
-                .Type = GDI_BIND_GROUP_TYPE_SAMPLER,
-                .StageFlags = GDI_SHADER_STAGE_PIXEL_BIT,
-                .ImmutableSamplers = {Sampler}
-            }
-        }
-    });
+    gdi_handle<gdi_bind_group_layout> TextureLayout = Renderer_Get_Texture_Layout(Renderer);
+    gdi_handle<gdi_bind_group_layout> DynamicLayout = Renderer_Get_Dynamic_Layout(Renderer);
 
     scratch Scratch = Scratch_Get();
     package* UIBoxShaderPackage = Packages_Get_Package(Packages, String_Lit("shaders"), String_Lit("ui_box")); 
@@ -178,7 +180,7 @@ ui_pipeline UI_Pipeline_Create(renderer* Renderer, packages* Packages, ui_render
     gdi_handle<gdi_pipeline> Pipeline = GDI_Context_Create_Graphics_Pipeline(Context, {
         .VS = {VtxShader, String_Lit("VS_Main")},
         .PS = {PxlShader, String_Lit("PS_Main")},
-        .Layouts = {BindGroupLayout},
+        .Layouts = {TextureLayout, DynamicLayout},
         .GraphicsState = {
             .VtxBufferBindings = { {
                     .ByteStride = sizeof(ui_box_shader_box),
@@ -224,45 +226,12 @@ ui_pipeline UI_Pipeline_Create(renderer* Renderer, packages* Packages, ui_render
     });
 
     return {
-        .Sampler = Sampler,
-        .BindGroupLayout = BindGroupLayout,
         .Pipeline = Pipeline
     };
 }
 
-void UI_Renderer_Create(ui_renderer* UIRenderer, renderer* Renderer, ui_render_pass* RenderPass, ui_pipeline* Pipeline, ui* UI, glyph_cache* GlyphCache) {    
+void UI_Renderer_Create(ui_renderer* UIRenderer, renderer* Renderer, ui_pipeline* Pipeline, ui* UI) {    
     UIRenderer->Pipeline = *Pipeline;
     UIRenderer->UI = UI;
-    UIRenderer->GlyphCache = GlyphCache;
-
-    gdi_context* Context = Renderer_Get_Context(Renderer);
-
-    UIRenderer->GlobalBuffer = GDI_Context_Create_Buffer(Context, {
-        .ByteSize = sizeof(ui_box_shader_global),
-        .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT
-    });
-    if(UIRenderer->GlobalBuffer.Is_Null()) {
-        Assert(false);
-        return;
-    }
-
-    UIRenderer->GlobalBindGroup = GDI_Context_Create_Bind_Group(Context, {
-        .Layout = UIRenderer->Pipeline.BindGroupLayout,
-        .WriteInfo = { 
-            .Bindings = { { 
-                    .Type = GDI_BIND_GROUP_TYPE_CONSTANT,
-                    .BufferBinding = {
-                        .Buffer = UIRenderer->GlobalBuffer
-                    }
-                }, {
-                    .Type = GDI_BIND_GROUP_TYPE_SAMPLED_TEXTURE,
-                    .CopyBinding = {
-                        .SrcBindGroup = UIRenderer->GlyphCache->Atlas.BindGroup
-                    }
-                }
-            }
-        }
-    });
-
     UIRenderer->RenderTask = Renderer_Create_Draw_Task(Renderer, UI_Renderer_Update, UIRenderer);
 }
