@@ -379,12 +379,6 @@ enum gdi_resource_state {
     GDI_RESOURCE_STATE_COUNT
 };
 
-enum gdi_execute_status {
-    GDI_EXECUTE_STATUS_NONE,
-    GDI_EXECUTE_STATUS_RESIZE,
-    GDI_EXECUTE_STATUS_ERROR
-};
-
 enum gdi_swapchain_status {
     GDI_SWAPCHAIN_STATUS_OK,
     GDI_SWAPCHAIN_STATUS_RESIZE,
