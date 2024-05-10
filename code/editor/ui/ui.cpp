@@ -19,6 +19,12 @@ internal void UI_Size_Calculate_Standalone(ui* UI, ui_box* Root, ui_axis2 Axis) 
         case UI_SIZE_TYPE_PIXELS: {
             Root->FixedSize.Data[Axis] = Root->PrefSize[Axis].Value;
         } break;
+
+        case UI_SIZE_TYPE_TEXT: {
+            f32 Padding = Root->PrefSize[Axis].Value;
+            f32 TextSize = Root->Text.Dim.Data[Axis];
+            Root->FixedSize.Data[Axis] = (Padding*2)+TextSize;
+        } break;
     }
 
     //Recurse
@@ -141,6 +147,14 @@ internal void UI_Layout_Root(ui* UI, ui_box* Root, ui_axis2 Axis) {
     UI_Layout_Positions(UI, Root, Axis);
 }
 
+internal f32 UI_Get_Padding(ui_size Size) {
+    f32 Result = 0.0f;
+    if(Size.Type == UI_SIZE_TYPE_TEXT) {
+        Result = Size.Value;
+    }
+    return Result;
+}
+
 internal bool UI_Font_Is_Different(ui_font* FontA, ui_font* FontB) {
     return (FontA->Font != FontB->Font || 
             FontA->Direction != FontB->Direction || 
@@ -201,6 +215,9 @@ internal void UI_Shape(ui* UI, ui_box* Box, string Text) {
     const text_glyph_info* Glyphs = ShapeResult.Glyphs;
     const text_shape_pos* Positions = ShapeResult.Positions;
 
+    //Only LTR text is supported right now
+    vec2 Dim = {};
+
     vec2 Cursor = {};
     for(u32 i = 0; i < ShapeResult.GlyphCount; i++) {
         glyph_metrics Metrics = Font_Get_Glyph_Metrics(Font->Font, Glyphs[i].Codepoint);
@@ -220,8 +237,18 @@ internal void UI_Shape(ui* UI, ui_box* Box, string Text) {
         Glyph->Codepoint = Glyphs[i].Codepoint;
         Glyph->ScreenRect = Rect2(PixelP, PixelP+Metrics.Dim);
 
+        //If this is the last entry in the shape, the size of the shapes
+        //combined is position of the last glyph plus the width of the last shape.
+        //This just ends up being the final glyphs ScreenRect.x since we always
+        //start from zero
+        if(i == (ShapeResult.GlyphCount-1)) {
+            Dim.x = Glyph->ScreenRect.Max.x;
+        }
+        Dim.y = Max(Dim.y, Glyph->ScreenRect.Max.y);
+
         Cursor.x += (f32)Metrics.Advance.x;
     } 
+    DisplayText->Dim = Dim;
 }
 
 internal void UI_Render_Root(ui* UI, ui_box* Root) {
@@ -244,10 +271,34 @@ internal void UI_Render_Root(ui* UI, ui_box* Root) {
         ui_text* Text = &Root->Text;
 
         if(UI_Text_Is_Valid(Root, Text)) {
-            //If the text is different, or if the font is different
-            //we will reshape
+            vec2 Offset = {};
 
-            vec2 Offset = Root->Rect.Min;
+            for(u32 i = 0; i < UI_AXIS2_COUNT; i++) {
+                u32 Index = i*3;
+
+                f32 Padding = UI_Get_Padding(Root->PrefSize[i]);
+                f32 Max = Max(Root->Rect.Max.Data[i]-Padding, 0.0f);
+                f32 Min = Min(Root->Rect.Min.Data[i]+Padding, Max);
+
+                if(Root->TextAlignment & (1 << Index)) {
+                    Assert(!(Root->TextAlignment & (1 << (Index+1))));
+                    Assert(!(Root->TextAlignment & (1 << (Index+2))));
+                    
+                    Offset.Data[i] = Min;
+                } else if(Root->TextAlignment & (1 << (Index+1))) {
+                    Assert(!(Root->TextAlignment & (1 << (Index+2))));
+
+                    Offset.Data[i] = Max - Text->Dim.Data[i];
+                } else if(Root->TextAlignment & (1 << (Index+2))) {
+                    f32 TextHalf = Text->Dim.Data[i]*0.5f;
+                    f32 Half = (Max-Min)*0.5f;
+                    Offset.Data[i] = Min + ((Half-Text->Dim.Data[i])+TextHalf);
+                } else {
+                    //Please specify a text alignment
+                    Assert(false);
+                }
+            }
+
             for(u32 i = 0; i < Text->Count; i++) {
                 ui_text_glyph* Glyph = Text->Glyphs + i;
                 const glyph_entry* CacheGlyph = Glyph_Cache_Get(UI->GlyphCache, Text->Font.Font, Glyph->Codepoint);
@@ -345,6 +396,10 @@ ui_box* UI_Box_From_Key(ui* UI, ui_key Key) {
     return *pBox;
 }
 
+ui_box* UI_Current_Box(ui* UI) {
+    return UI->CurrentBox;
+}
+
 ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key) {
     //Check to see if our box is allocated
     ui_box* Box = UI_Box_From_Key(UI, Key);
@@ -395,6 +450,7 @@ ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key) {
 
         if(Box->Flags & UI_BOX_FLAG_DRAW_TEXT) {
             Box->TextColor = UI_Current_Text_Color(UI)->Value;
+            Box->TextAlignment = UI_Current_Text_Alignment(UI)->Value;
 
             ui_stack_font* Font = UI_Current_Font(UI);
             if(Font) {
@@ -406,6 +462,8 @@ ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key) {
     }
 
     UI_Autopop_Stacks(UI);
+
+    UI->CurrentBox = Box;
 
     return Box;
 }
@@ -481,6 +539,10 @@ const ui_text* UI_Box_Get_Display_Text(ui_box* Box) {
     return &Box->Text;
 }
 
+vec2 UI_Box_Get_Dim(ui_box* Box) {
+    return Box->FixedSize;
+}
+
 ui_render_box* UI_Begin_Render_Box(ui* UI) {
     Assert(!UI->CurrentRenderBox);
     ui_render_box_entry* Result = Arena_Push_Struct(UI_Build_Arena(UI), ui_render_box_entry);
@@ -545,6 +607,10 @@ void UI_Push_Text_Color(ui* UI, vec4 Color) {
     UI_Push_Type(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color, Color);
 }
 
+void UI_Push_Text_Alignment(ui* UI, ui_text_alignment_flags TextAlignment) {
+    UI_Push_Type(UI_STACK_TYPE_TEXT_ALIGNMENT, ui_stack_text_alignment, TextAlignment);
+}
+
 //UI pop stack API
 void UI_Pop_Parent(ui* UI) {
     UI_Pop_Type_Safe(UI_STACK_TYPE_PARENT);
@@ -580,6 +646,10 @@ void UI_Pop_Font(ui* UI) {
 
 void UI_Pop_Text_Color(ui* UI) {
     UI_Pop_Type_Safe(UI_STACK_TYPE_TEXT_COLOR);
+}
+
+void UI_Pop_Text_Alignment(ui* UI) {
+    UI_Pop_Type_Safe(UI_STACK_TYPE_TEXT_ALIGNMENT);
 }
 
 //UI autopop api
@@ -619,6 +689,10 @@ void UI_Set_Next_Text_Color(ui* UI, vec4 Color) {
     UI_Autopush_Type(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color, Color);
 }
 
+void UI_Set_Next_Text_Alignment(ui* UI, ui_text_alignment_flags AlignmentFlags) {
+    UI_Autopush_Type(UI_STACK_TYPE_TEXT_ALIGNMENT, ui_stack_text_alignment, AlignmentFlags);
+}
+
 //UI get most recent stack api
 ui_stack_parent* UI_Current_Parent(ui* UI) {
     return UI_Current_Stack_Entry(UI_STACK_TYPE_PARENT, ui_stack_parent);
@@ -654,6 +728,10 @@ ui_stack_font* UI_Current_Font(ui* UI) {
 
 ui_stack_text_color* UI_Current_Text_Color(ui* UI) {
     return UI_Current_Stack_Entry(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color);
+}
+
+ui_stack_text_alignment* UI_Current_Text_Alignment(ui* UI) {
+    return UI_Current_Stack_Entry(UI_STACK_TYPE_TEXT_ALIGNMENT, ui_stack_text_alignment);
 }
 
 #include "ui_renderer.cpp"

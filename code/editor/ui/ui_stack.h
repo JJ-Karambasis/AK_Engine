@@ -13,6 +13,7 @@ enum ui_stack_type {
     UI_STACK_TYPE_BACKGROUND_COLOR,
     UI_STACK_TYPE_FONT,
     UI_STACK_TYPE_TEXT_COLOR,
+    UI_STACK_TYPE_TEXT_ALIGNMENT,
     UI_STACK_TYPE_COUNT
 };
 
@@ -61,6 +62,10 @@ struct ui_stack_font : ui_stack_entry {
 
 struct ui_stack_text_color : ui_stack_entry {
     vec4 Value;
+};
+
+struct ui_stack_text_alignment : ui_stack_entry {
+    ui_text_alignment_flags Value;
 };
 
 #endif

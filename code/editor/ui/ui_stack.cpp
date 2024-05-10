@@ -8,7 +8,8 @@ internal uptr UI_Get_Stack_Entry_Size(ui_stack_type Type) {
         sizeof(ui_stack_pref_height),
         sizeof(ui_stack_background_color),
         sizeof(ui_stack_font),
-        sizeof(ui_stack_text_color)
+        sizeof(ui_stack_text_color),
+        sizeof(ui_stack_text_alignment)
     };
     static_assert(Array_Count(Sizes) == UI_STACK_TYPE_COUNT);
     Assert(Type < UI_STACK_TYPE_COUNT);
@@ -53,6 +54,7 @@ internal void UI_Reset_Stacks(ui* UI) {
     UI_Push_Pref_Height(UI, UI_Pixels(30.0f, 1.0f));
     UI_Push_Background_Color(UI, vec4(1.0f, 0.0f, 1.0f, 1.0f));
     UI_Push_Text_Color(UI, vec4(1.0f, 0.0f, 1.0f, 1.0f));
+    UI_Push_Text_Alignment(UI, UI_TEXT_ALIGNMENT_LEFT_BIT|UI_TEXT_ALIGNMENT_TOP_BIT);
 }
 
 #ifdef DEBUG_BUILD
@@ -66,6 +68,7 @@ internal void UI_Validate_Stacks(ui* UI) {
         true,
         true,
         false,
+        true,
         true
     };
     static_assert(Array_Count(DebugSingleValidate) == UI_STACK_TYPE_COUNT);

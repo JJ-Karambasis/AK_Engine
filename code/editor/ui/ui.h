@@ -37,6 +37,7 @@ struct ui_text {
     ui_text_glyph* Glyphs;
     string         Text;
     ui_font        Font;
+    vec2           Dim;
 };
 
 struct ui;
@@ -59,20 +60,21 @@ struct ui_box {
     u32     ChildCount;
 
     //Per build info
-    ui_key                 Key;
-    ui_box_flags           Flags;
-    u64                    LastUsedBuildIndex;
-    vec2                   FixedSize;
-    vec2                   FixedPosition;
-    ui_size                PrefSize[UI_AXIS2_COUNT];
-    ui_axis2               ChildLayoutAxis;
-    vec4                   BackgroundColor;
-    vec4                   TextColor;
-    rect2                  Rect;
-    ui_font                Font;
-    ui_text                Text;
-    ui_custom_render_func* CustomRenderFunc;
-    void*                  RenderFuncUserData;
+    ui_key                  Key;
+    ui_box_flags            Flags;
+    u64                     LastUsedBuildIndex;
+    vec2                    FixedSize;
+    vec2                    FixedPosition;
+    ui_size                 PrefSize[UI_AXIS2_COUNT];
+    ui_axis2                ChildLayoutAxis;
+    vec4                    BackgroundColor;
+    vec4                    TextColor;
+    rect2                   Rect;
+    ui_font                 Font;
+    ui_text                 Text;
+    ui_text_alignment_flags TextAlignment;
+    ui_custom_render_func*  CustomRenderFunc;
+    void*                   RenderFuncUserData;
 };
 
 struct ui_create_info {
@@ -107,6 +109,9 @@ struct ui {
     ui_render_box_entry* LastRenderBox;
     ui_render_box_entry* CurrentRenderBox;
 
+    //Current box
+    ui_box* CurrentBox;
+
     //Stacks
     ui_stack_list Stacks[UI_STACK_TYPE_COUNT];
 };
@@ -121,6 +126,7 @@ void UI_End_Build(ui* UI);
 
 //Cache lookup
 ui_box* UI_Box_From_Key(ui* UI, ui_key Key);
+ui_box* UI_Current_Box(ui* UI);
 
 //Box construction API
 ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key);
@@ -133,6 +139,7 @@ void UI_Box_Attach_Display_Text(ui* UI, ui_box* Box, string Text);
 
 //Box get attachments API
 const ui_text* UI_Box_Get_Display_Text(ui_box* Box);
+vec2           UI_Box_Get_Dim(ui_box* Box);
 
 //Rendering API
 ui_render_box* UI_Begin_Render_Box(ui* UI);
@@ -148,6 +155,7 @@ void UI_Push_Pref_Height(ui* UI, ui_size Size);
 void UI_Push_Background_Color(ui* UI, vec4 Color);
 void UI_Push_Font(ui* UI, ui_font Font);
 void UI_Push_Text_Color(ui* UI, vec4 Color);
+void UI_Push_Text_Alignment(ui* UI, ui_text_alignment_flags AlignmentFlags);
 
 //UI pop stack API
 void UI_Pop_Parent(ui* UI);
@@ -159,6 +167,7 @@ void UI_Pop_Pref_Height(ui* UI);
 void UI_Pop_Background_Color(ui* UI);
 void UI_Pop_Font(ui* UI);
 void UI_Pop_Text_Color(ui* UI);
+void UI_Pop_Text_Alignment(ui* UI);
 
 //UI autopop api
 void UI_Set_Next_Parent(ui* UI, ui_box* Box);
@@ -170,6 +179,7 @@ void UI_Set_Next_Pref_Height(ui* UI, ui_size Size);
 void UI_Set_Next_Background_Color(ui* UI, vec4 Color);
 void UI_Set_Next_Font(ui* UI, ui_font Font);
 void UI_Set_Next_Text_Color(ui* UI, vec4 Color);
+void UI_Set_Next_Text_Alignment(ui* UI, ui_text_alignment_flags AlignmentFlags);
 
 //UI get most recent stack api
 ui_stack_parent*            UI_Current_Parent(ui* UI);
@@ -180,6 +190,7 @@ ui_stack_pref_width*        UI_Current_Pref_Width(ui* UI);
 ui_stack_pref_height*       UI_Current_Pref_Height(ui* UI);
 ui_stack_background_color*  UI_Current_Background_Color(ui* UI);
 ui_stack_font*              UI_Current_Font(ui* UI);    
-ui_stack_text_color*        UI_Current_Text_Color(ui* UI);             
+ui_stack_text_color*        UI_Current_Text_Color(ui* UI); 
+ui_stack_text_alignment*    UI_Current_Text_Alignment(ui* UI);            
 
 #endif

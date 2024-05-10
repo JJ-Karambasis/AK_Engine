@@ -336,7 +336,7 @@ void Window_Update(editor* Editor, window* Window) {
         .Language = TEXT_LANGUAGE_ENGLISH
     });
 
-    f32 ButtonSize = 50;
+    f32 ButtonSize = 100;
 
     UI_Push_Fixed_Height(UI, ButtonSize);
     UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.w);
@@ -345,13 +345,18 @@ void Window_Update(editor* Editor, window* Window) {
     ui_box* MenuBox = UI_Build_Box_From_StringF(UI, 0, "###%llux", (u64)(uptr)Window);
     UI_Push_Parent(UI, MenuBox);
     {
-        UI_Set_Next_Fixed_Width(UI, ButtonSize*2);
+        f32 MenuWidth = UI_Box_Get_Dim(MenuBox).w;
+
         UI_Set_Next_Background_Color(UI, Vec4_Yellow());
         UI_Set_Next_Text_Color(UI, Vec4_Blue());
+        UI_Set_Next_Pref_Width(UI, UI_Text(4, 1.0));
+        UI_Set_Next_Text_Alignment(UI, UI_TEXT_ALIGNMENT_CENTER);
         UI_Build_Box_From_String(UI, UI_BOX_FLAG_DRAW_TEXT, String_Lit("Help###Menu Box 1"));
+        
+        f32 Width = UI_Box_Get_Dim(UI_Current_Box(UI)).w;
 
         f32 FinalButtonsSize = ButtonSize*3;
-        f32 NextRect = Max(0.0f, (f32)Window->Size.w - (FinalButtonsSize+ButtonSize*2));
+        f32 NextRect = Max(0.0f, MenuWidth - (FinalButtonsSize+Width));
 
         UI_Set_Next_Fixed_Width(UI, NextRect);
         UI_Build_Box_From_String(UI, 0, String_Lit("###Filler Box"));
