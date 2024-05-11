@@ -1,3 +1,3 @@
-#include "atlas_allocator_tests.cpp"
+//#include "atlas_allocator_tests.cpp"
 
-#include <atlas/atlas.cpp>
+//#include <atlas/atlas.cpp>

@@ -2,8 +2,8 @@
 #define DEBUG_BUILD
 #endif
 
-#include <engine.h>
-#include <os/os.h>
+#include <core/core.h>
+#include <math/math.h>
 
 #include "utest.h"
 

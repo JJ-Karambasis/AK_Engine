@@ -270,6 +270,7 @@ typedef intptr_t  sptr;
 #define global static
 
 #include "utility.h"
+#include "simd.h"
 #include "strings.h"
 #include "hash.h"
 #include "memory.h"

@@ -194,6 +194,7 @@ void Core_Set(core* Core) {
 #include "memory.cpp"
 #include "hash.cpp"
 #include "strings.cpp"
+#include "simd.cpp"
 #include "utility.cpp"
 
 #define AK_JOB_MALLOC(size, user_data) Allocator_Allocate_Memory(Core_Get_Base_Allocator(), size)
