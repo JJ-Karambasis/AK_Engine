@@ -35,6 +35,11 @@ struct array {
         return Ptr[Index];
     }
 
+    inline const type& operator[](uptr Index) const {
+        Assert(Index < Count);
+        return Ptr[Index];
+    }
+
     inline type* begin() { return Ptr; }
     inline type* end() { return Ptr+Count; }
 

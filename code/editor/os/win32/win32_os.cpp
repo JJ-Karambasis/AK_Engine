@@ -519,4 +519,4 @@ void OS_Set(os* OS) {
     G_OS = OS;
 }
 
-#include <os/win32/win32_shared.cpp>
+#include <os2/win32/win32_shared.cpp>

@@ -4,7 +4,7 @@
 #include <core/core.h>
 #include <gdi/gdi.h>
 #include <os.h>
-#include <os/win32/win32_shared.h>
+#include <os2/win32/win32_shared.h>
 
 struct os_window {
     os_window_id              ID;

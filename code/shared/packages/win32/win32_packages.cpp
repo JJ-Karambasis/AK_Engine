@@ -1,5 +1,5 @@
 #include <packages/packages.cpp>
-#include <os/win32/win32_shared.h>
+#include <os2/win32/win32_shared.h>
 
 struct win32_file_resource : resource {
     HANDLE                 Handle;
@@ -262,4 +262,4 @@ void Packages_Wait_On_Task(packages* Packages, package_io_task Task) {
     }
 }
 
-#include <os/win32/win32_shared.cpp>
+#include <os2/win32/win32_shared.cpp>

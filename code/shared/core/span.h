@@ -12,7 +12,7 @@ struct span {
     span(array<type> Array);
     span(fixed_array<type> Array);
      
-    template <typename type, uptr N>
+    template <uptr N>
     inline span(const type (&Array)[N]) : Ptr(Array), Count(N) { }
 
     inline const type& operator[](uptr Index) const {

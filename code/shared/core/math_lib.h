@@ -128,29 +128,32 @@ union matrix3 {
         f32 m20, m21, m22;
     };
 
+    matrix3() = default;
     matrix3(quat Q);
 };
 
-union matrix4_affine {
-    f32 Data[12] = {
-        1, 0, 0, 
-        0, 1, 0, 
-        0, 0, 1, 
-        0, 0, 0
-    };
-    vec3 Rows[4];
-    struct {
-        matrix3 M;
-        vec3 Unused__0;
-    };
-    struct {
-        vec3 x, y, z, t;
-    };
-    struct {
-        f32 m00, m01, m02;
-        f32 m10, m11, m12;
-        f32 m20, m21, m22;
-        f32 m30, m31, m32;
+struct matrix4_affine {
+    union {
+        f32 Data[12] = {
+            1, 0, 0, 
+            0, 1, 0, 
+            0, 0, 1, 
+            0, 0, 0
+        };
+        vec3 Rows[4];
+        struct {
+            matrix3 M;
+            vec3 Unused__0;
+        };
+        struct {
+            vec3 x, y, z, t;
+        };
+        struct {
+            f32 m00, m01, m02;
+            f32 m10, m11, m12;
+            f32 m20, m21, m22;
+            f32 m30, m31, m32;
+        };
     };
 
     matrix4_affine() = default;

@@ -4,13 +4,10 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build win32",
+            "label": "build all (x64)",
             "type": "shell",
             "windows": {
-                "command": "${workspaceFolder}/build/win32/build.bat x64"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}/build/win32"
+                "command": "${workspaceFolder}/build/win32/build.bat ${config:compiler} ${config:build_mode} ${config:env}"
             },
             "problemMatcher": ["$msCompile", "$gcc"],
             "group": {
@@ -18,5 +15,5 @@
                 "isDefault": true
             }
         }
-    ]
+    ],
 }

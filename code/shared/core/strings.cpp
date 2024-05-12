@@ -271,6 +271,23 @@ string String_Substr(string String, uptr FirstIndex, uptr LastIndex) {
     return String;
 }
 
+fixed_array<string> String_Split(allocator* Allocator, string String, char CharToSplit) {
+    array<string> Result(Allocator);
+    
+    uptr CurrentStringStart = 0;
+    for(uptr i = 0; i < String.Size; i++) {
+        if(String.Str[i] == CharToSplit) {
+            Array_Push(&Result, String_Substr(String, CurrentStringStart, i));
+            CurrentStringStart = i+1;
+        }
+    }
+    if(CurrentStringStart <= String.Size) {
+        Array_Push(&Result, String_Substr(String, CurrentStringStart, String.Size));
+    }
+
+    return fixed_array<string>(Result.Ptr, Result.Count);
+}
+
 uptr String_Find_Last(string String, char Character) {
     if(String.Size == 0) return STR_INVALID_FIND;
 

@@ -1,12 +1,12 @@
 @echo off
 
+setlocal EnableDelayedExpansion
+set "lock=%temp%\wait%random%.lock"
+
 for %%a in (%*) do set "%%a=1"
 if not "%release%"=="1" set debug=1
 if not "%x86%"=="1" set x64=1
 if not "%clang%"=="1" set msvc=1
-
-if "%msvc%"=="1" if "%x86%"=="1" call init_compiler.bat x86
-if "%msvc%"=="1" if "%x64%"=="1" call init_compiler.bat x64
 
 set base_path=%~dp0..\..
 set code_path=%base_path%\code
@@ -18,6 +18,9 @@ set editor_path=%code_path%\editor
 set editor_os_path=%editor_path%\os
 set vk_include=%dependencies_path%\Vulkan-Headers\include
 set packages_path=%base_path%\bin\packages
+
+if "%msvc%"=="1" if "%x86%"=="1" call %base_path%\build\win32\init_compiler.bat x86
+if "%msvc%"=="1" if "%x64%"=="1" call %base_path%\build\win32\init_compiler.bat x64
 
 set cl_warnings=/WX /Wall /wd4061 /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4582 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262 /wd4091
 set cl_common=  /nologo /FC /Z7 /Gs- /D_CRT_SECURE_NO_WARNINGS
@@ -146,14 +149,26 @@ if not exist %base_path%\bin\ftsystem.lib (
 
 set gdi_objs=vk_loader.obj gdi.obj
 pushd %base_path%\bin    
-    %compile% %def%TEXT_FREETYPE_FONT_MANAGER %def%TEXT_UBA_SHEENBIDI %def%TEXT_SHAPER_HARFBUZZ %only_compile% %cpp% %shared_path%\text\text.cpp %obj%text.obj %compile_link% || exit /b 1
-    %compile% %only_compile% %cpp% %shared_path%\profiler\win32\win32_profiler.cpp %obj%profiler.obj %compile_link% || exit /b 1
-    %compile% %only_compile% %cpp% %shared_path%\packages\win32\win32_packages.cpp %obj%packages.obj %compile_link% || exit /b 1
-    %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link% || exit /b 1
-    %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link% || exit /b 1
-    %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj || exit /b 1
+    start "" 9>"%lock%1" /b /low cmd /c %compile% %def%TEXT_FREETYPE_FONT_MANAGER %def%TEXT_UBA_SHEENBIDI %def%TEXT_SHAPER_HARFBUZZ %only_compile% %cpp% %shared_path%\text\text.cpp %obj%text.obj %compile_link%
+    start "" 9>"%lock%2" /b /low cmd /c %compile% %only_compile% %cpp% %shared_path%\profiler\win32\win32_profiler.cpp %obj%profiler.obj %compile_link%
+    start "" 9>"%lock%3" /b /low cmd /c %compile% %only_compile% %cpp% %shared_path%\packages\win32\win32_packages.cpp %obj%packages.obj %compile_link%
+    start "" 9>"%lock%4" /b /low cmd /c %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link%
+    start "" 9>"%lock%5" /b /low cmd /c %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link%
+    start "" 9>"%lock%6" /b /low cmd /c %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj
+    
+    :Wait for all processes to finish (wait until lock files are no longer locked)
+    1>nul 2>nul ping /n 2 ::1
+    for %%F in ("%lock%*") do (
+    (call ) 9>"%%F" || goto :Wait
+    ) 2>nul
+
+    ::delete the lock files
+    del "%lock%*"
+
     %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj packages.obj text.obj profiler.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
     @REM %compile% %def%TEST_BUILD %inc%%code_path%\editor %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1
+    
+    
     del /s *.ilk >nul 2>&1
     del /s *.obj >nul 2>&1
     del /s *.exp >nul 2>&1

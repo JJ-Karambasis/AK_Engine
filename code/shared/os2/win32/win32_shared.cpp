@@ -29,7 +29,7 @@ internal bool Win32_File_Exists(const wchar_t* Path) {
 }
 
 internal bool Win32_Directory_Exists(const wchar_t* Path) {
-     DWORD Attrib = GetFileAttributesW(Path);
+    DWORD Attrib = GetFileAttributesW(Path);
     return (Attrib != INVALID_FILE_ATTRIBUTES && (Attrib & FILE_ATTRIBUTE_DIRECTORY));
 }
 

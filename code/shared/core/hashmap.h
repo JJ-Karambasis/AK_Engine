@@ -307,6 +307,11 @@ inline void Hashmap_Free(hashmap<key, value, hasher, comparer>* Hashmap) {
 }
 
 template <typename key, typename value, typename hasher, typename comparer>
+inline fixed_array<value> Hashmap_Get_Values(hashmap<key, value, hasher, comparer>* Hashmap) {
+    return fixed_array<value>(Hashmap->Values, Hashmap->Count);
+}
+
+template <typename key, typename value, typename hasher, typename comparer>
 inline value& hashmap<key, value, hasher, comparer>::operator[](const key& Key) {
     value* pValue = Hashmap_Find(this, Key);
     Assert(pValue);

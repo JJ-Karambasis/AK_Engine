@@ -38,14 +38,15 @@ struct string {
 bool operator==(string A, string B);
 bool String_Equals(string A, string B, str_case Case = str_case::Sensitive);
 
-bool   String_Is_Null_Or_Empty(string String);
-string String_Concat(allocator* Allocator, string StringA, string StringB);
-string String_Concat(allocator* Allocator, const span<string>& Strings);
-string String_Substr(string String, uptr FirstIndex, uptr LastIndex);
-uptr   String_Find_Last(string String, char Character);
-bool   String_Begins_With(string String, string Substr);
-uptr   String_Find(string String, string Substring);
-string String_Get_Path(string String);
+bool                String_Is_Null_Or_Empty(string String);
+string              String_Concat(allocator* Allocator, string StringA, string StringB);
+string              String_Concat(allocator* Allocator, const span<string>& Strings);
+string              String_Substr(string String, uptr FirstIndex, uptr LastIndex);
+fixed_array<string> String_Split(allocator* Allocator, string String, char CharToSplit);
+uptr                String_Find_Last(string String, char Character);
+bool                String_Begins_With(string String, string Substr);
+uptr                String_Find(string String, string Substring);
+string              String_Get_Path(string String);
 
 string String_To_Date_Format(allocator* Allocator, u32 Value);
 string String_To_Millisecond_Format(allocator* Allocator, u32 Value);
