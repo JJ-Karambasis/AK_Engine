@@ -50,6 +50,26 @@ u32 Align_U32(u32 Alignment, u32 Value);
 bool In_Range(u32 Value, u32 Min, u32 Max);
 bool In_Range(u64 Value, u64 Min, u64 Max);
 
+#ifdef CUSTOM_PTR_SIZE
+
+#   if defined(ENVIRONMENT32)
+
+inline uptr Ceil_Pow2(uptr V) {
+    return (uptr)Ceil_Pow2((u32)(V));
+}
+
+#   elif defined(ENVIRONMENT64)
+
+inline uptr Ceil_Pow2(uptr V) {
+    return (uptr)Ceil_Pow2((u64)(V));
+}
+
+#   else
+#   error "Not Implemented"
+#   endif
+
+#endif
+
 struct scoped_mutex {
     ak_mutex* Mutex;
     scoped_mutex(ak_mutex* _Mutex);

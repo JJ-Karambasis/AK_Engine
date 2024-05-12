@@ -13,6 +13,18 @@
 	#define SIMD_NEON 1
 #endif
 
+#if defined(SIMD_SSE)
+#include <emmintrin.h>
+#endif
+
+#if defined(SIMD_AVX)
+#include <immintrin.h>
+#endif
+
+#if defined(SIMD_NEON)
+#include <arm_neon.h>
+#endif
+
 struct f32_2x {
     union {
         f32 Data[2];
@@ -29,6 +41,8 @@ struct f32_4x {
     union {
 #if defined(SIMD_SSE)
         __m128 V;
+#elif defined(SIMD_NEON)
+        float32x4_t V;
 #else 
 #error Not Implemented
 #endif

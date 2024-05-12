@@ -17,3 +17,11 @@
 
 ## libs
 *.lib
+
+# osx general
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# bin folder
+bin/*

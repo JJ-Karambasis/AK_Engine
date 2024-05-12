@@ -9,6 +9,9 @@
             "windows": {
                 "command": "${workspaceFolder}/build/win32/build.bat ${config:compiler} ${config:build_mode} ${config:env}"
             },
+            "osx": {
+                "command": "${workspaceFolder}/build/osx/build.sh ${config:compiler} ${config:build_mode} ${config:env}"
+            },
             "problemMatcher": ["$msCompile", "$gcc"],
             "group": {
                 "kind": "build",

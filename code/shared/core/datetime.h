@@ -79,12 +79,14 @@ struct date {
 
 string Date_To_String(allocator* Allocator, date Date);
 
-struct time {
+struct _time {
     u32 Hour;
     u32 Minute;
     u32 Second;
     u32 Millisecond;
 };
+
+#define time _time
 
 string Time_To_String(allocator* Allocator, time Time);
 

@@ -142,9 +142,9 @@ void Virtual_Allocator_Release(virtual_allocator*  VirtualAllocator, void* Memor
 }
 #elif defined(OS_POSIX)
 virtual_allocator* Virtual_Allocator_Create() {
-    virtual_allocator* Result = mmap(NULL, sizeof(virtual_allocator), (PROT_READ|PROT_WRITE), (MAP_FIXED|MAP_SHARED|MAP_ANONYMOUS), -1, 0);
+    virtual_allocator* Result = (virtual_allocator*)mmap(NULL, sizeof(virtual_allocator), (PROT_READ|PROT_WRITE), (MAP_PRIVATE|MAP_ANONYMOUS), -1, 0);
     msync(Result, sizeof(virtual_allocator), (MS_SYNC|MS_INVALIDATE));
-    Result->Base.VTable = &G_VirtualAllocatorVTable;
+    Result->VTable = &G_VirtualAllocatorVTable;
     return Result;
 }
 

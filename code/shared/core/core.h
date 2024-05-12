@@ -260,6 +260,18 @@ typedef s32 b32;
 #define true32 ((b32)true)
 #define false32 ((b32)false)
 
+#if defined(OS_POSIX)
+#include <sys/mman.h>
+#include <sys/random.h>
+#endif
+
+//Some compilers typedef size_t to be what u32 or u64 are.
+//Some compilers don't. So this gives us a way to include custom
+//size_t functions
+#if defined(OS_OSX) && defined(COMPILER_GCC)
+#define CUSTOM_PTR_SIZE
+#endif
+
 typedef float     f32;
 typedef double    f64;
 typedef uintptr_t uptr;

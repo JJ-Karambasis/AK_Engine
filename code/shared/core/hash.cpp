@@ -59,13 +59,19 @@ u32 Hash_CRC(const void* Data, uptr Size, u32 Seed) {
     return ~Crc;
 }
 
-#ifdef OS_WIN32
+#if defined(OS_WIN32)
 #include <wincrypt.h>
 void Hash_Random(void* Data, uptr Size) {
+    Assert(Size <= 256);
     HCRYPTPROV Provider = NULL;
     CryptAcquireContextW(&Provider, 0, 0, PROV_DSS, CRYPT_VERIFYCONTEXT);
     CryptGenRandom(Provider, Safe_U32(Size), (BYTE*)Data);
     CryptReleaseContext(Provider, 0);
+}
+#elif defined(OS_POSIX)
+void Hash_Random(void* Data, uptr Size) {
+    Assert(Size <= 256);
+    getentropy(Data, Size);
 }
 #else
 #error Not Implemented
