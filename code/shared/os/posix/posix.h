@@ -3,7 +3,6 @@
 
 #include <core/core.h>
 #include <os/os.h>
-
 #include <sys/stat.h>
 
 struct os_process {

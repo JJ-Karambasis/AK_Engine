@@ -30,8 +30,8 @@ if [ $clang -eq 1 ]; then
     if [ $env32 -eq 1 ]; then clang_common="$clang_common -m32"; fi
 fi
 
-clang_debug="-O0 -DDEBUG_BUILD $clang_common $clang_warnings"
-clang_release="-O2 $clang_common $clang_warnings"
+clang_debug="clang++ -O0 -DDEBUG_BUILD $clang_common $clang_warnings"
+clang_release="clang++ -O2 $clang_common $clang_warnings"
 clang_link=     
 clang_out="-o"
 
@@ -57,6 +57,6 @@ fi
 echo $compile
 
 pushd "$base_path/bin"
-    clang ${compile} ${cpp} ${only_compile} $shared_path/os/osx/osx.mm ${compile_link} ${compile_out} osx.o
-    clang++ ${compile} ${cpp} $code_path/osx_test.cpp ${compile_link} osx.o ${compile_out} osx_test
+    ${compile} ${cpp} ${only_compile} $shared_path/os/osx/osx.mm ${compile_link} ${compile_out} osx.o
+    ${compile} ${cpp} -framework AppKit $code_path/osx_test.cpp ${compile_link} osx.o ${compile_out} osx_test
 popd

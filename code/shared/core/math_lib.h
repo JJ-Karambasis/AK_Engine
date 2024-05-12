@@ -197,7 +197,7 @@ struct matrix4 {
         };
     };
     
-    constexpr inline matrix4() { }
+    constexpr matrix4() { }
 };
 
 void Matrix4_Zero(matrix4* M);
