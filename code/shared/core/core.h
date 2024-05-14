@@ -292,7 +292,6 @@ typedef intptr_t  sptr;
 #include "log.h"
 #include "array.h"
 #include "span.h"
-#include "math_lib.h"
 #include "async_pool.h"
 #include "async_queue.h"
 #include "hashmap.h"

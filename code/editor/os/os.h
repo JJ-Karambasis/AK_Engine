@@ -27,7 +27,7 @@ int               OS_Process_Exit(os_process_id ID);
 //Monitor api
 struct os_monitor_info {
     string Name;
-    rect2  Rect;
+    rect2i Rect;
 };
 
 typedef u64 os_monitor_id;
@@ -55,8 +55,8 @@ struct os_event {
 const os_event* OS_Next_Event();
 bool            OS_Keyboard_Get_Key_State(os_keyboard_key Key);
 bool            OS_Mouse_Get_Key_State(os_mouse_key Key);
-svec2           OS_Mouse_Get_Position();
-svec2           OS_Mouse_Get_Delta();
+point2i         OS_Mouse_Get_Position();
+vec2i           OS_Mouse_Get_Delta();
 f32             OS_Mouse_Get_Scroll();
 
 //Input keys

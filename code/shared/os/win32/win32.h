@@ -2,6 +2,7 @@
 #define WIN32_H
 
 #include <core/core.h>
+#include <math/math.h>
 #include <os/os.h>
 
 struct os_process {

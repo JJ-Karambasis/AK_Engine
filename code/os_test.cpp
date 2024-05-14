@@ -1,4 +1,5 @@
 #include <core/core.h>
+#include <math/math.h>
 #include <os.h>
 
 #include <stdio.h>
@@ -11,8 +12,8 @@ bool Application_Main() {
     os_monitor_id PrimaryMonitor = OS_Get_Primary_Monitor();
     for(os_monitor_id Monitor : Monitors) {
         const os_monitor_info* MonitorInfo = OS_Get_Monitor_Info(Monitor);
-        printf("Monitor %.*s has rectangle: {(%f, %f), (%f, %f)}.", (int)MonitorInfo->Name.Size, MonitorInfo->Name.Str, 
-        MonitorInfo->Rect.Min.x, MonitorInfo->Rect.Min.y, MonitorInfo->Rect.Max.x, MonitorInfo->Rect.Max.y);
+        printf("Monitor %.*s has rectangle: {(%d, %d), (%d, %d)}.", (int)MonitorInfo->Name.Size, MonitorInfo->Name.Str, 
+        MonitorInfo->Rect.P1.x, MonitorInfo->Rect.P1.y, MonitorInfo->Rect.P2.x, MonitorInfo->Rect.P2.y);
 
         if(Monitor == PrimaryMonitor) {
             printf(" Monitor is primary!\n");
@@ -21,7 +22,7 @@ bool Application_Main() {
         }
     }
 
-    svec2 LastMousePosition;
+    point2i LastMousePosition = {};
     for(;;) {
         for(u32 i = 0; i < OS_KEYBOARD_KEY_COUNT; i++) {
             if(OS_Keyboard_Get_Key_State(i)) {
@@ -35,15 +36,15 @@ bool Application_Main() {
             }
         }
 
-        svec2 MousePosition = OS_Mouse_Get_Position();
-        if(MousePosition.x != LastMousePosition.x || MousePosition.y != LastMousePosition.y) {
+        point2i MousePosition = OS_Mouse_Get_Position();
+        if(MousePosition != LastMousePosition) {
             printf("Mouse position: (%d, %d)\n", MousePosition.x, MousePosition.y);
             LastMousePosition = MousePosition;
         }
 
-        svec2 MouseDelta = OS_Mouse_Get_Delta();
-        if(MouseDelta.x != 0 || MouseDelta.y != 0) {
-            printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
+        vec2i MouseDelta = OS_Mouse_Get_Delta();
+        if(MouseDelta != vec2i()) {
+            //printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
         }
 
         f32 MouseScroll = OS_Mouse_Get_Scroll();

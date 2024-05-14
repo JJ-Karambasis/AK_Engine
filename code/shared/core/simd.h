@@ -60,6 +60,10 @@ struct s32_2x {
     };
 };
 
+
+bool operator!=(s32_2x A, s32_2x B);
+bool operator==(s32_2x A, s32_2x B);
+
 struct s32_3x {
     union {
         s32 Data[3];

@@ -98,17 +98,17 @@ bool OS_Mouse_Get_Key_State(os_mouse_key Key) {
     return (GetAsyncKeyState(VKCode) & 0x8000) != 0;
 }
 
-svec2 OS_Mouse_Get_Position() {
+point2i OS_Mouse_Get_Position() {
     os* OS = OS_Get();
     POINT P;
     GetCursorPos(&P);
-    return svec2(P.x, P.y);
+    return point2i(P.x, P.y);
 }
 
-svec2 OS_Mouse_Get_Delta() {
+vec2i OS_Mouse_Get_Delta() {
     os* OS = OS_Get();
     s64 MouseDeltaPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MouseDeltaPacked);
-    return svec2((s32)MouseDeltaPacked, (s32)(MouseDeltaPacked >> 32));
+    return vec2i((s32)MouseDeltaPacked, (s32)(MouseDeltaPacked >> 32));
 }
 
 f32 OS_Mouse_Get_Scroll() {
@@ -171,7 +171,8 @@ internal BOOL CALLBACK Win32_Monitor_Enum_Proc(HMONITOR Monitor, HDC DeviceConte
         .Monitor = Monitor,
         .DeviceName = wstring(OS->Arena, MonitorInfo.szDevice),
         .MonitorInfo = {
-            .Rect = Rect2(vec2((f32)pRect->left, (f32)pRect->top), vec2((f32)pRect->right, (f32)pRect->bottom))
+            .Rect = rect2i(point2i(pRect->left, pRect->top), 
+                           point2i(pRect->right, pRect->bottom))
         }
     });
 
@@ -270,7 +271,7 @@ int main() {
                     case RIM_TYPEMOUSE: {
                         RAWMOUSE* Mouse = &RawInput->data.mouse;
                         if(Mouse->lLastX != 0 || Mouse->lLastY != 0) {
-                            svec2 Delta = svec2(Mouse->lLastX, -Mouse->lLastY);
+                            vec2i Delta = vec2i(Mouse->lLastX, -Mouse->lLastY);
                             s64 PackedDelta = ((s64)Delta.x) | (((s64)Delta.y) << 32);
                             AK_Atomic_Store_U64_Relaxed(&OS.MouseDeltaPacked, (u64)PackedDelta);
                         }
@@ -308,4 +309,5 @@ void OS_Set(os* OS) {
 #pragma comment(lib, "sheenbidi.lib")
 #pragma comment(lib, "user32.lib")
 #include <core/core.cpp>
+#include <math/math.cpp>
 #include <os_event.cpp>
