@@ -86,7 +86,36 @@ os_monitor_id OS_Get_Primary_Monitor() {
 const os_monitor_info* OS_Get_Monitor_Info(os_monitor_id ID) {
     os* OS = OS_Get();
     return &OS->Monitors[OS_Monitor_Index(ID)].MonitorInfo;
-}          
+}     
+
+bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
+    int VKCode = (int)G_VKCodes[Key];
+    return (GetAsyncKeyState(VKCode) & 0x8000) != 0;
+}
+
+bool OS_Mouse_Get_Key_State(os_mouse_key Key) {
+    int VKCode = (int)G_MouseVKCodes[Key];
+    return (GetAsyncKeyState(VKCode) & 0x8000) != 0;
+}
+
+svec2 OS_Mouse_Get_Position() {
+    os* OS = OS_Get();
+    POINT P;
+    GetCursorPos(&P);
+    return svec2(P.x, P.y);
+}
+
+svec2 OS_Mouse_Get_Delta() {
+    os* OS = OS_Get();
+    s64 MouseDeltaPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MouseDeltaPacked);
+    return svec2((s32)MouseDeltaPacked, (s32)(MouseDeltaPacked >> 32));
+}
+
+f32 OS_Mouse_Get_Scroll() {
+    os* OS = OS_Get();
+    u32 ScrollU32 = AK_Atomic_Load_U32_Relaxed(&OS->ScrollU32);
+    return U32_To_F32(ScrollU32);
+}
 
 #define Win32_Message(message) (WM_USER+WIN32_MESSAGE_##message)
 
@@ -177,6 +206,18 @@ int main() {
         return 1;
     }
 
+    RAWINPUTDEVICE RawInputDevice = {
+        .usUsagePage = WIN32_USAGE_PAGE,
+        .usUsage = WIN32_MOUSE_USAGE,
+        .dwFlags = RIDEV_INPUTSINK,
+        .hwndTarget = OS.BaseWindow
+    };
+
+    if(!RegisterRawInputDevices(&RawInputDevice, 1, sizeof(RAWINPUTDEVICE))) {
+        //TODO(JJ): logging
+        return 1;
+    }
+
     Array_Init(&OS.Monitors, OS.Arena, 8);
     Array_Init(&OS.MonitorIDs, OS.Arena, 8);
     
@@ -191,6 +232,8 @@ int main() {
         OS.Monitors[i].MonitorInfo.Name = string(OS.Arena, wstring(DisplayDevice.DeviceString));
     }
 
+    OS_Event_Manager_Create(&OS.EventManager, 1);
+
     Async_Pool_Create(&OS.ProcessPool, OS.Arena, 128);
 
     if(!Thread_Manager_Create_Thread(Win32_Application_Thread, nullptr)) {
@@ -200,14 +243,50 @@ int main() {
     for(;;) {
         MSG Message;
         if(!PeekMessageW(&Message, NULL, 0, 0, PM_REMOVE)) {
-            GetMessageW(&Message, NULL, 0, 0);
+            BOOL Status = GetMessageW(&Message, NULL, 0, 0);
+            Assert(Status != -1);
+
+            if(OS.EventStream) {
+                OS_Event_Manager_Push_Back_Stream(&OS.EventManager, OS.EventStream);
+            }
+            OS.EventStream = OS_Event_Manager_Allocate_Stream(&OS.EventManager);
         }
 
         switch(Message.message) {
             case WM_QUIT: {
                 Core_Delete();
-                OutputDebugStringA("Finished\n");
                 return 0;
+            } break;
+
+            case WM_INPUT: {
+                scratch Scratch = Scratch_Get();
+
+                UINT RawInputSize;
+                GetRawInputData((HRAWINPUT)Message.lParam, RID_INPUT, nullptr, &RawInputSize, sizeof(RAWINPUTHEADER));
+                RAWINPUT* RawInput = (RAWINPUT*)Scratch_Push(&Scratch, RawInputSize); 
+                GetRawInputData((HRAWINPUT)Message.lParam, RID_INPUT, RawInput, &RawInputSize, sizeof(RAWINPUTHEADER));
+
+                switch(RawInput->header.dwType) {
+                    case RIM_TYPEMOUSE: {
+                        RAWMOUSE* Mouse = &RawInput->data.mouse;
+                        if(Mouse->lLastX != 0 || Mouse->lLastY != 0) {
+                            svec2 Delta = svec2(Mouse->lLastX, -Mouse->lLastY);
+                            s64 PackedDelta = ((s64)Delta.x) | (((s64)Delta.y) << 32);
+                            AK_Atomic_Store_U64_Relaxed(&OS.MouseDeltaPacked, (u64)PackedDelta);
+                        }
+
+                        if(Mouse->usButtonFlags & RI_MOUSE_WHEEL) {
+                            f32 Scroll = (f32)((SHORT)Mouse->usButtonData/WHEEL_DELTA);
+                            u32 ScrollU32 = F32_To_U32(Scroll);
+                            AK_Atomic_Store_U32_Relaxed(&OS.ScrollU32, ScrollU32);
+                        }
+                    } break;
+                }
+            } break;
+
+            default: {
+                TranslateMessage(&Message);
+                DispatchMessageW(&Message);
             } break;
         }
     }
@@ -229,3 +308,4 @@ void OS_Set(os* OS) {
 #pragma comment(lib, "sheenbidi.lib")
 #pragma comment(lib, "user32.lib")
 #include <core/core.cpp>
+#include <os_event.cpp>

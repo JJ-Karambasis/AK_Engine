@@ -229,15 +229,14 @@ thread_manager* Thread_Manager_Create() {
 void Thread_Manager_Delete() {
     thread_manager* ThreadManager = Thread_Manager_Get();
     if(ThreadManager) {
-        AK_TLS_Delete(&ThreadManager->ThreadContextLocalStorage);
-
         for(u32 ThreadIndex = 0; ThreadIndex < MAX_THREAD_COUNT; ThreadIndex++) {
             thread_context* ThreadContext = ThreadManager->ThreadPool.Threads + ThreadIndex;
             if(ThreadContext->PoolIndex != (u32)-1) {
                 Thread_Context_Delete(ThreadContext);
             }
         }
-
+        
+        AK_TLS_Delete(&ThreadManager->ThreadContextLocalStorage);
         AK_QSBR_Delete(ThreadManager->QSBR);
         AK_Mutex_Delete(&ThreadManager->AllocateLock);
         AK_Mutex_Delete(&ThreadManager->MapLock);

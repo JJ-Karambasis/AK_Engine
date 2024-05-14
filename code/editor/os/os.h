@@ -35,7 +35,103 @@ span<os_monitor_id>    OS_Get_Monitors();
 os_monitor_id          OS_Get_Primary_Monitor();
 const os_monitor_info* OS_Get_Monitor_Info(os_monitor_id ID);             
 
+//Window api
+typedef u64 os_window_id;
+
 //Event api
-//#include "os_event.h"
+typedef u32 os_keyboard_key;
+typedef u32 os_mouse_key;
+enum os_event_type {
+    OS_EVENT_TYPE_NONE,
+    OS_EVENT_TYPE_WINDOW_CLOSED,
+    OS_EVENT_TYPE_COUNT
+};
+
+struct os_event {
+    os_event_type Type;
+    os_window_id  WindowID;
+};
+
+const os_event* OS_Next_Event();
+bool            OS_Keyboard_Get_Key_State(os_keyboard_key Key);
+bool            OS_Mouse_Get_Key_State(os_mouse_key Key);
+svec2           OS_Mouse_Get_Position();
+svec2           OS_Mouse_Get_Delta();
+f32             OS_Mouse_Get_Scroll();
+
+//Input keys
+enum {
+    OS_MOUSE_KEY_LEFT,
+    OS_MOUSE_KEY_MIDDLE,
+    OS_MOUSE_KEY_RIGHT,
+    OS_MOUSE_KEY_COUNT
+};
+
+enum {
+    OS_KEYBOARD_KEY_A,
+    OS_KEYBOARD_KEY_B, 
+    OS_KEYBOARD_KEY_C,
+    OS_KEYBOARD_KEY_D,
+    OS_KEYBOARD_KEY_E,
+    OS_KEYBOARD_KEY_F,
+    OS_KEYBOARD_KEY_G,
+    OS_KEYBOARD_KEY_H,
+    OS_KEYBOARD_KEY_I,
+    OS_KEYBOARD_KEY_J,
+    OS_KEYBOARD_KEY_K,
+    OS_KEYBOARD_KEY_L,
+    OS_KEYBOARD_KEY_M,
+    OS_KEYBOARD_KEY_N,
+    OS_KEYBOARD_KEY_O,
+    OS_KEYBOARD_KEY_P,
+    OS_KEYBOARD_KEY_Q,
+    OS_KEYBOARD_KEY_R,
+    OS_KEYBOARD_KEY_S,
+    OS_KEYBOARD_KEY_T,
+    OS_KEYBOARD_KEY_U,
+    OS_KEYBOARD_KEY_V, 
+    OS_KEYBOARD_KEY_W, 
+    OS_KEYBOARD_KEY_X, 
+    OS_KEYBOARD_KEY_Y, 
+    OS_KEYBOARD_KEY_Z, 
+    OS_KEYBOARD_KEY_ZERO, 
+    OS_KEYBOARD_KEY_ONE,
+    OS_KEYBOARD_KEY_TWO,
+    OS_KEYBOARD_KEY_THREE,
+    OS_KEYBOARD_KEY_FOUR,
+    OS_KEYBOARD_KEY_FIVE,
+    OS_KEYBOARD_KEY_SIX,
+    OS_KEYBOARD_KEY_SEVEN,
+    OS_KEYBOARD_KEY_EIGHT,
+    OS_KEYBOARD_KEY_NINE,
+    OS_KEYBOARD_KEY_SPACE,
+    OS_KEYBOARD_KEY_TAB,
+    OS_KEYBOARD_KEY_ESCAPE,
+    OS_KEYBOARD_KEY_PAUSE,
+    OS_KEYBOARD_KEY_UP,
+    OS_KEYBOARD_KEY_DOWN,
+    OS_KEYBOARD_KEY_LEFT, 
+    OS_KEYBOARD_KEY_RIGHT,
+    OS_KEYBOARD_KEY_BACKSPACE,
+    OS_KEYBOARD_KEY_RETURN,
+    OS_KEYBOARD_KEY_DELETE,
+    OS_KEYBOARD_KEY_INSERT, 
+    OS_KEYBOARD_KEY_SHIFT,
+    OS_KEYBOARD_KEY_CONTROL,
+    OS_KEYBOARD_KEY_ALT,
+    OS_KEYBOARD_KEY_F1,
+    OS_KEYBOARD_KEY_F2,
+    OS_KEYBOARD_KEY_F3,
+    OS_KEYBOARD_KEY_F4,
+    OS_KEYBOARD_KEY_F5,
+    OS_KEYBOARD_KEY_F6, 
+    OS_KEYBOARD_KEY_F7, 
+    OS_KEYBOARD_KEY_F8, 
+    OS_KEYBOARD_KEY_F9, 
+    OS_KEYBOARD_KEY_F10,
+    OS_KEYBOARD_KEY_F11, 
+    OS_KEYBOARD_KEY_F12,
+    OS_KEYBOARD_KEY_COUNT
+};
 
 #endif
