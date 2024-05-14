@@ -20,7 +20,8 @@ void*   Scratch_Push(scratch* Scratch, uptr Size, uptr Alignment = DEFAULT_ALIGN
 #define Scratch_Push_Array(scratch, count, type) (type*)Scratch_Push(scratch, sizeof(type)*count, alignof(type))
 
 struct thread_context;
-typedef u32 thread_context_callback(thread_context* Context, void* UserData);
+#define THREAD_CONTEXT_CALLBACK(name) u32 name(thread_context* Context, void* UserData)
+typedef THREAD_CONTEXT_CALLBACK(thread_context_callback);
 
 struct thread_context {
 	arena* 		    ScratchPool[MAX_SCRATCH_COUNT];

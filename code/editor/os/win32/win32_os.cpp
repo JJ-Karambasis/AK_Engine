@@ -1,6 +1,6 @@
 #include "win32_os.h"
 
-#define Win32__OS_Get_Message(message) (WM_USER+message)
+#define Win32_Message(message) (WM_USER+message)
 
 internal void OS_Window_Storage__Init(os_window_storage* WindowStorage, arena* Arena, u32 WindowCapacity) {
     uptr AllocationSize = (sizeof(ak_slot64)+sizeof(uint32_t)+sizeof(os_window))*WindowCapacity;
