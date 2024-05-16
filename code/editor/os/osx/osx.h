@@ -1,6 +1,31 @@
 #ifndef OSX_H
 #define OSX_H
 
+
+/*todo:
+- OS key down events are still broken. Sometimes they get into a state where
+  OSKeyboardState doesn't work. KeyboardStates will always be true sometimes.
+  Not sure if the best strategy is to treat this like we do in win32.
+
+- Window zooming still doesn't work.
+
+- Implement mouse deltas
+
+- Make win32 and osx layer consistent
+  -Coordinate system. Make this top to bottom. OSX is Bottom to Top it looks like
+  -Scrolls. Not sure if scrolls are possible. Values are always from 1 -> -1 on win32
+   and they are higher resolution values in osx. Might need to add a scaling factor 
+   on osx or win32 but this will never be 100% consistent, and I'm not sure how much
+   this might be device dependent
+  -Mouse coordinate via monitors. Do we have to be hovering over windows for mouse
+   events to work? If so we can grab global mouse coordinates and there are no problems
+
+- Test how supporting multiple windows might work. Imagine a multi monitor setup 
+  with a window on each side. One is a level editor and another might be a material
+  editor or some other editor/tool. 
+
+*/
+
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
 #include <posix/posix.h>

@@ -15,6 +15,7 @@ struct os {
     arena*                 Arena;
     async_pool<os_process> ProcessPool;
     os_event_manager       EventManager;
+    os_event_stream*       EventStream;
 };
 
 internal bool Posix_Create();

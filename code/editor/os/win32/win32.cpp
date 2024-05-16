@@ -244,13 +244,13 @@ int main() {
     for(;;) {
         MSG Message;
         if(!PeekMessageW(&Message, NULL, 0, 0, PM_REMOVE)) {
-            BOOL Status = GetMessageW(&Message, NULL, 0, 0);
-            Assert(Status != -1);
-
             if(OS.EventStream) {
                 OS_Event_Manager_Push_Back_Stream(&OS.EventManager, OS.EventStream);
             }
             OS.EventStream = OS_Event_Manager_Allocate_Stream(&OS.EventManager);
+
+            BOOL Status = GetMessageW(&Message, NULL, 0, 0);
+            Assert(Status != -1);
         }
 
         switch(Message.message) {

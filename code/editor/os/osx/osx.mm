@@ -282,10 +282,8 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
         Scroll *= 0.1;
     }
 
-    if(Abs(Scroll) > 0) {
-        u32 ScrollU32 = F32_To_U32(Scroll);
-        AK_Atomic_Store_U32_Relaxed(&OS->ScrollU32, ScrollU32);
-    }
+    u32 ScrollU32 = F32_To_U32(Scroll);
+    AK_Atomic_Store_U32_Relaxed(&OS->ScrollU32, ScrollU32);
 }
 
 - (void)mouseMoved:(NSEvent *)Event {
@@ -362,18 +360,24 @@ int main() {
         }
 
         for(;;) {
-            NSEvent* Event;
-            do {
-                Event = [NSApp nextEventMatchingMask: NSEventMaskAny
-                                        untilDate: [NSDate distantFuture]
-                                        inMode: NSDefaultRunLoopMode
-                                        dequeue: YES];
-
-                if (Event) {
-                    // handle events here
-                    [NSApp sendEvent: Event];
+            NSEvent* Event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                                    untilDate: nil
+                                    inMode: NSDefaultRunLoopMode
+                                    dequeue: YES];
+            if(Event == nil) {
+                AK_Atomic_Store_U32_Relaxed(&OS.ScrollU32, 0);
+                if(OS.EventStream) {
+                    OS_Event_Manager_Push_Back_Stream(&OS.EventManager, OS.EventStream);
                 }
-            } while (Event);
+                OS.EventStream = OS_Event_Manager_Allocate_Stream(&OS.EventManager);
+                Event = [NSApp nextEventMatchingMask: NSEventMaskAny
+                               untilDate: [NSDate distantFuture]
+                               inMode: NSDefaultRunLoopMode
+                               dequeue: YES];
+                Assert(Event != nil);
+            }
+
+            [NSApp sendEvent: Event];
         }
     }
 }
