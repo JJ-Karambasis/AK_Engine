@@ -9,9 +9,14 @@ struct os_monitor {
     os_monitor_info MonitorInfo;
 };
 
+struct os_window {
+
+};
+
 struct osx_os : os {
-    fixed_array<os_monitor> Monitors;
+    fixed_array<os_monitor>    Monitors;
     fixed_array<os_monitor_id> MonitorIDs;
+    async_pool<os_window>      WindowPool;
 };
 
 internal osx_os* OSX_Get();

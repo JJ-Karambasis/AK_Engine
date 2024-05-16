@@ -57,6 +57,5 @@ fi
 echo $compile
 
 pushd "$base_path/bin"
-    ${compile} ${cpp} ${only_compile} $shared_path/os/osx/osx.mm ${compile_link} ${compile_out} osx.o
-    ${compile} ${cpp} -framework AppKit $code_path/osx_test.cpp ${compile_link} osx.o ${compile_out} osx_test
+    ${compile} ${cpp} ${inc}${code_path}/editor/os -framework AppKit ${code_path}/os_test.cpp ${code_path}/editor/os/osx/osx.mm ${compile_link} ${compile_out} os_test
 popd

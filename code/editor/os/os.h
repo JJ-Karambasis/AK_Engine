@@ -1,6 +1,9 @@
 #ifndef OS_H
 #define OS_H
 
+#define OS_MAX_PROCESS_COUNT 128
+#define OS_MAX_WINDOW_COUNT 128
+
 bool Application_Main();
 
 struct os;
@@ -36,7 +39,32 @@ os_monitor_id          OS_Get_Primary_Monitor();
 const os_monitor_info* OS_Get_Monitor_Info(os_monitor_id ID);             
 
 //Window api
+enum {
+    OS_WINDOW_FLAG_NONE,
+    OS_WINDOW_FLAG_MAIN_BIT = (1 << 0),
+    OS_WINDOW_FLAG_MAXIMIZE_BIT = (1 << 1)
+};
+typedef u32 os_window_flags;
+
+struct os_create_window_info {
+    os_window_flags Flags;
+    string          Title;
+    os_monitor_id   Monitor;
+    point2i         Pos; //Position relative to monitor if monitor id is valid
+    dim2i           Size; 
+    void*           UserData;
+};
+
 typedef u64 os_window_id;
+os_window_id OS_Create_Window(const os_create_window_info& CreateInfo);
+void         OS_Delete_Window(os_window_id WindowID);
+void         OS_Set_Main_Window(os_window_id WindowID);
+os_window_id OS_Get_Main_Window();
+void         OS_Window_Set_Data(os_window_id WindowID, void* UserData);
+void*        OS_Window_Get_Data(os_window_id WindowID);
+void         OS_Window_Set_Title(os_window_id WindowID, string Title);
+dim2i        OS_Window_Get_Size(os_window_id WindowID);
+point2i      OS_Window_Get_Pos(os_window_id WindowID);
 
 //Event api
 typedef u32 os_keyboard_key;
@@ -52,11 +80,11 @@ struct os_event {
     os_window_id  WindowID;
 };
 
-const os_event* OS_Next_Event();
+// const os_event* OS_Next_Event();
 bool            OS_Keyboard_Get_Key_State(os_keyboard_key Key);
 bool            OS_Mouse_Get_Key_State(os_mouse_key Key);
 point2i         OS_Mouse_Get_Position();
-vec2i           OS_Mouse_Get_Delta();
+// vec2i           OS_Mouse_Get_Delta();
 f32             OS_Mouse_Get_Scroll();
 
 //Input keys
@@ -107,7 +135,6 @@ enum {
     OS_KEYBOARD_KEY_SPACE,
     OS_KEYBOARD_KEY_TAB,
     OS_KEYBOARD_KEY_ESCAPE,
-    OS_KEYBOARD_KEY_PAUSE,
     OS_KEYBOARD_KEY_UP,
     OS_KEYBOARD_KEY_DOWN,
     OS_KEYBOARD_KEY_LEFT, 

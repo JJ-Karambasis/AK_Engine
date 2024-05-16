@@ -8,6 +8,13 @@ bool Application_Main() {
     OS_Process_Exit(OS_Exec_Process(String_Lit("echo"), String_Lit("hello")));
     OS_Process_Exit(OS_Exec_Process(String_Lit("echo"), String_Lit("world")));
 
+    OS_Create_Window({
+        .Flags = OS_WINDOW_FLAG_MAIN_BIT, 
+        .Title = String_Lit("Test"),
+        .Monitor = OS_Get_Primary_Monitor(), 
+        .Size = dim2i(1920, 1080)
+    });
+
     span<os_monitor_id> Monitors = OS_Get_Monitors();
     os_monitor_id PrimaryMonitor = OS_Get_Primary_Monitor();
     for(os_monitor_id Monitor : Monitors) {
@@ -42,10 +49,10 @@ bool Application_Main() {
             LastMousePosition = MousePosition;
         }
 
-        vec2i MouseDelta = OS_Mouse_Get_Delta();
-        if(MouseDelta != vec2i()) {
-            //printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
-        }
+        // vec2i MouseDelta = OS_Mouse_Get_Delta();
+        // if(MouseDelta != vec2i()) {
+        //     //printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
+        // }
 
         f32 MouseScroll = OS_Mouse_Get_Scroll();
         if(MouseScroll != 0) {
@@ -56,4 +63,6 @@ bool Application_Main() {
             return true;
         }
     }
+
+    return true;
 }

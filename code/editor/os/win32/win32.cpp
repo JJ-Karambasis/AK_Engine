@@ -235,7 +235,7 @@ int main() {
 
     OS_Event_Manager_Create(&OS.EventManager, 1);
 
-    Async_Pool_Create(&OS.ProcessPool, OS.Arena, 128);
+    Async_Pool_Create(&OS.ProcessPool, OS.Arena, OS_MAX_PROCESS_COUNT);
 
     if(!Thread_Manager_Create_Thread(Win32_Application_Thread, nullptr)) {
         return 1;

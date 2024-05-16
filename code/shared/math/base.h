@@ -20,6 +20,7 @@ struct vec2i {
 
     vec2i() = default;
     vec2i(s32 x, s32 y);
+    vec2i(s32_2x Data);
 };
 
 bool operator!=(vec2i A, vec2i B);
@@ -44,16 +45,20 @@ struct point2i {
 
     point2i() = default;
     point2i(s32 x, s32 y);
+    point2i(s32_2x Data);
 };
 
 bool operator!=(point2i A, point2i B);
 bool operator==(point2i A, point2i B);
+point2i operator+(point2i A, point2i B);
+point2i operator+=(point2i& A, point2i B);
+vec2i operator-(point2i A, point2i B);
 
 struct dim2 {
     union {
         f32_2x Data;
         struct {
-            f32 x, y;
+            f32 width, height;
         };
     };
 };
@@ -62,9 +67,13 @@ struct dim2i {
     union {
         s32_2x Data;
         struct {
-            s32 x, y;
+            s32 width, height;
         };
     };
+
+    dim2i() = default;
+    dim2i(s32 w, s32 h);
+    dim2i(const vec2i& Extent);
 };
 
 struct rect2 {
@@ -79,5 +88,7 @@ struct rect2i {
     rect2i() = default;
     rect2i(point2i Min, point2i Max);
 };
+
+dim2i Rect2i_Get_Dim(const rect2i& Rect);
 
 #endif
