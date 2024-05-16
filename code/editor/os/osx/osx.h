@@ -3,11 +3,6 @@
 
 
 /*todo:
-- OS key down events are still broken. Sometimes they get into a state where
-  OSKeyboardState doesn't work. KeyboardStates will always be true sometimes.
-  Not sure if the best strategy is to treat this like we do in win32.
-
-- Window zooming still doesn't work.
 
 - Implement mouse deltas
 

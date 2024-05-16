@@ -89,6 +89,11 @@ const os_monitor_info* OS_Get_Monitor_Info(os_monitor_id ID) {
 }     
 
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
+    //Command is not supported on win32
+    if(Key == OS_KEYBOARD_KEY_COMMAND) {
+        return false;
+    }
+
     int VKCode = (int)G_VKCodes[Key];
     return (GetAsyncKeyState(VKCode) & 0x8000) != 0;
 }

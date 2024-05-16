@@ -107,7 +107,8 @@ global const DWORD G_VKCodes[] = {
     VK_F9,
     VK_F10,
     VK_F11,
-    VK_F12
+    VK_F12,
+    (os_keyboard_key)-1 //Command not supported on win32. Always returns false, usually command and control are used in conjunction
 };
 
 static_assert(Array_Count(G_VKCodes) == OS_KEYBOARD_KEY_COUNT);

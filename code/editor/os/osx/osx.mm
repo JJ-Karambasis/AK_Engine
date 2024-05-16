@@ -1,6 +1,8 @@
 #include "osx.h"
 
+internal void OSX_Create_Menu_Bar();
 internal os_keyboard_key OSX_Translate_Key(int VKCode);
+internal NSUInteger OSX_Translate_Key_To_Modifier_Flag(os_keyboard_key Key);
 
 span<os_monitor_id> OS_Get_Monitors() {
     osx_os* OS = OSX_Get();
@@ -49,7 +51,7 @@ bool OS_Create_Window_Internal(os_window* Window, const os_create_window_info& C
             FrameRect = NSMakeRect(Origin.x, Origin.y, CreateInfo.Size.width, CreateInfo.Size.height);
         }
 
-        NSUInteger StyleMask = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable);
+        NSUInteger StyleMask = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable | NSWindowStyleMaskBorderless);
 
         Window->Window = [[osx_window alloc] 
             initWithContentRect:FrameRect
@@ -62,7 +64,7 @@ bool OS_Create_Window_Internal(os_window* Window, const os_create_window_info& C
             return;
         }
 
-        [Window->Window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenNone];
+        [Window->Window setCollectionBehavior: NSWindowCollectionBehaviorFullScreenPrimary];
 
         if(CreateInfo.Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
             [Window->Window zoom:nil];
@@ -264,15 +266,41 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
 - (void)keyDown:(NSEvent *)Event {
     osx_os* OS = OSX_Get();
     os_keyboard_key Key = OSX_Translate_Key([Event keyCode]);
-    AK_Atomic_Store_U32_Relaxed(&OS->KeyboardStates[Key], true);
+    if(Key != -1) {
+        AK_Atomic_Store_U32_Relaxed(&OS->KeyboardStates[Key], true);
+    }
     [self interpretKeyEvents:@[Event]];
 }
 
 - (void)keyUp:(NSEvent *)Event {
     osx_os* OS = OSX_Get();
     os_keyboard_key Key = OSX_Translate_Key([Event keyCode]);
-    AK_Atomic_Store_U32_Relaxed(&OS->KeyboardStates[Key], false);
+    if(Key != -1) {
+        AK_Atomic_Store_U32_Relaxed(&OS->KeyboardStates[Key], false);
+    }
 }
+
+- (void)flagsChanged:(NSEvent *)Event {
+    osx_os* OS = OSX_Get();
+
+    const unsigned int ModifierFlags =
+        [Event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+    os_keyboard_key Key = OSX_Translate_Key([Event keyCode]);
+    if(Key != -1) {
+        const NSUInteger KeyFlag = OSX_Translate_Key_To_Modifier_Flag(Key);
+        if (KeyFlag & ModifierFlags)
+        {
+            if(AK_Atomic_Load_U32_Relaxed(&OS->KeyboardStates[Key])) {
+                AK_Atomic_Store_U32_Relaxed(&OS->KeyboardStates[Key], false);
+            } else {
+                AK_Atomic_Store_U32_Relaxed(&OS->KeyboardStates[Key], true);
+            }
+        }
+        else
+            AK_Atomic_Store_U32_Relaxed(&OS->KeyboardStates[Key], false);
+    }
+}
+
 
 - (void)scrollWheel:(NSEvent *)Event {
     osx_os* OS = OSX_Get();
@@ -313,15 +341,28 @@ int main() {
         [NSApplication sharedApplication];
         Assert(NSApp != nil);
 
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-
-        osx_delegate* AppDelegate = [[osx_delegate alloc] init];
-        [NSApp setDelegate:AppDelegate]; 
-
         if(!Core_Create()) {
             //todo: Logging
             return 1;
         }
+
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+
+        OSX_Create_Menu_Bar();
+
+        osx_delegate* AppDelegate = [[osx_delegate alloc] init];
+        [NSApp setDelegate:AppDelegate]; 
+
+        NSEvent* (^Block)(NSEvent*) = ^ NSEvent* (NSEvent* Event)
+        {
+            if ([Event modifierFlags] & NSEventModifierFlagCommand)
+                [[NSApp keyWindow] sendEvent:Event];
+
+            return Event;
+        };
+
+        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyUp
+                 handler:Block];
 
         osx_os OS = {};
         OS.Arena = Arena_Create(Core_Get_Base_Allocator());
@@ -366,6 +407,7 @@ int main() {
                                     dequeue: YES];
             if(Event == nil) {
                 AK_Atomic_Store_U32_Relaxed(&OS.ScrollU32, 0);
+                
                 if(OS.EventStream) {
                     OS_Event_Manager_Push_Back_Stream(&OS.EventManager, OS.EventStream);
                 }
@@ -387,6 +429,109 @@ internal osx_os* OSX_Get() {
 }
 
 #include <posix/posix.cpp>
+
+// Needed for _NSGetProgname
+#include <crt_externs.h>
+
+//todo: This is gross, copied from GLFW. We should probably use a nib when shipping
+internal void OSX_Create_Menu_Bar()
+{
+    NSString* appName = nil;
+    NSDictionary* bundleInfo = [[NSBundle mainBundle] infoDictionary];
+    NSString* nameKeys[] =
+    {
+        @"CFBundleDisplayName",
+        @"CFBundleName",
+        @"CFBundleExecutable",
+    };
+
+    // Try to figure out what the calling application is called
+
+    for (size_t i = 0;  i < sizeof(nameKeys) / sizeof(nameKeys[0]);  i++)
+    {
+        id name = bundleInfo[nameKeys[i]];
+        if (name &&
+            [name isKindOfClass:[NSString class]] &&
+            ![name isEqualToString:@""])
+        {
+            appName = name;
+            break;
+        }
+    }
+
+    if (!appName)
+    {
+        char** progname = _NSGetProgname();
+        if (progname && *progname)
+            appName = @(*progname);
+        else
+            appName = @"GLFW Application";
+    }
+
+    NSMenu* bar = [[NSMenu alloc] init];
+    [NSApp setMainMenu:bar];
+
+    NSMenuItem* appMenuItem =
+        [bar addItemWithTitle:@"" action:NULL keyEquivalent:@""];
+    NSMenu* appMenu = [[NSMenu alloc] init];
+    [appMenuItem setSubmenu:appMenu];
+
+    [appMenu addItemWithTitle:[NSString stringWithFormat:@"About %@", appName]
+                       action:@selector(orderFrontStandardAboutPanel:)
+                keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    NSMenu* servicesMenu = [[NSMenu alloc] init];
+    [NSApp setServicesMenu:servicesMenu];
+    [[appMenu addItemWithTitle:@"Services"
+                       action:NULL
+                keyEquivalent:@""] setSubmenu:servicesMenu];
+    [servicesMenu release];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    [appMenu addItemWithTitle:[NSString stringWithFormat:@"Hide %@", appName]
+                       action:@selector(hide:)
+                keyEquivalent:@"h"];
+    [[appMenu addItemWithTitle:@"Hide Others"
+                       action:@selector(hideOtherApplications:)
+                keyEquivalent:@"h"]
+        setKeyEquivalentModifierMask:NSEventModifierFlagOption | NSEventModifierFlagCommand];
+    [appMenu addItemWithTitle:@"Show All"
+                       action:@selector(unhideAllApplications:)
+                keyEquivalent:@""];
+    [appMenu addItem:[NSMenuItem separatorItem]];
+    [appMenu addItemWithTitle:[NSString stringWithFormat:@"Quit %@", appName]
+                       action:@selector(terminate:)
+                keyEquivalent:@"q"];
+
+    NSMenuItem* windowMenuItem =
+        [bar addItemWithTitle:@"" action:NULL keyEquivalent:@""];
+    [bar release];
+    NSMenu* windowMenu = [[NSMenu alloc] initWithTitle:@"Window"];
+    [NSApp setWindowsMenu:windowMenu];
+    [windowMenuItem setSubmenu:windowMenu];
+
+    [windowMenu addItemWithTitle:@"Minimize"
+                          action:@selector(performMiniaturize:)
+                   keyEquivalent:@"m"];
+    [windowMenu addItemWithTitle:@"Zoom"
+                          action:@selector(performZoom:)
+                   keyEquivalent:@""];
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    [windowMenu addItemWithTitle:@"Bring All to Front"
+                          action:@selector(arrangeInFront:)
+                   keyEquivalent:@""];
+
+    // TODO: Make this appear at the bottom of the menu (for consistency)
+    [windowMenu addItem:[NSMenuItem separatorItem]];
+    [[windowMenu addItemWithTitle:@"Enter Full Screen"
+                           action:@selector(toggleFullScreen:)
+                    keyEquivalent:@"f"]
+     setKeyEquivalentModifierMask:NSEventModifierFlagControl | NSEventModifierFlagCommand];
+
+    // Prior to Snow Leopard, we need to use this oddly-named semi-private API
+    // to get the application menu working properly.
+    SEL setAppleMenuSelector = NSSelectorFromString(@"setAppleMenu:");
+    [NSApp performSelector:setAppleMenuSelector withObject:appMenu];
+}
 
 internal os_keyboard_key OSX_Translate_Key(int VKCode) {
     switch(VKCode) {
@@ -451,9 +596,25 @@ internal os_keyboard_key OSX_Translate_Key(int VKCode) {
         case kVK_F9: return OS_KEYBOARD_KEY_F9; 
         case kVK_F10: return OS_KEYBOARD_KEY_F10;
         case kVK_F11: return OS_KEYBOARD_KEY_F11; 
-        case kVK_F12: return OS_KEYBOARD_KEY_F12;    
-        Invalid_Default_Case();
+        case kVK_F12: return OS_KEYBOARD_KEY_F12;   
+        case kVK_Command: return OS_KEYBOARD_KEY_COMMAND;
     }
 
     return -1;
+}
+
+internal NSUInteger OSX_Translate_Key_To_Modifier_Flag(os_keyboard_key Key) {
+    switch (Key)
+    {
+        case OS_KEYBOARD_KEY_SHIFT:
+            return NSEventModifierFlagShift;
+        case OS_KEYBOARD_KEY_CONTROL:
+            return NSEventModifierFlagControl;
+        case OS_KEYBOARD_KEY_ALT:
+            return NSEventModifierFlagOption;
+        case OS_KEYBOARD_KEY_COMMAND:
+            return NSEventModifierFlagCommand;
+    }
+
+    return 0;
 }

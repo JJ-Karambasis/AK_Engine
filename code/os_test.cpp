@@ -30,17 +30,27 @@ bool Application_Main() {
     }
 
     point2i LastMousePosition = {};
+    int FrameCount = 0;
     for(;;) {
+        bool Down = false;
         for(u32 i = 0; i < OS_KEYBOARD_KEY_COUNT; i++) {
             if(OS_Keyboard_Get_Key_State(i)) {
-                printf("OS Key down: %d\n", i);
+                printf("OS Key down: %d %d\n", i, FrameCount);
+                Down = true;
             }
         }
 
         for(u32 i = 0; i < OS_MOUSE_KEY_COUNT; i++) {
             if(OS_Mouse_Get_Key_State(i)) {
-                printf("OS Mouse down: %d\n", i);
+                printf("OS Mouse down: %d %d\n", i, FrameCount);
+                Down = true;
             }
+        }
+
+        if(Down == false) {
+            FrameCount = 0;
+        } else {
+            FrameCount++;
         }
 
         point2i MousePosition = OS_Mouse_Get_Position();
