@@ -14,8 +14,6 @@
    events to work? If so we can grab global mouse coordinates and there are no problems
   -Mouse deltas have a similar thing going on with scrolls
 
-- Get window position and get window size
-
 - Test how supporting multiple windows might work. Imagine a multi monitor setup 
   with a window on each side. One is a level editor and another might be a material
   editor or some other editor/tool. 
@@ -27,6 +25,7 @@
 
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
+#include <mach-o/dyld.h>
 #include <posix/posix.h>
 
 struct os_window;
@@ -63,6 +62,8 @@ struct os_window {
     osx_window_delegate* Delegate;
     osx_window*          Window;
     osx_window_view*     View;
+    ak_atomic_u64        PosPacked;
+    ak_atomic_u64        SizePacked;
     void*                UserData;
 };
 

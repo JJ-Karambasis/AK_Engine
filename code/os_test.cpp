@@ -30,6 +30,9 @@ bool Application_Main() {
         }
     }
 
+    string Executable = OS_Get_Executable_Path();
+    printf("%.*s\n", (int)Executable.Size, Executable.Str);
+
     point2i LastMousePosition = {};
     int FrameCount = 0;
     while(OS_Window_Is_Open(OS_Get_Main_Window())) {
@@ -62,11 +65,11 @@ bool Application_Main() {
             FrameCount++;
         }
 
-        point2i MousePosition = OS_Mouse_Get_Position();
-        if(MousePosition != LastMousePosition) {
-            printf("Mouse position: (%d, %d)\n", MousePosition.x, MousePosition.y);
-            LastMousePosition = MousePosition;
-        }
+        // point2i MousePosition = OS_Mouse_Get_Position();
+        // if(MousePosition != LastMousePosition) {
+        //     printf("Mouse position: (%d, %d)\n", MousePosition.x, MousePosition.y);
+        //     LastMousePosition = MousePosition;
+        // }
 
         // vec2i MouseDelta = OS_Mouse_Get_Delta();
         // if(MouseDelta != vec2i()) {
@@ -77,6 +80,10 @@ bool Application_Main() {
         if(MouseScroll != 0) {
             printf("Mouse scroll: %f\n", MouseScroll);
         }
+
+        point2i WindowPos = OS_Window_Get_Pos(OS_Get_Main_Window());
+        rect2i WindowRect = rect2i(WindowPos, WindowPos+OS_Window_Get_Size(OS_Get_Main_Window()));
+        //printf("Window rect: [(%d, %d) (%d, %d)]\n", WindowRect.P1.x, WindowRect.P1.y, WindowRect.P2.x, WindowRect.P2.y);
 
         if(OS_Keyboard_Get_Key_State(OS_KEYBOARD_KEY_ESCAPE)) {
             return true;

@@ -4,6 +4,26 @@ internal void OSX_Create_Menu_Bar();
 internal os_keyboard_key OSX_Translate_Key(int VKCode);
 internal NSUInteger OSX_Translate_Key_To_Modifier_Flag(os_keyboard_key Key);
 
+internal string OSX_Get_Executable_Path(allocator* Allocator) {
+    local_persist char TempBuffer[1];
+    u32 BufferSize = 1;
+    _NSGetExecutablePath(TempBuffer, &BufferSize);
+
+    char* Buffer = (char*)Allocator_Allocate_Memory(Allocator, BufferSize);
+    _NSGetExecutablePath(Buffer, &BufferSize);
+
+    return string(Buffer, BufferSize-1);
+}
+
+string OS_Get_Executable_Path() {
+    osx_os* OS = OSX_Get();
+    return OS->ExecutablePath;
+}
+
+bool   OS_Directory_Exists(string Directory);
+bool   OS_File_Exists(string File);
+void   OS_Message_Box(string Message, string Title);
+
 span<os_monitor_id> OS_Get_Monitors() {
     osx_os* OS = OSX_Get();
     return OS->MonitorIDs;
@@ -24,7 +44,6 @@ const os_monitor_info* OS_Get_Monitor_Info(os_monitor_id ID) {
 internal os_window* OS_Window_Get(os_window_id WindowID) {
     osx_os* OS = OSX_Get();
     os_window* Window = Async_Pool_Get(&OS->WindowPool, async_handle<os_window>(WindowID));
-    Assert(Window);
     return Window;
 }
 
@@ -44,21 +63,32 @@ internal bool OS_Open_Window_Internal(os_window* Window, const os_create_window_
         NSRect FrameRect;
 
         //If we are maximized we ignore the position and size parameters
+
+        point2i Origin;
+        dim2i Dim;
         if(CreateInfo.Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
             rect2i Rect = Monitor->MonitorInfo.Rect;
-            dim2i Dim = Rect2i_Get_Dim(Rect);
+            Origin = point2i(Rect.P1.x, Rect.P1.y);
+            Dim = Rect2i_Get_Dim(Rect);
             FrameRect = NSMakeRect(Rect.P1.x, Rect.P1.y, Dim.width, Dim.height);
         } else {
-            point2i Origin = CreateInfo.Pos;
+            Origin = CreateInfo.Pos;
             Origin += Monitor->MonitorInfo.Rect.P1;
+            Dim = CreateInfo.Size;
+
+            point2i ActualOrigin = Origin;
 
             //Since our coordinate system is top down and osx is bottom up. The origin
             //is in the wrong corner.
-            Origin.y = (Rect2i_Get_Height(Monitor->MonitorInfo.Rect) - Origin.y) - CreateInfo.Size.height;
+            ActualOrigin.y = (Rect2i_Get_Height(Monitor->MonitorInfo.Rect) - ActualOrigin.y) - CreateInfo.Size.height;
 
             //Make sure coordinate system is top down and not bottom up
-            FrameRect = NSMakeRect(Origin.x, Origin.y, CreateInfo.Size.width, CreateInfo.Size.height);
+            FrameRect = NSMakeRect(ActualOrigin.x, ActualOrigin.y, CreateInfo.Size.width, CreateInfo.Size.height);
         }
+        s64 PackedPos = ((s64)Origin.x) | (((s64)Origin.y) << 32);
+        s64 PackedDim = ((s64)Dim.width) | (((s64)Dim.height) << 32);
+        AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)PackedPos);
+        AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)PackedDim);
 
         NSUInteger StyleMask = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable | NSWindowStyleMaskBorderless);
 
@@ -180,6 +210,8 @@ void* OS_Window_Get_Data(os_window_id WindowID) {
 void OS_Window_Set_Title(os_window_id WindowID, string Title) {
     dispatch_async(dispatch_get_main_queue(), ^{
         os_window* Window = OS_Window_Get(WindowID);
+        if(!Window) return;
+
         @autoreleasepool {
             NSString* NSTitle = [[NSString alloc] 
                 initWithBytes:Title.Str
@@ -190,10 +222,22 @@ void OS_Window_Set_Title(os_window_id WindowID, string Title) {
     });
 }
 
-dim2i        OS_Window_Get_Size(os_window_id WindowID);
-point2i      OS_Window_Get_Pos(os_window_id WindowID);
+dim2i OS_Window_Get_Size(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return {};
+    
+    s64 SizePacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->SizePacked);
+    return dim2i((s32)SizePacked, (s32)(SizePacked >> 32));
+}
 
-// const os_event* OS_Next_Event();
+point2i OS_Window_Get_Pos(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return {};
+
+    s64 PosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->PosPacked);
+    return point2i((s32)PosPacked, (s32)(PosPacked >> 32));
+}
+
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
     osx_os* OS = OSX_Get();
     return AK_Atomic_Load_U32_Relaxed(&OS->KeyboardStates[Key]) == true;
@@ -253,6 +297,24 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
     os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_WINDOW_CLOSED);
     Event->Window = Window->ID;
     return NO;
+}
+
+- (void)windowDidResize:(NSNotification *)Notification {
+    NSRect WindowRect = [Window->Window frame];
+    s64 PackedDim = ((s64)WindowRect.size.width) | (((s64)WindowRect.size.height) << 32);
+    AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)PackedDim);
+}
+
+- (void)windowDidMove:(NSNotification *)Notification {
+    NSScreen* Screen = [Window->Window screen];
+    NSRect WindowRect = [Window->Window frame];
+    NSRect ScreenRect = [Screen frame];
+
+    point2i Origin = point2i(WindowRect.origin.x, WindowRect.origin.y);
+    Origin.y = (ScreenRect.size.height - Origin.y) - WindowRect.size.height;
+
+    s64 PackedPos = ((s64)Origin.x) | (((s64)Origin.y) << 32);
+    AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)PackedPos);
 }
 
 @end
@@ -420,14 +482,20 @@ int main() {
         [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyUp
                  handler:Block];
 
+        scratch Scratch = Scratch_Get();
+
         osx_os OS = {};
         OS.Arena = Arena_Create(Core_Get_Base_Allocator());
         OS_Set(&OS);
+
+        string ExecutableFilePath = OSX_Get_Executable_Path(&Scratch);
+        OS.ExecutablePath = string(OS.Arena, String_Get_Path(ExecutableFilePath));
 
         if(!Posix_Create()) {
             //todo: Logging
             return 1;
         }
+        
 
         NSArray<NSScreen*>* Screens = [NSScreen screens];
         Array_Init(&OS.Monitors, OS.Arena, [Screens count]);

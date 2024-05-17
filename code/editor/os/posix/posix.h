@@ -13,6 +13,7 @@ struct os_process {
 
 struct os {
     arena*                 Arena;
+    string                 ExecutablePath;
     async_pool<os_process> ProcessPool;
     os_event_manager       EventManager;
     os_event_stream*       EventStream;

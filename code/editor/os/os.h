@@ -10,10 +10,10 @@ bool Application_Main();
 struct os;
 os*    OS_Get();
 void   OS_Set(os* OS);
-// string OS_Get_Executable_Path();
-// bool   OS_Directory_Exists(string Directory);
-// bool   OS_File_Exists(string File);
-// void   OS_Message_Box(string Message, string Title);
+string OS_Get_Executable_Path();
+bool   OS_Directory_Exists(string Directory);
+bool   OS_File_Exists(string File);
+void   OS_Message_Box(string Message, string Title);
 
 //Process api
 enum os_process_status {
