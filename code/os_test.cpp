@@ -12,6 +12,7 @@ bool Application_Main() {
         .Flags = OS_WINDOW_FLAG_MAIN_BIT, 
         .Title = String_Lit("Test"),
         .Monitor = OS_Get_Primary_Monitor(), 
+        .Pos = point2i(200, 200),
         .Size = dim2i(1920, 1080)
     });
 
@@ -61,7 +62,7 @@ bool Application_Main() {
 
         // vec2i MouseDelta = OS_Mouse_Get_Delta();
         // if(MouseDelta != vec2i()) {
-        //     //printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
+        //     printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
         // }
 
         f32 MouseScroll = OS_Mouse_Get_Scroll();

@@ -31,13 +31,14 @@ os* OS_Create(const os_create_info& CreateInfo) {
             const char* Name = [[Screens[i] localizedName] UTF8String];
             NSRect Rect = [Screens[i] frame];
 
+            point2i Origin = point2i(Rect.origin.x, Rect.size.height-Rect.origin.y);
+            dim2i Size = dim2i(Rect.size.width, Rect.size.height);
+
             OS->Monitors[i] = {
                 .Screen = Screens[i],
                 .MonitorInfo = {
                     .Name = string(OS->Arena, Name),
-                    .Rect = Rect2(vec2(Rect.origin.x, (f32)Rect.origin.y), 
-                                  vec2((f32)(Rect.origin.x+Rect.size.width), 
-                                       (f32)(Rect.origin.y+Rect.size.height)))
+                    .Rect = rect2i(Origin, Origin + Size)
                 }
             };
 

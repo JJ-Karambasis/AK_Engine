@@ -1,6 +1,15 @@
 #ifndef BASE_H
 #define BASE_H
 
+struct vec2;
+struct vec2i;
+struct point2;
+struct point2i;
+struct dim2;
+struct dim2i;
+struct rect2;
+struct rect2i;
+
 struct vec2 {
     union {
         f32_2x Data;
@@ -23,8 +32,8 @@ struct vec2i {
     vec2i(s32_2x Data);
 };
 
-bool operator!=(vec2i A, vec2i B);
-bool operator==(vec2i A, vec2i B);
+bool operator!=(const vec2i& A, const vec2i& B);
+bool operator==(const vec2i& A, const vec2i& B);
 
 struct point2 {
     union {
@@ -48,11 +57,12 @@ struct point2i {
     point2i(s32_2x Data);
 };
 
-bool operator!=(point2i A, point2i B);
-bool operator==(point2i A, point2i B);
-point2i operator+(point2i A, point2i B);
-point2i operator+=(point2i& A, point2i B);
-vec2i operator-(point2i A, point2i B);
+bool operator!=(const point2i& A, const point2i& B);
+bool operator==(const point2i& A, const point2i& B);
+point2i operator+(const point2i& A, const point2i& B);
+point2i operator+=(point2i& A, const point2i& B);
+point2i operator+(const point2i& A, const dim2i& B);
+vec2i operator-(const point2i& A, const point2i& B);
 
 struct dim2 {
     union {
@@ -86,9 +96,10 @@ struct rect2i {
     point2i P2;
 
     rect2i() = default;
-    rect2i(point2i Min, point2i Max);
+    rect2i(const point2i& Min, const point2i& Max);
 };
 
+s32   Rect2i_Get_Height(const rect2i& Rect);
 dim2i Rect2i_Get_Dim(const rect2i& Rect);
 
 #endif

@@ -85,7 +85,7 @@ struct os_event {
 bool            OS_Keyboard_Get_Key_State(os_keyboard_key Key);
 bool            OS_Mouse_Get_Key_State(os_mouse_key Key);
 point2i         OS_Mouse_Get_Position();
-// vec2i           OS_Mouse_Get_Delta();
+vec2i           OS_Mouse_Get_Delta();
 f32             OS_Mouse_Get_Scroll();
 
 //Input keys

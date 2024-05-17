@@ -31,23 +31,24 @@ bool OS_Create_Window_Internal(os_window* Window, const os_create_window_info& C
         }
 
         os_monitor* Monitor = (os_monitor*)(uptr)CreateInfo.Monitor;
+        Assert(Monitor);
         
         NSRect FrameRect;
 
         //If we are maximized we ignore the position and size parameters
         if(CreateInfo.Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
-            //Make sure we have a valid monitor
-            Assert(Monitor);
-
             rect2i Rect = Monitor->MonitorInfo.Rect;
-
             dim2i Dim = Rect2i_Get_Dim(Rect);
             FrameRect = NSMakeRect(Rect.P1.x, Rect.P1.y, Dim.width, Dim.height);
         } else {
             point2i Origin = CreateInfo.Pos;
-            if(Monitor) {
-                Origin += Monitor->MonitorInfo.Rect.P1;
-            }
+            Origin += Monitor->MonitorInfo.Rect.P1;
+
+            //Since our coordinate system is top down and osx is bottom up. The origin
+            //is in the wrong corner.
+            Origin.y = (Rect2i_Get_Height(Monitor->MonitorInfo.Rect) - Origin.y) - CreateInfo.Size.height;
+
+            //Make sure coordinate system is top down and not bottom up
             FrameRect = NSMakeRect(Origin.x, Origin.y, CreateInfo.Size.width, CreateInfo.Size.height);
         }
 
@@ -79,6 +80,7 @@ bool OS_Create_Window_Internal(os_window* Window, const os_create_window_info& C
         [Window->Window setContentView:Window->View];
         [Window->Window makeFirstResponder:Window->View];
         [Window->Window setDelegate:Window->Delegate];
+        [Window->Window setAcceptsMouseMovedEvents:TRUE];
         [NSApp activateIgnoringOtherApps:YES];
         [Window->Window makeKeyAndOrderFront:nil];
 
@@ -175,7 +177,11 @@ point2i OS_Mouse_Get_Position() {
     return point2i((s32)MousePosPacked, (s32)(MousePosPacked >> 32));
 }
 
-// vec2i           OS_Mouse_Get_Delta();
+vec2i OS_Mouse_Get_Delta() {
+    osx_os* OS = OSX_Get();
+    s64 MouseDeltaPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MouseDeltaPacked);
+    return vec2i((s32)MouseDeltaPacked, (s32)(MouseDeltaPacked >> 32));
+}
 
 f32 OS_Mouse_Get_Scroll() {
     osx_os* OS = OSX_Get();
@@ -316,8 +322,18 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
 
 - (void)mouseMoved:(NSEvent *)Event {
     osx_os* OS = OSX_Get();
-    const NSPoint Pos = [Event locationInWindow];
+    NSPoint Pos = [NSEvent mouseLocation];
+    const s32 Delta = [Event deltaX];
+
+    //Make sure coordinate system is top down and not bottom up
+    NSScreen* Screen = [[Event window] screen];
+    NSRect Rect = [Screen frame];
+
+    Pos.y = Rect.size.height - Pos.y;
+
+    s64 PackedDelta = ((s64)[Event deltaX]) | (((s64)[Event deltaY]) << 32);
     s64 PackedPos = ((s64)Pos.x) | (((s64)Pos.y) << 32);
+    AK_Atomic_Store_U64_Relaxed(&OS->MouseDeltaPacked, (u64)PackedDelta);
     AK_Atomic_Store_U64_Relaxed(&OS->MousePosPacked, (u64)PackedPos);
 }
 
@@ -381,13 +397,14 @@ int main() {
             const char* Name = [[Screens[i] localizedName] UTF8String];
             NSRect Rect = [Screens[i] frame];
 
+            point2i Origin = point2i(Rect.origin.x, Rect.origin.y);
+            dim2i Dim = dim2i(Rect.size.width, Rect.size.height);
+
             OS.Monitors[i] = {
                 .Screen = Screens[i],
                 .MonitorInfo = {
                     .Name = string(OS.Arena, Name),
-                    .Rect = rect2i(point2i(Rect.origin.x, Rect.origin.y),
-                                point2i((Rect.origin.x+Rect.size.width), 
-                                        (Rect.origin.y+Rect.size.height)))
+                    .Rect = rect2i(Origin, Origin+Dim)
                 }
             };
 
