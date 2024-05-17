@@ -20,7 +20,15 @@ const os_monitor_info* OS_Get_Monitor_Info(os_monitor_id ID) {
     return &Monitor->MonitorInfo;
 }
 
-bool OS_Create_Window_Internal(os_window* Window, const os_create_window_info& CreateInfo) {
+
+internal os_window* OS_Window_Get(os_window_id WindowID) {
+    osx_os* OS = OSX_Get();
+    os_window* Window = Async_Pool_Get(&OS->WindowPool, async_handle<os_window>(WindowID));
+    Assert(Window);
+    return Window;
+}
+
+internal bool OS_Open_Window_Internal(os_window* Window, const os_create_window_info& CreateInfo) {
     __block bool WindowCreated = false;
     dispatch_sync(dispatch_get_main_queue(), ^{
         // Update the UI on the main thread
@@ -91,28 +99,60 @@ bool OS_Create_Window_Internal(os_window* Window, const os_create_window_info& C
     return WindowCreated;
 }
 
-os_window_id OS_Create_Window(const os_create_window_info& CreateInfo) {
+os_window_id OS_Open_Window(const os_create_window_info& CreateInfo) {
     osx_os* OSX = OSX_Get();
     async_handle<os_window> Handle = Async_Pool_Allocate(&OSX->WindowPool);
     os_window* Window = Async_Pool_Get(&OSX->WindowPool, Handle);
 
-    if(!OS_Create_Window_Internal(Window, CreateInfo)) {
-        OS_Delete_Window(Handle.ID);
+    if(!OS_Open_Window_Internal(Window, CreateInfo)) {
+        OS_Close_Window(Handle.ID);
         return 0;
     }
 
+    Window->ID = Handle.ID; 
+
     if(CreateInfo.Flags & OS_WINDOW_FLAG_MAIN_BIT) {
-        OS_Set_Main_Window(Handle.ID);
+        OS_Set_Main_Window(Window->ID);
     }
 
-    OS_Window_Set_Data(Handle.ID, CreateInfo.UserData);
-    OS_Window_Set_Title(Handle.ID, CreateInfo.Title);
+    OS_Window_Set_Data(Window->ID, CreateInfo.UserData);
+    OS_Window_Set_Title(Window->ID, CreateInfo.Title);
 
     return Handle.ID;
 }
 
-void OS_Delete_Window(os_window_id WindowID) {
-    Not_Implemented();
+void OS_Close_Window(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(Window) {
+        osx_os* OS = OSX_Get();
+
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            Window->UserData = nullptr;
+            if(Window->Window != nil) {
+                [Window->Window orderOut:nil];
+                [Window->Window setDelegate:nil];
+                [Window->Window close];
+                Window->Window = nil;
+            }
+
+            if(Window->View != nil) {
+                [Window->View release];
+                Window->View = nil;
+            }
+
+            if(Window->Delegate != nil) {
+                [Window->Delegate release];
+                Window->Delegate = nil;
+            }
+        });
+
+        Async_Pool_Free(&OS->WindowPool, async_handle<os_window>(WindowID));
+    }
+}
+
+bool OS_Window_Is_Open(os_window_id WindowID) {
+    osx_os* OS = OSX_Get();
+    return Async_Pool_Valid_Handle(&OS->WindowPool, async_handle<os_window>(WindowID));
 }
 
 void OS_Set_Main_Window(os_window_id WindowID) {
@@ -123,13 +163,6 @@ void OS_Set_Main_Window(os_window_id WindowID) {
 os_window_id OS_Get_Main_Window() {
     osx_os* OS = OSX_Get();
     return (os_window_id)AK_Atomic_Load_U64_Relaxed(&OS->MainWindowID);
-}
-
-os_window* OS_Window_Get(os_window_id WindowID) {
-    osx_os* OS = OSX_Get();
-    os_window* Window = Async_Pool_Get(&OS->WindowPool, async_handle<os_window>(WindowID));
-    Assert(Window);
-    return Window;
 }
 
 void OS_Window_Set_Data(os_window_id WindowID, void* UserData) {
@@ -213,6 +246,13 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
     if(self != nil)
         Window = _Window;
     return self;
+}
+
+- (BOOL)windowShouldClose:(id)sender {
+    osx_os* OS = OSX_Get();
+    os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_WINDOW_CLOSED);
+    Event->Window = Window->ID;
+    return NO;
 }
 
 @end

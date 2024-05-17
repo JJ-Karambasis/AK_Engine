@@ -8,7 +8,7 @@ bool Application_Main() {
     OS_Process_Exit(OS_Exec_Process(String_Lit("echo"), String_Lit("hello")));
     OS_Process_Exit(OS_Exec_Process(String_Lit("echo"), String_Lit("world")));
 
-    OS_Create_Window({
+    OS_Open_Window({
         .Flags = OS_WINDOW_FLAG_MAIN_BIT, 
         .Title = String_Lit("Test"),
         .Monitor = OS_Get_Primary_Monitor(), 
@@ -32,7 +32,15 @@ bool Application_Main() {
 
     point2i LastMousePosition = {};
     int FrameCount = 0;
-    for(;;) {
+    while(OS_Window_Is_Open(OS_Get_Main_Window())) {
+        while(const os_event* Event = OS_Next_Event()) {
+            switch(Event->Type) {
+                case OS_EVENT_TYPE_WINDOW_CLOSED: {
+                    OS_Close_Window(Event->Window);
+                } break;
+            }
+        }
+
         bool Down = false;
         for(u32 i = 0; i < OS_KEYBOARD_KEY_COUNT; i++) {
             if(OS_Keyboard_Get_Key_State(i)) {

@@ -57,8 +57,9 @@ struct os_create_window_info {
 };
 
 typedef u64 os_window_id;
-os_window_id OS_Create_Window(const os_create_window_info& CreateInfo);
-void         OS_Delete_Window(os_window_id WindowID);
+os_window_id OS_Open_Window(const os_create_window_info& CreateInfo);
+void         OS_Close_Window(os_window_id WindowID);
+bool         OS_Window_Is_Open(os_window_id WindowID);
 void         OS_Set_Main_Window(os_window_id WindowID);
 os_window_id OS_Get_Main_Window();
 void         OS_Window_Set_Data(os_window_id WindowID, void* UserData);
@@ -78,10 +79,10 @@ enum os_event_type {
 
 struct os_event {
     os_event_type Type;
-    os_window_id  WindowID;
+    os_window_id  Window;
 };
 
-// const os_event* OS_Next_Event();
+const os_event* OS_Next_Event();
 bool            OS_Keyboard_Get_Key_State(os_keyboard_key Key);
 bool            OS_Mouse_Get_Key_State(os_mouse_key Key);
 point2i         OS_Mouse_Get_Position();

@@ -4,8 +4,6 @@
 
 /*todo:
 
-- Implement mouse deltas
-
 - Make win32 and osx layer consistent
   -Coordinate system. Make this top to bottom. OSX is Bottom to Top it looks like
   -Scrolls. Not sure if scrolls are possible. Values are always from 1 -> -1 on win32
@@ -14,10 +12,16 @@
    this might be device dependent
   -Mouse coordinate via monitors. Do we have to be hovering over windows for mouse
    events to work? If so we can grab global mouse coordinates and there are no problems
+  -Mouse deltas have a similar thing going on with scrolls
+
+- Get window position and get window size
 
 - Test how supporting multiple windows might work. Imagine a multi monitor setup 
   with a window on each side. One is a level editor and another might be a material
   editor or some other editor/tool. 
+
+- Test multi monitor configuration. Kinda sucks since I can only have one additional
+  monitor on osx along with the laptop monitor but it will have to do. 
 
 */
 
@@ -55,6 +59,7 @@ struct os_monitor {
 };
 
 struct os_window {
+    os_window_id         ID;
     osx_window_delegate* Delegate;
     osx_window*          Window;
     osx_window_view*     View;

@@ -33,6 +33,7 @@ void OS_Event_Manager_Create(os_event_manager* EventManager, u32 NumThreadReader
     EventManager->IterArray.Ptr = Iterators;
     EventManager->IterArray.Count = NumThreadReaders;
     AK_Atomic_Store_U32_Relaxed(&EventManager->UsedThreadCount, 0);
+    AK_TLS_Create(&EventManager->IterLocalStorage);
 }
 
 void OS_Event_Manager_Delete(os_event_manager* EventManager) {

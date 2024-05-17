@@ -12,7 +12,6 @@ os_process_id OS_Exec_Process(string App, string Parameters) {
     pid_t PID = fork();
     if(PID == 0) {
         if(execlp(App.Str, App.Str, Parameters.Str, (char*)0) == -1) {
-            printf("Dead\n");
             exit(-1);
         } else {
             exit(0);
