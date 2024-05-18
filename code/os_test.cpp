@@ -57,7 +57,7 @@ bool Application_Main() {
         bool Down = false;
         for(u32 i = 0; i < OS_KEYBOARD_KEY_COUNT; i++) {
             if(OS_Keyboard_Get_Key_State(i)) {
-                //printf("OS Key down: %d %d\n", i, FrameCount);
+                printf("OS Key down: %d %d\n", i, FrameCount);
                 Down = true;
             }
         }

@@ -232,7 +232,7 @@ point2i OS_Window_Get_Pos(os_window_id WindowID) {
     if(!Window) return {};
 
     s64 PosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->PosPacked);
-    return Unpack_S64(PosPacked)
+    return Unpack_S64(PosPacked);
 }
 
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
