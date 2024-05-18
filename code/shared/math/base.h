@@ -84,6 +84,7 @@ struct dim2i {
     dim2i() = default;
     dim2i(s32 w, s32 h);
     dim2i(const vec2i& Extent);
+    dim2i(s32_2x Data);
 };
 
 struct rect2 {

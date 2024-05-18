@@ -281,8 +281,8 @@ typedef intptr_t  sptr;
 #define internal static
 #define global static
 
-#include "utility.h"
 #include "simd.h"
+#include "utility.h"
 #include "fixed_array.h"
 #include "strings.h"
 #include "hash.h"

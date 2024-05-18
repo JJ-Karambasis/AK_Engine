@@ -61,6 +61,12 @@ struct s32_2x {
 
     s32_2x() = default;
     s32_2x(std::initializer_list<s32> List);
+    s32_2x(s32 A, s32 B);
+
+    inline s32& operator[](u32 i) {
+        Assert(i < 2);
+        return Data[i];
+    }
 };
 
 

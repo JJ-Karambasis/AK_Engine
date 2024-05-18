@@ -85,10 +85,8 @@ internal bool OS_Open_Window_Internal(os_window* Window, const os_open_window_in
             //Make sure coordinate system is top down and not bottom up
             FrameRect = NSMakeRect(ActualOrigin.x, ActualOrigin.y, OpenInfo.Size.width, OpenInfo.Size.height);
         }
-        s64 PackedPos = ((s64)Origin.x) | (((s64)Origin.y) << 32);
-        s64 PackedDim = ((s64)Dim.width) | (((s64)Dim.height) << 32);
-        AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)PackedPos);
-        AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)PackedDim);
+        AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)Pack_S64(Origin.x, Origin.y));
+        AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)Pack_S64(Dim.width, Dim.height));
 
         NSUInteger StyleMask = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable | NSWindowStyleMaskBorderless);
 
@@ -226,7 +224,7 @@ dim2i OS_Window_Get_Size(os_window_id WindowID) {
     if(!Window) return {};
     
     s64 SizePacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->SizePacked);
-    return dim2i((s32)SizePacked, (s32)(SizePacked >> 32));
+    return Unpack_S64(SizePacked);
 }
 
 point2i OS_Window_Get_Pos(os_window_id WindowID) {
@@ -234,7 +232,7 @@ point2i OS_Window_Get_Pos(os_window_id WindowID) {
     if(!Window) return {};
 
     s64 PosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->PosPacked);
-    return point2i((s32)PosPacked, (s32)(PosPacked >> 32));
+    return Unpack_S64(PosPacked)
 }
 
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
@@ -250,7 +248,7 @@ bool OS_Mouse_Get_Key_State(os_mouse_key Key) {
 point2i OS_Mouse_Get_Position() {
     osx_os* OS = OSX_Get();
     s64 MousePosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MousePosPacked);
-    return point2i((s32)MousePosPacked, (s32)(MousePosPacked >> 32));
+    return Unpack_S64(MousePosPacked);
 }
 
 internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
@@ -289,7 +287,7 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
 - (void)windowDidResize:(NSNotification *)Notification {
     NSRect WindowRect = [Window->Window frame];
     s64 PackedDim = ((s64)WindowRect.size.width) | (((s64)WindowRect.size.height) << 32);
-    AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)PackedDim);
+    AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)Pack_S64(WindowRect.size.width, WindowRect.size.height));
 }
 
 - (void)windowDidMove:(NSNotification *)Notification {
@@ -299,9 +297,7 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
 
     point2i Origin = point2i(WindowRect.origin.x, WindowRect.origin.y);
     Origin.y = (ScreenRect.size.height - Origin.y) - WindowRect.size.height;
-
-    s64 PackedPos = ((s64)Origin.x) | (((s64)Origin.y) << 32);
-    AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)PackedPos);
+    AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)Pack_S64(Origin.x, Origin.y));
 }
 
 @end
@@ -423,8 +419,7 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
     os_mouse_delta_event* DeltaEvent = (os_mouse_delta_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_DELTA);
     DeltaEvent->Delta = Delta;
 
-    s64 PackedPos = ((s64)Pos.x) | (((s64)Pos.y) << 32);
-    AK_Atomic_Store_U64_Relaxed(&OS->MousePosPacked, (u64)PackedPos);
+    AK_Atomic_Store_U64_Relaxed(&OS->MousePosPacked, (u64)Pack_S64(Pos.x, Pos.y));
 }
 
 @end

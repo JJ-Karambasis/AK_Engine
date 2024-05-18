@@ -49,6 +49,9 @@ s32 Random_Between(s32 Min, s32 Max);
 u32 Align_U32(u32 Alignment, u32 Value);
 bool In_Range(u32 Value, u32 Min, u32 Max);
 bool In_Range(u64 Value, u64 Min, u64 Max);
+s64  Pack_S64(s32_2x Data);
+s64  Pack_S64(s32 A, s32 B);
+s32_2x Unpack_S64(s64 A);
 
 #ifdef CUSTOM_PTR_SIZE
 

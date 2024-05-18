@@ -186,6 +186,20 @@ bool In_Range(u64 Value, u64 Min, u64 Max) {
     return Value >= Min && Value <= Max;
 }
 
+s64 Pack_S64(s32_2x Data) {
+    return Pack_S64(Data[0], Data[1]);
+}
+
+s64 Pack_S64(s32 A, s32 B) {
+    s64 PackedX = ((s64)A) & 0xFFFFFFFFLL;
+    s64 PackedY = ((s64)B) & 0xFFFFFFFFLL;
+    return (PackedX) | (PackedY << 32);
+}
+
+s32_2x Unpack_S64(s64 A) {
+    return s32_2x((s32)A, (s32)(A >> 32));
+}
+
 scoped_mutex::scoped_mutex(ak_mutex* _Mutex) : Mutex(_Mutex) { 
     AK_Mutex_Lock(Mutex);
 }

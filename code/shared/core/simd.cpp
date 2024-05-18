@@ -2,6 +2,11 @@ s32_2x::s32_2x(std::initializer_list<s32> List) {
     Memory_Copy(Data, List.begin(), List.size()*sizeof(s32));
 }
 
+s32_2x::s32_2x(s32 A, s32 B) {
+    Data[0] = A;
+    Data[1] = B;
+}
+
 bool operator!=(s32_2x A, s32_2x B) {
     return A.Data[0] != B.Data[0] || A.Data[1] != B.Data[1];
 }

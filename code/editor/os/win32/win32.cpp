@@ -197,14 +197,17 @@ void OS_Window_Set_Title(os_window_id WindowID, string Title) {
     os_window* Window = OS_Window_Get(WindowID);
     if(!Window) return;
 
-    SendMessageW(Window->Handle, Win32_Message(SET_TITLE), (WPARAM)&Title, 0);
+    scratch Scratch = Scratch_Get();
+
+    wstring TitleW(&Scratch, Title);
+    SendMessageW(Window->Handle, Win32_Message(SET_TITLE), (WPARAM)&TitleW, 0);
 }
 
 dim2i OS_Window_Get_Size(os_window_id WindowID) {
     os_window* Window = OS_Window_Get(WindowID);
     if(!Window) return dim2i();
     s64 SizePacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->SizePacked);
-    return dim2i((s32)SizePacked, (s32)(SizePacked >> 32));
+    return Unpack_S64(SizePacked);
 }
 
 point2i OS_Window_Get_Pos(os_window_id WindowID) {
@@ -212,7 +215,7 @@ point2i OS_Window_Get_Pos(os_window_id WindowID) {
     if(!Window) return {};
 
     s64 PosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->PosPacked);
-    return point2i((s32)PosPacked, (s32)(PosPacked >> 32));
+    return Unpack_S64(PosPacked);
 }
 
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
@@ -260,6 +263,8 @@ internal HWND Win32_Create_Window(WNDCLASSEXW* WindowClass, DWORD Style, LONG XO
     return Result;
 }
 
+#include <stdio.h>
+
 internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam) {
     LRESULT Result = 0;
 
@@ -283,6 +288,24 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
 
             os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_WINDOW_CLOSED);
             Event->Window = OSWindow->ID;
+        } break;
+
+        case WM_WINDOWPOSCHANGED: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+
+            WINDOWPOS* WindowPos = (WINDOWPOS*)LParam;
+            AK_Atomic_Store_U64_Relaxed(&OSWindow->PosPacked, (u64)Pack_S64(WindowPos->x, WindowPos->y));
+        } break;
+
+        case WM_SIZE: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+
+            RECT WindowRect;
+            GetWindowRect(Window, &WindowRect);
+            dim2i Dim = dim2i(WindowRect.right-WindowRect.left, WindowRect.bottom-WindowRect.top);
+            AK_Atomic_Store_U64_Relaxed(&OSWindow->SizePacked, (u64)Pack_S64(Dim.Data));
         } break;
 
         default: {
@@ -321,10 +344,8 @@ internal LRESULT Win32_OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARAM
                 Dim = OpenInfo->Size;
             }
 
-            s64 PackedPos = ((s64)Origin.x) | (((s64)Origin.y) << 32);
-            s64 PackedDim = ((s64)Dim.width) | (((s64)Dim.height) << 32);
-            AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)PackedPos);
-            AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)PackedDim);
+            AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)Pack_S64(Origin.x, Origin.y));
+            AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)Pack_S64(Dim.width, Dim.height));
 
             DWORD ExStyle = 0;
             DWORD Style = WS_OVERLAPPEDWINDOW;

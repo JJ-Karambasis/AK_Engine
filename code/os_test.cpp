@@ -44,12 +44,12 @@ bool Application_Main() {
 
                 case OS_EVENT_TYPE_MOUSE_DELTA: {
                     const os_mouse_delta_event* DeltaEvent = (const os_mouse_delta_event*)Event;
-                    printf("Mouse delta %d %d\n", DeltaEvent->Delta.x, DeltaEvent->Delta.y);
+                    //printf("Mouse delta %d %d\n", DeltaEvent->Delta.x, DeltaEvent->Delta.y);
                 } break;
 
                 case OS_EVENT_TYPE_MOUSE_SCROLL: {
                     const os_mouse_scroll_event* ScrollEvent = (const os_mouse_scroll_event*)Event;
-                    printf("Mouse scroll %f\n", ScrollEvent->Scroll);
+                    //printf("Mouse scroll %f\n", ScrollEvent->Scroll);
                 } break;
             }
         }
@@ -57,14 +57,14 @@ bool Application_Main() {
         bool Down = false;
         for(u32 i = 0; i < OS_KEYBOARD_KEY_COUNT; i++) {
             if(OS_Keyboard_Get_Key_State(i)) {
-                printf("OS Key down: %d %d\n", i, FrameCount);
+                //printf("OS Key down: %d %d\n", i, FrameCount);
                 Down = true;
             }
         }
 
         for(u32 i = 0; i < OS_MOUSE_KEY_COUNT; i++) {
             if(OS_Mouse_Get_Key_State(i)) {
-                printf("OS Mouse down: %d %d\n", i, FrameCount);
+                //printf("OS Mouse down: %d %d\n", i, FrameCount);
                 Down = true;
             }
         }
@@ -77,23 +77,13 @@ bool Application_Main() {
 
         point2i MousePosition = OS_Mouse_Get_Position();
         if(MousePosition != LastMousePosition) {
-            printf("Mouse position: (%d, %d)\n", MousePosition.x, MousePosition.y);
+            //printf("Mouse position: (%d, %d)\n", MousePosition.x, MousePosition.y);
             LastMousePosition = MousePosition;
         }
 
-        // vec2i MouseDelta = OS_Mouse_Get_Delta();
-        // if(MouseDelta != vec2i()) {
-        //     printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
-        // }
-
-        // f32 MouseScroll = OS_Mouse_Get_Scroll();
-        // if(MouseScroll != 0) {
-        //     printf("Mouse scroll: %f\n", MouseScroll);
-        // }
-
         point2i WindowPos = OS_Window_Get_Pos(OS_Get_Main_Window());
         rect2i WindowRect = rect2i(WindowPos, WindowPos+OS_Window_Get_Size(OS_Get_Main_Window()));
-        //printf("Window rect: [(%d, %d) (%d, %d)]\n", WindowRect.P1.x, WindowRect.P1.y, WindowRect.P2.x, WindowRect.P2.y);
+        printf("Window rect: [(%d, %d)]\n", WindowPos.x, WindowPos.y);
 
         if(OS_Keyboard_Get_Key_State(OS_KEYBOARD_KEY_ESCAPE)) {
             return true;
