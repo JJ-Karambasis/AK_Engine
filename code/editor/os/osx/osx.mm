@@ -47,7 +47,7 @@ internal os_window* OS_Window_Get(os_window_id WindowID) {
     return Window;
 }
 
-internal bool OS_Open_Window_Internal(os_window* Window, const os_create_window_info& CreateInfo) {
+internal bool OS_Open_Window_Internal(os_window* Window, const os_open_window_info& OpenInfo) {
     __block bool WindowCreated = false;
     dispatch_sync(dispatch_get_main_queue(), ^{
         // Update the UI on the main thread
@@ -57,7 +57,7 @@ internal bool OS_Open_Window_Internal(os_window* Window, const os_create_window_
             return;
         }
 
-        os_monitor* Monitor = (os_monitor*)(uptr)CreateInfo.Monitor;
+        os_monitor* Monitor = (os_monitor*)(uptr)OpenInfo.Monitor;
         Assert(Monitor);
         
         NSRect FrameRect;
@@ -66,24 +66,24 @@ internal bool OS_Open_Window_Internal(os_window* Window, const os_create_window_
 
         point2i Origin;
         dim2i Dim;
-        if(CreateInfo.Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
+        if(OpenInfo.Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
             rect2i Rect = Monitor->MonitorInfo.Rect;
             Origin = point2i(Rect.P1.x, Rect.P1.y);
             Dim = Rect2i_Get_Dim(Rect);
             FrameRect = NSMakeRect(Rect.P1.x, Rect.P1.y, Dim.width, Dim.height);
         } else {
-            Origin = CreateInfo.Pos;
+            Origin = OpenInfo.Pos;
             Origin += Monitor->MonitorInfo.Rect.P1;
-            Dim = CreateInfo.Size;
+            Dim = OpenInfo.Size;
 
             point2i ActualOrigin = Origin;
 
             //Since our coordinate system is top down and osx is bottom up. The origin
             //is in the wrong corner.
-            ActualOrigin.y = (Rect2i_Get_Height(Monitor->MonitorInfo.Rect) - ActualOrigin.y) - CreateInfo.Size.height;
+            ActualOrigin.y = (Rect2i_Get_Height(Monitor->MonitorInfo.Rect) - ActualOrigin.y) - OpenInfo.Size.height;
 
             //Make sure coordinate system is top down and not bottom up
-            FrameRect = NSMakeRect(ActualOrigin.x, ActualOrigin.y, CreateInfo.Size.width, CreateInfo.Size.height);
+            FrameRect = NSMakeRect(ActualOrigin.x, ActualOrigin.y, OpenInfo.Size.width, OpenInfo.Size.height);
         }
         s64 PackedPos = ((s64)Origin.x) | (((s64)Origin.y) << 32);
         s64 PackedDim = ((s64)Dim.width) | (((s64)Dim.height) << 32);
@@ -105,7 +105,7 @@ internal bool OS_Open_Window_Internal(os_window* Window, const os_create_window_
 
         [Window->Window setCollectionBehavior: NSWindowCollectionBehaviorFullScreenPrimary];
 
-        if(CreateInfo.Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
+        if(OpenInfo.Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
             [Window->Window zoom:nil];
         }
 
@@ -122,31 +122,30 @@ internal bool OS_Open_Window_Internal(os_window* Window, const os_create_window_
         [NSApp activateIgnoringOtherApps:YES];
         [Window->Window makeKeyAndOrderFront:nil];
 
-        Window->UserData = CreateInfo.UserData;
         WindowCreated = true;
     });
 
     return WindowCreated;
 }
 
-os_window_id OS_Open_Window(const os_create_window_info& CreateInfo) {
+os_window_id OS_Open_Window(const os_open_window_info& OpenInfo) {
     osx_os* OSX = OSX_Get();
     async_handle<os_window> Handle = Async_Pool_Allocate(&OSX->WindowPool);
     os_window* Window = Async_Pool_Get(&OSX->WindowPool, Handle);
 
-    if(!OS_Open_Window_Internal(Window, CreateInfo)) {
+    if(!OS_Open_Window_Internal(Window, OpenInfo)) {
         OS_Close_Window(Handle.ID);
         return 0;
     }
 
     Window->ID = Handle.ID; 
 
-    if(CreateInfo.Flags & OS_WINDOW_FLAG_MAIN_BIT) {
+    if(OpenInfo.Flags & OS_WINDOW_FLAG_MAIN_BIT) {
         OS_Set_Main_Window(Window->ID);
     }
 
-    OS_Window_Set_Data(Window->ID, CreateInfo.UserData);
-    OS_Window_Set_Title(Window->ID, CreateInfo.Title);
+    OS_Window_Set_Data(Window->ID, OpenInfo.UserData);
+    OS_Window_Set_Title(Window->ID, OpenInfo.Title);
 
     return Handle.ID;
 }
@@ -252,18 +251,6 @@ point2i OS_Mouse_Get_Position() {
     osx_os* OS = OSX_Get();
     s64 MousePosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MousePosPacked);
     return point2i((s32)MousePosPacked, (s32)(MousePosPacked >> 32));
-}
-
-vec2i OS_Mouse_Get_Delta() {
-    osx_os* OS = OSX_Get();
-    s64 MouseDeltaPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MouseDeltaPacked);
-    return vec2i((s32)MouseDeltaPacked, (s32)(MouseDeltaPacked >> 32));
-}
-
-f32 OS_Mouse_Get_Scroll() {
-    osx_os* OS = OSX_Get();
-    u32 ScrollU32 = AK_Atomic_Load_U32_Relaxed(&OS->ScrollU32);
-    return U32_To_F32(ScrollU32);
 }
 
 internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
@@ -418,14 +405,13 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
         Scroll *= 0.1;
     }
 
-    u32 ScrollU32 = F32_To_U32(Scroll);
-    AK_Atomic_Store_U32_Relaxed(&OS->ScrollU32, ScrollU32);
+    os_mouse_scroll_event* ScrollEvent = (os_mouse_scroll_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_SCROLL);
+    ScrollEvent->Scroll = Scroll;
 }
 
 - (void)mouseMoved:(NSEvent *)Event {
     osx_os* OS = OSX_Get();
     NSPoint Pos = [NSEvent mouseLocation];
-    const s32 Delta = [Event deltaX];
 
     //Make sure coordinate system is top down and not bottom up
     NSScreen* Screen = [[Event window] screen];
@@ -433,9 +419,11 @@ internal THREAD_CONTEXT_CALLBACK(OSX_Applcation_Thread) {
 
     Pos.y = Rect.size.height - Pos.y;
 
-    s64 PackedDelta = ((s64)[Event deltaX]) | (((s64)[Event deltaY]) << 32);
+    vec2i Delta = vec2i([Event deltaX], [Event deltaY]);
+    os_mouse_delta_event* DeltaEvent = (os_mouse_delta_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_DELTA);
+    DeltaEvent->Delta = Delta;
+
     s64 PackedPos = ((s64)Pos.x) | (((s64)Pos.y) << 32);
-    AK_Atomic_Store_U64_Relaxed(&OS->MouseDeltaPacked, (u64)PackedDelta);
     AK_Atomic_Store_U64_Relaxed(&OS->MousePosPacked, (u64)PackedPos);
 }
 
@@ -530,9 +518,7 @@ int main() {
                                     untilDate: nil
                                     inMode: NSDefaultRunLoopMode
                                     dequeue: YES];
-            if(Event == nil) {
-                AK_Atomic_Store_U32_Relaxed(&OS.ScrollU32, 0);
-                
+            if(Event == nil) {                
                 if(OS.EventStream) {
                     OS_Event_Manager_Push_Back_Stream(&OS.EventManager, OS.EventStream);
                 }

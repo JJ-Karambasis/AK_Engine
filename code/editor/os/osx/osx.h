@@ -78,9 +78,7 @@ struct osx_os : os {
     //implemented
     ak_atomic_u32 KeyboardStates[OS_KEYBOARD_KEY_COUNT];                
     ak_atomic_u32 MouseStates[OS_MOUSE_KEY_COUNT];
-    ak_atomic_u32 ScrollU32;
     ak_atomic_u64 MousePosPacked;
-    ak_atomic_u64 MouseDeltaPacked;
 };
 
 internal osx_os* OSX_Get();
