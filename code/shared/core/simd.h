@@ -58,6 +58,9 @@ struct s32_2x {
     union {
         s32 Data[2];
     };
+
+    s32_2x() = default;
+    s32_2x(std::initializer_list<s32> List);
 };
 
 

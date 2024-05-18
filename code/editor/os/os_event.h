@@ -61,6 +61,8 @@ struct os_event_manager {
 static const uptr G_OSEventTypeSize[] = {
     0,
     sizeof(os_event),
+    sizeof(os_mouse_delta_event),
+    sizeof(os_mouse_scroll_event)
 #ifdef TEST_BUILD
     sizeof(os_event_test),
 #endif

@@ -16,23 +16,46 @@ struct os_monitor {
     os_monitor_info MonitorInfo;
 };
 
+struct os_window {
+    os_window_id  ID;
+    HWND          Handle;
+    ak_atomic_u64 PosPacked;
+    ak_atomic_u64 SizePacked;
+    void*         UserData;
+};
+
 struct os {
     arena*                 Arena;
-    bool                   AppResult;
-    HWND                   BaseWindow;
-    array<os_monitor>      Monitors;
-    array<os_monitor_id>   MonitorIDs;
-    os_monitor_id          PrimaryMonitor;
+    string                 ExecutablePath;
+    async_pool<os_process> ProcessPool;
     os_event_manager       EventManager;
     os_event_stream*       EventStream;
-    ak_atomic_u64          MouseDeltaPacked;
-    ak_atomic_u32          ScrollU32;
-    async_pool<os_process> ProcessPool;
+
+    HWND                  BaseWindow;
+    array<os_monitor>     Monitors;
+    array<os_monitor_id>  MonitorIDs;
+    os_monitor_id         PrimaryMonitor;
+    async_pool<os_window> WindowPool;
+    ak_atomic_u64         MainWindowID;
+    bool                  AppResult;
 };
 
 enum win32_message {
     WIN32_MESSAGE_QUIT,
+    WIN32_MESSAGE_SET_TITLE,
+    WIN32_MESSAGE_OPEN_WINDOW,
+    WIN32_MESSAGE_CLOSE_WINDOW,
     WIN32_MESSAGE_COUNT
+};
+
+struct win32_open_window_request {
+    os_window*                 Window;
+    const os_open_window_info* OpenInfo;
+    bool                       Result;
+};
+
+struct win32_close_window_request {
+    os_window* Window;
 };
 
 #define WIN32_MOUSE_USAGE 2
@@ -84,7 +107,6 @@ global const DWORD G_VKCodes[] = {
     VK_SPACE,
     VK_TAB,
     VK_ESCAPE,
-    VK_PAUSE,
     VK_UP,
     VK_DOWN,
     VK_LEFT,

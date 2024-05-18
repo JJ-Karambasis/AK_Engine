@@ -1,7 +1,33 @@
 #include "win32.h"
 
+#define Win32_Message(message) (WM_USER+WIN32_MESSAGE_##message)
 #define OS_Monitor_ID(index) (((u64)index << 32) | UINT32_MAX)
 #define OS_Monitor_Index(ID) (u32)(ID >> 32)
+
+#define WIN32_GLOBAL_WINDOW_CLASS L"AK_Engine Main Window Class"
+
+internal os_keyboard_key Win32_Translate_Key(int VKCode);
+
+internal string Win32_Get_Executable_Path(allocator* Allocator) {
+    DWORD MemorySize = 1024;
+    
+    for(int Iterations = 0; Iterations < 32; Iterations++) {
+        scratch Scratch = Scratch_Get();
+        wchar_t* Buffer = (wchar_t*)Scratch_Push(&Scratch, sizeof(wchar_t)*MemorySize);
+        DWORD Size = GetModuleFileNameW(nullptr, Buffer, MemorySize);
+        if(GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+            return string(Allocator, wstring(Buffer, Size));
+        }
+        MemorySize *= 2;
+    }
+
+    return string();
+}
+
+string OS_Get_Executable_Path() {
+    os* OS = OS_Get();
+    return OS->ExecutablePath;
+}
 
 os_process_id OS_Exec_Process(string App, string Parameters) {
     os* OS = OS_Get();
@@ -88,6 +114,107 @@ const os_monitor_info* OS_Get_Monitor_Info(os_monitor_id ID) {
     return &OS->Monitors[OS_Monitor_Index(ID)].MonitorInfo;
 }     
 
+internal os_window* OS_Window_Get(os_window_id WindowID) {
+    os* OS = OS_Get();
+    os_window* Window = Async_Pool_Get(&OS->WindowPool, async_handle<os_window>(WindowID));
+    return Window;
+}
+
+internal bool OS_Open_Window_Internal(os_window* Window, const os_open_window_info& OpenInfo) {
+    os* OS = OS_Get();
+    win32_open_window_request OpenWindowRequest = {
+        .Window = Window,
+        .OpenInfo = &OpenInfo,
+        .Result = true
+    };
+
+    SendMessageW(OS->BaseWindow, Win32_Message(OPEN_WINDOW), (WPARAM)&OpenWindowRequest, 0);
+
+    return OpenWindowRequest.Result;
+}
+
+os_window_id OS_Open_Window(const os_open_window_info& OpenInfo) {
+    os* OS = OS_Get();
+    async_handle<os_window> Handle = Async_Pool_Allocate(&OS->WindowPool);
+    os_window* Window = Async_Pool_Get(&OS->WindowPool, Handle);
+
+    if(!OS_Open_Window_Internal(Window, OpenInfo)) {
+        OS_Close_Window(Handle.ID);
+        return 0;
+    }
+
+    Window->ID = Handle.ID;
+    if(OpenInfo.Flags & OS_WINDOW_FLAG_MAIN_BIT) {
+        OS_Set_Main_Window(Window->ID);
+    }
+
+    OS_Window_Set_Data(Window->ID, OpenInfo.UserData);
+    OS_Window_Set_Title(Window->ID, OpenInfo.Title);
+
+    return Handle.ID;
+}
+
+void OS_Close_Window(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return;
+    
+    win32_close_window_request CloseWindowRequest = {
+        .Window = Window
+    };
+
+    SendMessageW(OS_Get()->BaseWindow, Win32_Message(CLOSE_WINDOW), (WPARAM)&CloseWindowRequest, 0);
+    Async_Pool_Free(&OS_Get()->WindowPool, async_handle<os_window>(WindowID));
+}
+
+bool OS_Window_Is_Open(os_window_id WindowID) {
+    os* OS = OS_Get();
+    return Async_Pool_Valid_Handle(&OS->WindowPool, async_handle<os_window>(WindowID));
+}
+
+void OS_Set_Main_Window(os_window_id WindowID) {
+    os* OS = OS_Get();
+    AK_Atomic_Store_U64_Relaxed(&OS->MainWindowID, WindowID);
+}
+
+os_window_id OS_Get_Main_Window() {
+    os* OS = OS_Get();
+    return (os_window_id)AK_Atomic_Load_U64_Relaxed(&OS->MainWindowID);
+}
+
+void OS_Window_Set_Data(os_window_id WindowID, void* UserData) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return;
+    Window->UserData = UserData;
+}
+
+void* OS_Window_Get_Data(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return nullptr;
+    return Window->UserData;
+}
+
+void OS_Window_Set_Title(os_window_id WindowID, string Title) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return;
+
+    SendMessageW(Window->Handle, Win32_Message(SET_TITLE), (WPARAM)&Title, 0);
+}
+
+dim2i OS_Window_Get_Size(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return dim2i();
+    s64 SizePacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->SizePacked);
+    return dim2i((s32)SizePacked, (s32)(SizePacked >> 32));
+}
+
+point2i OS_Window_Get_Pos(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return {};
+
+    s64 PosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->PosPacked);
+    return point2i((s32)PosPacked, (s32)(PosPacked >> 32));
+}
+
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
     //Command is not supported on win32
     if(Key == OS_KEYBOARD_KEY_COMMAND) {
@@ -110,24 +237,14 @@ point2i OS_Mouse_Get_Position() {
     return point2i(P.x, P.y);
 }
 
-vec2i OS_Mouse_Get_Delta() {
-    os* OS = OS_Get();
-    s64 MouseDeltaPacked = (s64)AK_Atomic_Load_U64_Relaxed(&OS->MouseDeltaPacked);
-    return vec2i((s32)MouseDeltaPacked, (s32)(MouseDeltaPacked >> 32));
-}
-
-f32 OS_Mouse_Get_Scroll() {
-    os* OS = OS_Get();
-    u32 ScrollU32 = AK_Atomic_Load_U32_Relaxed(&OS->ScrollU32);
-    return U32_To_F32(ScrollU32);
-}
-
-#define Win32_Message(message) (WM_USER+WIN32_MESSAGE_##message)
 
 internal THREAD_CONTEXT_CALLBACK(Win32_Application_Thread) {
+    HANDLE Handle = GetCurrentThread();
+    Assert(SetThreadPriority(Handle, THREAD_PRIORITY_HIGHEST));
+
     os* OS = OS_Get();
     OS->AppResult = Application_Main();
-    SendNotifyMessageW(OS->BaseWindow, Win32_Message(QUIT), 0, 0);
+    SendNotifyMessageW(OS->BaseWindow, Win32_Message(QUIT), 0, 0); //This can be async
     return 0;
 }
 
@@ -143,11 +260,97 @@ internal HWND Win32_Create_Window(WNDCLASSEXW* WindowClass, DWORD Style, LONG XO
     return Result;
 }
 
+internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam) {
+    LRESULT Result = 0;
+
+    os* OS = OS_Get();
+    switch(Message) {
+        case Win32_Message(SET_TITLE): {
+            wstring* String = (wstring*)WParam;
+            SetWindowTextW(Window, String->Str);
+        } break;
+
+        case WM_CREATE: {
+            CREATESTRUCTW* CreateStruct = (CREATESTRUCTW*)LParam;
+            os_window* OSWindow = (os_window*)CreateStruct->lpCreateParams;
+            OSWindow->Handle = Window;
+            SetWindowLongPtrW(Window, GWLP_USERDATA, (LONG_PTR)OSWindow);
+        } break;
+
+        case WM_CLOSE: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+
+            os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_WINDOW_CLOSED);
+            Event->Window = OSWindow->ID;
+        } break;
+
+        default: {
+            Result = DefWindowProcW(Window, Message, WParam, LParam);
+        } break;
+    }
+
+    return Result;
+}
+
 internal LRESULT Win32_OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARAM WParam, LPARAM LParam) {
     LRESULT Result = 0;
+
+    os* OS = OS_Get();
     switch(Message) {
         case Win32_Message(QUIT): {
             PostQuitMessage(0);
+        } break;
+
+        case Win32_Message(OPEN_WINDOW): {
+            win32_open_window_request* OpenWindowRequest = (win32_open_window_request*)WParam;
+            os_window* Window = OpenWindowRequest->Window;
+            const os_open_window_info* OpenInfo = OpenWindowRequest->OpenInfo;
+
+            os_monitor* Monitor = &OS->Monitors[OS_Monitor_Index(OpenInfo->Monitor)];
+
+            point2i Origin;
+            dim2i Dim;
+            if(OpenInfo->Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
+                rect2i Rect = Monitor->MonitorInfo.Rect;
+                Origin = point2i(Rect.P1.x, Rect.P1.y);
+                Dim = Rect2i_Get_Dim(Rect);
+            } else {
+                Origin = OpenInfo->Pos;
+                Origin += Monitor->MonitorInfo.Rect.P1;
+                Dim = OpenInfo->Size;
+            }
+
+            s64 PackedPos = ((s64)Origin.x) | (((s64)Origin.y) << 32);
+            s64 PackedDim = ((s64)Dim.width) | (((s64)Dim.height) << 32);
+            AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)PackedPos);
+            AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)PackedDim);
+
+            DWORD ExStyle = 0;
+            DWORD Style = WS_OVERLAPPEDWINDOW;
+
+            Window->Handle = CreateWindowExW(ExStyle, WIN32_GLOBAL_WINDOW_CLASS, L"", Style, 
+                                             Origin.x, Origin.y, Dim.width, Dim.height, 
+                                             nullptr, nullptr, GetModuleHandleW(nullptr), Window);
+            if(!Window->Handle) {
+                OpenWindowRequest->Result = false;
+                return 0;
+            }
+
+            if(OpenInfo->Flags & OS_WINDOW_FLAG_MAXIMIZE_BIT) {
+                ShowWindow(Window->Handle, SW_MAXIMIZE);
+                UpdateWindow(Window->Handle);
+            } else {
+                ShowWindow(Window->Handle, SW_NORMAL);
+                UpdateWindow(Window->Handle);
+            }
+
+        } break;
+
+        case Win32_Message(CLOSE_WINDOW): {
+            win32_close_window_request* CloseWindowRequest = (win32_close_window_request*)WParam;
+            os_window* Window = CloseWindowRequest->Window;
+            DestroyWindow(Window->Handle);
         } break;
 
         default: {
@@ -194,6 +397,12 @@ int main() {
     OS.Arena = Arena_Create(Core_Get_Base_Allocator());
     OS_Set(&OS);
 
+    {
+        scratch Scratch = Scratch_Get();
+        string ExecutableFilePath = Win32_Get_Executable_Path(&Scratch);
+        OS.ExecutablePath = string(OS.Arena, String_Get_Path(ExecutableFilePath));
+    }
+
     WNDCLASSEXW BaseWindowClass = {
         .cbSize = sizeof(WNDCLASSEXW),
         .lpfnWndProc = Win32_OS_Base_Window_Proc,
@@ -201,7 +410,19 @@ int main() {
         .lpszClassName = L"AK_Engine Base Window Class"        
     };
 
+    WNDCLASSEXW MainWindowClass = {
+        .cbSize = sizeof(WNDCLASSEXW),
+        .lpfnWndProc = Win32_OS_Main_Window_Proc,
+        .hInstance = GetModuleHandleW(NULL),
+        .lpszClassName = WIN32_GLOBAL_WINDOW_CLASS
+    };
+
     if(!RegisterClassExW(&BaseWindowClass)) {
+        //todo: Logging
+        return 1;
+    }
+
+    if(!RegisterClassExW(&MainWindowClass)) {
         //todo: Logging
         return 1;
     }
@@ -241,6 +462,7 @@ int main() {
     OS_Event_Manager_Create(&OS.EventManager, 1);
 
     Async_Pool_Create(&OS.ProcessPool, OS.Arena, OS_MAX_PROCESS_COUNT);
+    Async_Pool_Create(&OS.WindowPool, OS.Arena, OS_MAX_WINDOW_COUNT);
 
     if(!Thread_Manager_Create_Thread(Win32_Application_Thread, nullptr)) {
         return 1;
@@ -277,14 +499,14 @@ int main() {
                         RAWMOUSE* Mouse = &RawInput->data.mouse;
                         if(Mouse->lLastX != 0 || Mouse->lLastY != 0) {
                             vec2i Delta = vec2i(Mouse->lLastX, -Mouse->lLastY);
-                            s64 PackedDelta = ((s64)Delta.x) | (((s64)Delta.y) << 32);
-                            AK_Atomic_Store_U64_Relaxed(&OS.MouseDeltaPacked, (u64)PackedDelta);
+                            os_mouse_delta_event* Event = (os_mouse_delta_event*)OS_Event_Stream_Allocate_Event(OS.EventStream, OS_EVENT_TYPE_MOUSE_DELTA);
+                            Event->Delta = Delta;
                         }
 
                         if(Mouse->usButtonFlags & RI_MOUSE_WHEEL) {
                             f32 Scroll = (f32)((SHORT)Mouse->usButtonData/WHEEL_DELTA);
-                            u32 ScrollU32 = F32_To_U32(Scroll);
-                            AK_Atomic_Store_U32_Relaxed(&OS.ScrollU32, ScrollU32);
+                            os_mouse_scroll_event* Event = (os_mouse_scroll_event*)OS_Event_Stream_Allocate_Event(OS.EventStream, OS_EVENT_TYPE_MOUSE_SCROLL);
+                            Event->Scroll = Scroll;
                         }
                     } break;
                 }

@@ -41,6 +41,16 @@ bool Application_Main() {
                 case OS_EVENT_TYPE_WINDOW_CLOSED: {
                     OS_Close_Window(Event->Window);
                 } break;
+
+                case OS_EVENT_TYPE_MOUSE_DELTA: {
+                    const os_mouse_delta_event* DeltaEvent = (const os_mouse_delta_event*)Event;
+                    printf("Mouse delta %d %d\n", DeltaEvent->Delta.x, DeltaEvent->Delta.y);
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_SCROLL: {
+                    const os_mouse_scroll_event* ScrollEvent = (const os_mouse_scroll_event*)Event;
+                    printf("Mouse scroll %f\n", ScrollEvent->Scroll);
+                } break;
             }
         }
 
@@ -65,21 +75,21 @@ bool Application_Main() {
             FrameCount++;
         }
 
-        // point2i MousePosition = OS_Mouse_Get_Position();
-        // if(MousePosition != LastMousePosition) {
-        //     printf("Mouse position: (%d, %d)\n", MousePosition.x, MousePosition.y);
-        //     LastMousePosition = MousePosition;
-        // }
+        point2i MousePosition = OS_Mouse_Get_Position();
+        if(MousePosition != LastMousePosition) {
+            printf("Mouse position: (%d, %d)\n", MousePosition.x, MousePosition.y);
+            LastMousePosition = MousePosition;
+        }
 
         // vec2i MouseDelta = OS_Mouse_Get_Delta();
         // if(MouseDelta != vec2i()) {
         //     printf("Mouse delta: (%d, %d)\n", MouseDelta.x, MouseDelta.y);
         // }
 
-        f32 MouseScroll = OS_Mouse_Get_Scroll();
-        if(MouseScroll != 0) {
-            printf("Mouse scroll: %f\n", MouseScroll);
-        }
+        // f32 MouseScroll = OS_Mouse_Get_Scroll();
+        // if(MouseScroll != 0) {
+        //     printf("Mouse scroll: %f\n", MouseScroll);
+        // }
 
         point2i WindowPos = OS_Window_Get_Pos(OS_Get_Main_Window());
         rect2i WindowRect = rect2i(WindowPos, WindowPos+OS_Window_Get_Size(OS_Get_Main_Window()));

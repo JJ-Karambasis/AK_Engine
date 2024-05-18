@@ -47,7 +47,7 @@ enum {
 };
 typedef u32 os_window_flags;
 
-struct os_create_window_info {
+struct os_open_window_info {
     os_window_flags Flags;
     string          Title;
     os_monitor_id   Monitor;
@@ -57,7 +57,7 @@ struct os_create_window_info {
 };
 
 typedef u64 os_window_id;
-os_window_id OS_Open_Window(const os_create_window_info& CreateInfo);
+os_window_id OS_Open_Window(const os_open_window_info& OpenInfo);
 void         OS_Close_Window(os_window_id WindowID);
 bool         OS_Window_Is_Open(os_window_id WindowID);
 void         OS_Set_Main_Window(os_window_id WindowID);
@@ -74,6 +74,8 @@ typedef u32 os_mouse_key;
 enum os_event_type {
     OS_EVENT_TYPE_NONE,
     OS_EVENT_TYPE_WINDOW_CLOSED,
+    OS_EVENT_TYPE_MOUSE_SCROLL,
+    OS_EVENT_TYPE_MOUSE_DELTA,
     OS_EVENT_TYPE_COUNT
 };
 
@@ -82,12 +84,18 @@ struct os_event {
     os_window_id  Window;
 };
 
+struct os_mouse_delta_event : os_event {
+    vec2i Delta;
+};
+
+struct os_mouse_scroll_event : os_event {
+    f32 Scroll;
+};
+
 const os_event* OS_Next_Event();
 bool            OS_Keyboard_Get_Key_State(os_keyboard_key Key);
 bool            OS_Mouse_Get_Key_State(os_mouse_key Key);
 point2i         OS_Mouse_Get_Position();
-vec2i           OS_Mouse_Get_Delta();
-f32             OS_Mouse_Get_Scroll();
 
 //Input keys
 enum {
