@@ -70,7 +70,7 @@ internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const
         .flags = VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT,
         .imageType = VK_IMAGE_TYPE_2D,
         .format = VK_Get_Format(CreateInfo.Format),
-        .extent = {CreateInfo.Width, CreateInfo.Height, 1},
+        .extent = {(u32)CreateInfo.Size.width, (u32)CreateInfo.Size.height, 1},
         .mipLevels = 1,
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -99,8 +99,7 @@ internal bool VK_Create_Texture(gdi_context* Context, vk_texture* Texture, const
         return false;
     }
 
-    Texture->Width = CreateInfo.Width;
-    Texture->Height = CreateInfo.Height;
+    Texture->Size = CreateInfo.Size;
     Texture->Format = CreateInfo.Format;
     Texture->IsSwapchain = false;
     Texture->JustAllocated = true;

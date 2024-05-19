@@ -44,6 +44,14 @@ dim2i::dim2i(const vec2i& Extent) : width(Extent.x), height(Extent.y) { }
 
 dim2i::dim2i(s32_2x _Data) : Data(_Data) { }
 
+bool dim2i::operator!=(const dim2i& A, const dim2i& B) {
+    return A.Data != B.Data;
+}
+
+bool dim2i::operator==(const dim2i& A, const dim2i& B) {
+    return A.Data == B.Data;
+}
+
 rect2i::rect2i(const point2i& _Min, const point2i& _Max) : P1(_Min), P2(_Max) { }
 
 s32 Rect2i_Get_Height(const rect2i& Rect) {

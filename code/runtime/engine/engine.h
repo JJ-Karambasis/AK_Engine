@@ -2,6 +2,7 @@
 #define ENGINE_H
 
 #include <core/core.h>
+#include <math/math.h>
 #include <gdi/gdi.h>
 #include <input/input.h>
 #include <text/text.h>

@@ -46,6 +46,11 @@ u32 Safe_U32(u64 x) {
     return (u32)x;
 }
 
+s32 Safe_S32(u32 X) {
+    Assert(X <= INT32_MAX);
+    return (s32)X;
+}
+
 f32 Safe_Ratio(u32 w, u32 h) {
     Assert(h != 0);
     return (f32)w/(f32)h;

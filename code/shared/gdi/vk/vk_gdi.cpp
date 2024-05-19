@@ -1066,12 +1066,12 @@ void GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebu
     }
 }
 
-uvec2 GDI_Context_Get_Framebuffer_Resolution(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle) {
+dim2i GDI_Context_Get_Framebuffer_Size(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle) {
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     vk_handle<vk_framebuffer> FramebufferHandle(Handle.ID);
     vk_framebuffer* Framebuffer = VK_Resource_Get(ResourceContext->Framebuffers, FramebufferHandle);
     if(!Framebuffer) return {};
-    return uvec2(Framebuffer->Width, Framebuffer->Height);
+    return Framebuffer->Size;
 }
 
 fixed_array<gdi_handle<gdi_texture_view>> GDI_Context_Get_Framebuffer_Attachments(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle, allocator* Allocator) {
@@ -1223,10 +1223,9 @@ gdi_handle<gdi_texture> GDI_Context_Create_Texture(gdi_context* Context, const g
         Memory_Copy(Ptr, CreateInfo.InitialData.Ptr, CreateInfo.InitialData.Size);
 
         VK_Copy_Context_Add_Upload_To_Texture_Copy(&ThreadContext->CopyContext, TextureHandle, Upload, {
-            .Width = CreateInfo.Width,
-            .Height = CreateInfo.Height
+            .Size = CreateInfo.Size
         });
-    }
+    }  
 
     return gdi_handle<gdi_texture>(TextureHandle.ID);
 }
@@ -1273,10 +1272,8 @@ void GDI_Context_Upload_Texture(gdi_context* Context, gdi_handle<gdi_texture> Ha
             Ptr += SrcUploads[i].Texels.Size;
 
             Regions[i] = {
-                .XOffset = SrcUploads[i].XOffset,
-                .YOffset = SrcUploads[i].YOffset,
-                .Width   = SrcUploads[i].Width,
-                .Height  = SrcUploads[i].Height
+                .Offset = SrcUploads[i].Offset,
+                .Size = SrcUploads[i].Size
             };
         }
 
@@ -1531,10 +1528,10 @@ gdi_cmd_list* GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type
     vkBeginCommandBuffer(CmdList->CmdBuffer, &BeginInfo);
 
     if(!IsPrimary) {
-        VkRect2D Scissor = {{}, {Framebuffer->Width, Framebuffer->Height}};
+        VkRect2D Scissor = {{}, {(u32)Framebuffer->Size.width, (u32)Framebuffer->Size.height}};
         VkViewport Viewport = {
-            .width = (f32)Framebuffer->Width,
-            .height = (f32)Framebuffer->Height,
+            .width = (f32)Framebuffer->Size.width,
+            .height = (f32)Framebuffer->Size.height,
             .maxDepth = 1.0f
         };
         vkCmdSetScissor(CmdList->CmdBuffer, 0, 1, &Scissor);
@@ -1784,7 +1781,7 @@ void GDI_Cmd_List_Begin_Render_Pass(gdi_cmd_list* _CmdList, const gdi_render_pas
         .sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass  = RenderPass->Handle,
         .framebuffer = Framebuffer->Handle,
-        .renderArea  = {{}, {Framebuffer->Width, Framebuffer->Height}},
+        .renderArea  = {{}, {(u32)Framebuffer->Size.width, (u32)Framebuffer->Size.height}},
         .clearValueCount = Safe_U32(ClearValues.Count),
         .pClearValues = ClearValues.Ptr
     };

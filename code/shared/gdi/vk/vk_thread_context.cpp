@@ -449,8 +449,8 @@ void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager) {
                     Regions[i] = {
                         .bufferOffset = CopyUploadsToTexture.Upload.Offset + CopyUploadsToTexture.Offsets[i],
                         .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                        .imageOffset = {(s32)CopyUploadsToTexture.Regions[i].XOffset, (s32)CopyUploadsToTexture.Regions[i].YOffset, 0},
-                        .imageExtent = {CopyUploadsToTexture.Regions[i].Width, CopyUploadsToTexture.Regions[i].Height, 1}
+                        .imageOffset = {CopyUploadsToTexture.Regions[i].Offset.x, CopyUploadsToTexture.Regions[i].Offset.y, 0},
+                        .imageExtent = {(u32)CopyUploadsToTexture.Regions[i].Size.width, (u32)CopyUploadsToTexture.Regions[i].Size.height, 1}
                     };
                 }
 

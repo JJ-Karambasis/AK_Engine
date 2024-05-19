@@ -28,6 +28,6 @@ const_buffer              Font_Get_Buffer(font_id Font);
 glyph_metrics             Font_Get_Glyph_Metrics(font_id Font, u32 GlyphIndex);
 glyph_bitmap              Font_Rasterize_Glyph(font_id Font, allocator* Allocator, u32 GlyphIndex);  
 text_shape_result         Font_Shape(font_id Font, const text_shaper_shape_info& ShapeInfo);
-svec2                     Font_Get_Kerning(font_id Font, u32 GlyphA, u32 GlyphB);
+vec2i                     Font_Get_Kerning(font_id Font, u32 GlyphA, u32 GlyphB);
 
 #endif

@@ -11,8 +11,7 @@ internal void VK_Render_Pass_Record_Frame(gdi_context* Context, async_handle<vk_
 
 struct vk_framebuffer : vk_resource_base {
     VkFramebuffer Handle;
-    u32           Width;
-    u32           Height;
+    dim2i         Size;
 };
 
 bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, const gdi_framebuffer_create_info& CreateInfo);

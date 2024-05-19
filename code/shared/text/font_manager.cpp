@@ -97,7 +97,7 @@ text_shape_result Font_Shape(font_id FontID, const text_shaper_shape_info& Shape
     return Text_Shaper_Face_Shape(Font->ShaperFace, ShapeInfo);
 }
 
-svec2 Font_Get_Kerning(font_id FontID, u32 GlyphA, u32 GlyphB) {
+vec2i Font_Get_Kerning(font_id FontID, u32 GlyphA, u32 GlyphB) {
     font* Font = Font_Get(FontID);
     if(!Font) return {};
     return Glyph_Face_Get_Kerning(Font->Face, GlyphA, GlyphB);

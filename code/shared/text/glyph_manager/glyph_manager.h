@@ -10,7 +10,7 @@ enum glyph_bitmap_format {
 
 struct glyph_bitmap {
     glyph_bitmap_format Format;
-    uvec2               Dim;
+    dim2i               Dim;
     const_buffer        Texels;
 };
 
@@ -26,9 +26,9 @@ struct glyph_face_metrics {
 };
 
 struct glyph_metrics {
-    uvec2 Advance;
-    svec2 Offset;
-    uvec2 Dim;
+    vec2i Advance;
+    vec2i Offset;
+    dim2i Dim;
 };
 
 struct glyph_manager_create_info {
@@ -40,7 +40,7 @@ glyph_face_id      Glyph_Manager_Create_Face(glyph_manager* Manager, const_buffe
 const_buffer       Glyph_Face_Get_Font_Buffer(glyph_face_id FaceID);
 glyph_face_metrics Glyph_Face_Get_Metrics(glyph_face_id FaceID);
 glyph_metrics      Glyph_Face_Get_Glyph_Metrics(glyph_face_id FaceID, u32 GlyphIndex);
-svec2              Glyph_Face_Get_Kerning(glyph_face_id FaceID, u32 GlyphA, u32 GlyphB);
+vec2i              Glyph_Face_Get_Kerning(glyph_face_id FaceID, u32 GlyphA, u32 GlyphB);
 glyph_bitmap       Glyph_Face_Create_Bitmap(glyph_face_id FaceID, allocator* Allocator, u32 GlyphIndex);
 
 #endif

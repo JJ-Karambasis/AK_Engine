@@ -2,6 +2,7 @@
 #define VK_GDI_H
 
 #include <core/core.h>
+#include <math/math.h>
 #include <gdi/gdi.h>
 
 namespace modules {

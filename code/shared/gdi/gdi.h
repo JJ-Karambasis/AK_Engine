@@ -275,18 +275,15 @@ typedef u32 gdi_texture_usage_flags;
 
 struct gdi_texture_create_info {
     gdi_format              Format;
-    u32                     Width;
-    u32                     Height;
+    dim2i                   Size;
     gdi_texture_usage_flags UsageFlags;
     const_buffer            InitialData;
 };
 
 struct gdi_texture_upload {
     const_buffer Texels;
-    u32          XOffset;
-    u32          YOffset;
-    u32          Width;
-    u32          Height;          
+    point2i      Offset;
+    dim2i        Size;         
 };
 
 enum {
@@ -425,7 +422,7 @@ void                              GDI_Context_Delete_Bind_Group_Layout(gdi_conte
 
 gdi_handle<gdi_framebuffer>               GDI_Context_Create_Framebuffer(gdi_context* Context, const gdi_framebuffer_create_info& CreateInfo);
 void                                      GDI_Context_Delete_Framebuffer(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
-uvec2                                     GDI_Context_Get_Framebuffer_Resolution(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
+dim2i                                     GDI_Context_Get_Framebuffer_Size(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle);
 fixed_array<gdi_handle<gdi_texture_view>> GDI_Context_Get_Framebuffer_Attachments(gdi_context* Context, gdi_handle<gdi_framebuffer> Handle, allocator* Allocator);
 gdi_handle<gdi_render_pass>               GDI_Context_Create_Render_Pass(gdi_context* Context, const gdi_render_pass_create_info& CreateInfo);
 void                                      GDI_Context_Delete_Render_Pass(gdi_context* Context, gdi_handle<gdi_render_pass> Handle);

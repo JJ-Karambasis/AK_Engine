@@ -149,12 +149,11 @@ if not exist %base_path%\bin\ftsystem.lib (
 
 set gdi_objs=vk_loader.obj gdi.obj
 pushd %base_path%\bin    
-    @REM start "" 9>"%lock%1" /b /low cmd /c %compile% %def%TEXT_FREETYPE_FONT_MANAGER %def%TEXT_UBA_SHEENBIDI %def%TEXT_SHAPER_HARFBUZZ %only_compile% %cpp% %shared_path%\text\text.cpp %obj%text.obj %compile_link%
-    @REM start "" 9>"%lock%2" /b /low cmd /c %compile% %only_compile% %cpp% %shared_path%\profiler\win32\win32_profiler.cpp %obj%profiler.obj %compile_link%
-    @REM start "" 9>"%lock%3" /b /low cmd /c %compile% %only_compile% %cpp% %shared_path%\packages\win32\win32_packages.cpp %obj%packages.obj %compile_link%
-    @REM start "" 9>"%lock%4" /b /low cmd /c %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link%
-    @REM start "" 9>"%lock%5" /b /low cmd /c %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link%
-    @REM start "" 9>"%lock%6" /b /low cmd /c %compile% %only_compile% %cpp% %inc%%editor_os_path% %editor_os_path%\win32\win32_os.cpp %compile_link% %obj%win32_os.obj
+    start "" 9>"%lock%1" /b /low cmd /c %compile% %def%TEXT_FREETYPE_FONT_MANAGER %def%TEXT_UBA_SHEENBIDI %def%TEXT_SHAPER_HARFBUZZ %only_compile% %cpp% %shared_path%\text\text.cpp %obj%text.obj %compile_link%
+    start "" 9>"%lock%2" /b /low cmd /c %compile% %only_compile% %cpp% %shared_path%\profiler\win32\win32_profiler.cpp %obj%profiler.obj %compile_link%
+    start "" 9>"%lock%3" /b /low cmd /c %compile% %only_compile% %cpp% %shared_path%\packages\win32\win32_packages.cpp %obj%packages.obj %compile_link%
+    start "" 9>"%lock%4" /b /low cmd /c %compile% %inc%%vk_include% %only_compile% %c% %shared_path%\gdi\vk\loader\vk_win32_loader.c %obj%vk_loader.obj %compile_link%
+    start "" 9>"%lock%5" /b /low cmd /c %compile% %inc%%vk_include% %only_compile% %cpp% %shared_path%\gdi\vk\vk_gdi.cpp %obj%gdi.obj %compile_link%
     
     :Wait for all processes to finish (wait until lock files are no longer locked)
     1>nul 2>nul ping /n 2 ::1
@@ -165,9 +164,8 @@ pushd %base_path%\bin
     ::delete the lock files
     del "%lock%*"
 
-    @REM %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %cpp% ..\code\editor\editor.cpp %compile_link% win32_os.obj packages.obj text.obj profiler.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
+    %compile% %def%EDITOR_PACKAGE_FILE_SYSTEM %inc%%code_path%\editor\os %cpp% %code_path%\editor\editor.cpp %code_path%\editor\os\win32\win32.cpp %compile_link% packages.obj text.obj profiler.obj %gdi_objs% %out%AK_Engine.exe || exit /b 1
     @REM %compile% %def%TEST_BUILD %inc%%code_path%\editor %cpp% ..\code\tests\unit\unit_test.cpp %compile_link% %out%Unit_Test.exe || exit /b 1
-    %compile% %cpp% %inc%%editor_os_path% %code_path%\os_test.cpp %editor_os_path%\win32\win32.cpp %compile_link% %out%os_test.exe
     
     del /s *.ilk >nul 2>&1
     del /s *.obj >nul 2>&1

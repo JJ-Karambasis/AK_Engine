@@ -87,6 +87,9 @@ struct dim2i {
     dim2i(s32_2x Data);
 };
 
+bool operator!=(const dim2i& A, const dim2i& B);
+bool operator==(const dim2i& A, const dim2i& B);
+
 struct rect2 {
     point2 P1;
     point2 P2;
@@ -102,5 +105,32 @@ struct rect2i {
 
 s32   Rect2i_Get_Height(const rect2i& Rect);
 dim2i Rect2i_Get_Dim(const rect2i& Rect);
+
+struct vec4 {
+    union {
+        f32_4x Data;
+        struct {
+            f32 x, y, z, w;
+        };
+    };
+};
+
+struct point4 {
+    union {
+        f32_4x Data;
+        struct {
+            f32 x, y, z, w;
+        };
+    };
+};
+
+struct color4 {
+    union {
+        f32_4x Data;
+        struct {
+            f32 r, g, b, a;
+        };
+    };
+};
 
 #endif

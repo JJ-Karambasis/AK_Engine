@@ -11,6 +11,7 @@
 #include <freetype/ftadvanc.h>
 
 #include <core/core.h>
+#include <math/math.h>
 #include <text/text.h>
 
 struct glyph_face {

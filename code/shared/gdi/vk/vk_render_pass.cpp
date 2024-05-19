@@ -76,8 +76,8 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
     scratch Scratch = Scratch_Get();
     array<VkImageView> Attachments(&Scratch, CreateInfo.Attachments.Count);
 
-    u32 Width  = (u32)-1;
-    u32 Height = (u32)-1;
+    s32 Width  = -1;
+    s32 Height = -1;
 
     //Make sure all attachments are loaded already
     for(uptr i = 0; i < CreateInfo.Attachments.Count; i++) {
@@ -94,19 +94,19 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
             return false;
         } 
 
-        if(Width == (u32)-1) {
-            Width = Texture->Width;
+        if(Width == -1) {
+            Width = Texture->Size.width;
         } else {
-            if(Width != Texture->Width) {
+            if(Width != Texture->Size.width) {
                 //todo: diagnostic
                 return false;
             }
         }
 
-        if(Height == (u32)-1) {
-            Height = Texture->Height;
+        if(Height == -1) {
+            Height = Texture->Size.height;
         } else {
-            if(Height != Texture->Height) {
+            if(Height != Texture->Size.height) {
                 //todo: diagnostic
                 return false;
             }
@@ -128,8 +128,8 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
         .renderPass = RenderPass->Handle,
         .attachmentCount = Safe_U32(Attachments.Count),
         .pAttachments = Attachments.Ptr,
-        .width = Width,
-        .height = Height,
+        .width = (u32)Width,
+        .height = (u32)Height,
         .layers = 1
     };
 
@@ -138,8 +138,8 @@ bool VK_Create_Framebuffer(gdi_context* Context, vk_framebuffer* Framebuffer, co
         return false;
     }
 
-    Framebuffer->Width  = Width;
-    Framebuffer->Height = Height;
+    Framebuffer->Size.width  = Width;
+    Framebuffer->Size.height = Height;
 
     return true;
 }

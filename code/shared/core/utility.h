@@ -19,6 +19,7 @@ wchar_t To_Lower(wchar_t C);
 wchar_t To_Upper(wchar_t C);
 bool Is_Whitespace(char C);
 u32 Safe_U32(u64 x);
+s32 Safe_S32(u32 X);
 f32 Safe_Ratio(u32 w, u32 h);
 f32 SNorm(s16 Value);
 s16 SNorm_S16(f32 Value);

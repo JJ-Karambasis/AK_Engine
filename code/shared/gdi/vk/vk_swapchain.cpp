@@ -145,8 +145,7 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
         return false;
     }
 
-    Swapchain->Width = SurfaceCaps.currentExtent.width;
-    Swapchain->Height = SurfaceCaps.currentExtent.height;
+    Swapchain->Size = dim2i((s32)SurfaceCaps.currentExtent.width, (s32)SurfaceCaps.currentExtent.height);
     Swapchain->Handle = SwapchainHandle;
     
     u32 ImageCount;
@@ -198,8 +197,7 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
 
         vk_texture* Texture = VK_Resource_Get(ResourceContext->Textures, TextureHandle);
         Texture->Handle = Images[i];
-        Texture->Width  = Swapchain->Width;
-        Texture->Height = Swapchain->Height;
+        Texture->Size   = Swapchain->Size;
         Texture->Format = Swapchain->Format;
         Texture->IsSwapchain = true;
         Texture->JustAllocated = true;

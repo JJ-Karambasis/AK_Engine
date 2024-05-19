@@ -4,8 +4,7 @@
 struct vk_texture : vk_resource_base {
     VkImage       Handle;
     vk_allocation Allocation;
-    u32           Width;
-    u32           Height;
+    dim2i         Size;
     gdi_format    Format;
     b16           JustAllocated;
     b16           IsSwapchain;

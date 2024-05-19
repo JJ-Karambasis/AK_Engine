@@ -7,8 +7,7 @@ struct vk_swapchain : vk_resource_base {
     VkSurfaceKHR                   Surface;
     VkSwapchainKHR                 Handle;
     array<gdi_handle<gdi_texture>> Textures;
-    u32                            Width;
-    u32                            Height;
+    dim2i                          Size;
     s32                            TextureIndex;
     fixed_array<VkSemaphore>       AcquireLocks;
     fixed_array<VkSemaphore>       ExecuteLocks;

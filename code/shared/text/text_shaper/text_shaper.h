@@ -9,8 +9,8 @@ struct text_shaper_face_id {
 };
 
 struct text_shape_pos {
-    svec2 Offset;
-    svec2 Advance;
+    vec2i Offset;
+    vec2i Advance;
 };
 
 struct text_glyph_info {

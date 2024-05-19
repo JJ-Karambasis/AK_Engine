@@ -18,7 +18,7 @@ enum {
 struct ui_render_box {
     rect2                      ScreenRect;
     rect2                      UVRect;
-    vec4                       Color;
+    color4                     Color;
     vec2                       TextureDim;
     gdi_handle<gdi_bind_group> Texture;
 };

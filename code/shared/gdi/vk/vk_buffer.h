@@ -8,10 +8,8 @@ struct vk_upload {
 };
 
 struct vk_region {
-    u32 XOffset;
-    u32 YOffset;
-    u32 Width;
-    u32 Height;
+    point2i Offset;
+    dim2i   Size;
 };
 
 struct vk_buffer : vk_resource_base {

@@ -144,8 +144,8 @@ text_shape_result Text_Shaper_Face_Shape(text_shaper_face_id FaceID, const text_
             };
 
             DstPos[i] = {
-                .Offset = svec2(GlyphPos[i].x_offset >> 6, GlyphPos[i].y_offset >> 6),
-                .Advance = svec2(GlyphPos[i].x_advance >> 6, GlyphPos[i].y_advance >> 6)
+                .Offset = vec2i(GlyphPos[i].x_offset >> 6, GlyphPos[i].y_offset >> 6),
+                .Advance = vec2i(GlyphPos[i].x_advance >> 6, GlyphPos[i].y_advance >> 6)
             };
         }
 

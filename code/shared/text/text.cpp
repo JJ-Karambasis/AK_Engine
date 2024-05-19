@@ -7,6 +7,7 @@
 //Freetype has conflicts with our core library so we need to include core
 //after freetype
 #include <core/core.h>
+#include <math/math.h>
 #include <text/text.h>
 
 #ifdef TEXT_UBA_SHEENBIDI

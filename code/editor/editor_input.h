@@ -8,13 +8,13 @@ struct editor_input_manager {
     f32   MouseScroll;
     f64   dt;
 
-    bool Is_Down(os_keyboard_key Key);
-    bool Is_Pressed(os_keyboard_key Key);
-    bool Is_Released(os_keyboard_key Key);
+    bool Is_Key_Down(os_keyboard_key Key);
+    bool Is_Key_Pressed(os_keyboard_key Key);
+    bool Is_Key_Released(os_keyboard_key Key);
 
-    bool Is_Down(os_mouse_key Key);
-    bool Is_Pressed(os_mouse_key Key);
-    bool Is_Released(os_mouse_key Key);
+    bool Is_Mouse_Down(os_mouse_key Key);
+    bool Is_Mouse_Pressed(os_mouse_key Key);
+    bool Is_Mouse_Released(os_mouse_key Key);
 
     f32 Get_DeltaX();
     f32 Get_DeltaY();

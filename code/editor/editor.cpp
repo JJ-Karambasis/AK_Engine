@@ -51,9 +51,8 @@ window_handle::window_handle(window* _Window) {
 }
 
 internal void Window_Handle_Resize(editor* Editor, window* Window) {
-    uvec2 CurrentWindowSize;
-    OS_Window_Get_Resolution(Window->WindowID, &CurrentWindowSize.w, &CurrentWindowSize.h);
-    if(CurrentWindowSize.x != 0 && CurrentWindowSize.y != 0) {
+    dim2i CurrentWindowSize = OS_Window_Get_Size(Window->WindowID);
+    if(CurrentWindowSize.width != 0 && CurrentWindowSize.height != 0) {
         if(CurrentWindowSize != Window->Size) {
             gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
 
@@ -96,7 +95,7 @@ inline bool Window_Is_Open(window_handle Handle) {
     return Handle.Window && Handle.Generation && (Handle.Window->Generation == Handle.Generation);
 }
 
-window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset, uvec2 Size, u32 Border, string Name) {
+window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, point2i Offset, vec2i Size, u32 Border, string Name) {
     window* Window = Editor->FreeWindows;
     if(Editor->FreeWindows) SLL_Pop_Front(Editor->FreeWindows);
     else {
@@ -110,8 +109,10 @@ window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, svec2 Offset,
     Array_Init(&Window->SwapchainViews, Window->Arena);
     Array_Init(&Window->Framebuffers, Window->Arena);
 
-    Window->WindowID = OS_Create_Window({
+    Window->WindowID = OS_Open_Window({
+        .Flags = OS_WINDOW_FLAG_NONE,
         .MonitorID = MonitorID,
+        .
         .XOffset = Offset.x,
         .YOffset = Offset.y,
         .Width = Size.x,
@@ -172,8 +173,9 @@ void Window_Close(editor* Editor, window_handle Handle) {
                 GDI_Context_Delete_Texture_View(Context, SwapchainView);
             }
         }
-        
-        OS_Delete_Window(Window->WindowID);
+
+        GDI_Context_Delete_Swapchain(Context, Window->Swapchain);
+        OS_Close_Window(Window->OSHandle);        
         Arena_Delete(Window->Arena);
 
         Window->Arena = nullptr;
@@ -460,7 +462,7 @@ void Window_Update(editor* Editor, window* Window) {
 #endif
 }
 
-bool Editor_Main() {
+bool Application_Main() {
     gdi* GDI = GDI_Create({
         .LoggingCallbacks = {
             .LogDebug   = GDI_Log_Debug,
@@ -497,7 +499,7 @@ bool Editor_Main() {
 
     editor Editor = {};
     Editor.Arena = Arena_Create(Core_Get_Base_Allocator());
-    string ExecutablePath = OS_Get_Executable_Path(Editor.Arena);
+    string ExecutablePath = OS_Get_Executable_Path();
 
     {
         scratch Scratch = Scratch_Get();
@@ -547,25 +549,63 @@ bool Editor_Main() {
     Editor.MainFontBuffer = Packages_Load_Entire_Resource(Editor.Packages, FontResource, Editor.Arena);
     Editor.MainFont = Font_Manager_Create_Font(Editor.FontManager, Editor.MainFontBuffer, 40);
 
-    if(!OS_Create(Context)) {
-        Fatal_Error_Message();
-        return false;
-    }
+    {
+        os_monitor_id MonitorID = OS_Get_Primary_Monitor();
+        os_window_id  MainWindowID = OS_Open_Window({
+            .Flags = OS_WINDOW_FLAG_MAIN_BIT|OS_WINDOW_FLAG_MAXIMIZE_BIT
+        });
+        if(!MainWindowID) {
+            Fatal_Error_Message();
+            return false;
+        }
 
-    Log_Info(modules::Editor, "Finished creating GPU context for %.*s", Device.Name.Size, Device.Name.Str);
+        gdi_format TargetFormat = GDI_FORMAT_R8G8B8A8_SRGB;
+
+        scratch Scratch = Scratch_Get();
+        array<gdi_format> WindowFormats = GDI_Context_Supported_Window_Formats(OS->GDIContext, OS_Window_Get_GDI_Data(MainWindowID), Scratch.Arena);
+        gdi_format WindowFormat = GDI_FORMAT_NONE;
+        
+        for(gdi_format Format : WindowFormats) {
+            if(Format == TargetFormat) {
+                WindowFormat = Format;
+                break;
+            }
+        }
+
+        if(WindowFormat == GDI_FORMAT_NONE) {
+            WindowFormat = WindowFormats[0];
+        }
+
+        gdi_texture_usage_flags UsageFlags = GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT; 
+        gdi_handle<gdi_swapchian> Swapchain = GDI_Context_Create_Swapchain(GDIContext, {
+            .WindowData   = OS_Window_Get_GDI_Data(MainWindowID)
+            .TargetFormat = WindowFormat,
+            .UsageFlags   = UsageFlags
+        });
+
+        if(Swapchain.Is_Null()) {
+            Fatal_Error_Message();
+            return false;
+        }
+
+        Editor->UIRenderPass = UI_Render_Pass_Create(Editor->Renderer, WindowFormat);
+        Editor->UIPipeline = UI_Pipeline_Create(Editor->Renderer, Editor->Packages, &Editor->UIRenderPass);
+        Window_Manager_Create(&Editor->WindowManager, {
+            .Allocator = Core_Get_Base_Allocator(),
+            .Context = GDIContext,
+            .Pipeline = Editor->UIPipeline,
+            .Format = WindowFormat,
+            .UsageFlags = UsageFlags
+        });
+
+        Window_Open_With_Handle(&Editor->WindowManager, MainWindowID, Swapchain);
+    }
     
     editor_input_manager* InputManager = &Editor.InputManager;
-
-    os_monitor_id MonitorID = OS_Get_Primary_Monitor();
     
     Editor.GlyphCache = Glyph_Cache_Create({
         .Renderer = Editor.Renderer
     });
-
-    AK_Mutex_Create(&Editor.WindowLock);
-    uvec2 MonitorResolution = OS_Get_Monitor_Resolution(MonitorID);
-    window_handle MainWindowID = Window_Open(&Editor, MonitorID, {}, MonitorResolution, 5, String_Lit("AK_Engine"));
-    window* MainWindow = Window_Get(MainWindowID);
     
     if(!Editor.GlyphCache) {
         Fatal_Error_Message();
@@ -589,7 +629,7 @@ bool Editor_Main() {
     u64 Frequency = AK_Query_Performance_Frequency();
     u64 LastCounter = AK_Query_Performance_Counter();
 
-    while(Window_Is_Open(MainWindowID)) {
+    while(OS_Window_Is_Open(OS_Get_Main_Window())) {
         u64 StartCounter = AK_Query_Performance_Counter();
         f64 dt = (double)(StartCounter-LastCounter)/(double)Frequency;
         LastCounter = StartCounter;
@@ -607,11 +647,23 @@ bool Editor_Main() {
             }
         }
 
-        InputManager->MouseDelta = OS_Mouse_Get_Delta();
-        InputManager->MouseScroll = OS_Mouse_Get_Scroll();
+        while(const os_event* Event = OS_Next_Event()) {
+            switch(Event->Type) {
+                case OS_EVENT_TYPE_WINDOW_CLOSED: {
+                    window* Window = OS_Window_Get_Data(Event->Window);
+                    Window_Close(&Editor.WindowManager, window_handle(Window));
+                } break;
 
-        if(InputManager->Is_Down(OS_KEYBOARD_KEY_ALT) && InputManager->Is_Pressed(OS_KEYBOARD_KEY_F4)) {
-            Window_Close(&Editor, MainWindowID);
+                case OS_EVENT_TYPE_MOUSE_DELTA: {
+                    const os_mouse_delta_event* DeltaEvent = (const os_mouse_delta_event*)Event;
+                    InputManager->MouseDelta = DeltaEvent->Delta;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_SCROLL: {
+                    const os_mouse_scroll_event* ScrollEvent = (const os_mouse_scroll_event*)Event;
+                    InputManager->Scroll = ScrollEvent->Scroll;
+                } break;
+            }
         }
 
         for(window* Window = Editor.FirstWindow; Window; Window = Window->Next) {
@@ -724,19 +776,8 @@ bool Editor_Main() {
 //     });
 // }
 
-int main() {
-    if(!Core_Create()) {
-        OS_Message_Box("A fatal error occurred during initialization!", "Error");
-        return 1;
-    }
-
-    bool Result = Editor_Main();
-
-    Core_Delete();
-    return Result ? 0 : 1;
-}
-
 //#include "level_editor/level_editor.cpp"
+#include "windows.cpp"
 #include "ui/ui.cpp"
 #include "editor_input.cpp"
 #include <engine_source.cpp>

@@ -111,19 +111,19 @@ glyph_metrics Glyph_Face_Get_Glyph_Metrics(glyph_face_id FaceID, u32 GlyphIndex)
     FT_Glyph_Metrics* GlyphMetric = &Face->Face->glyph->metrics;
 
     return {
-        .Advance = uvec2((u32)(GlyphMetric->horiAdvance >> 6), (u32)(GlyphMetric->vertAdvance >> 6)),
-        .Offset = svec2(GlyphMetric->horiBearingX >> 6, GlyphMetric->horiBearingY >> 6),
-        .Dim = uvec2((u32)(GlyphMetric->width >> 6), (u32)(GlyphMetric->height >> 6)) 
+        .Advance = vec2i(GlyphMetric->horiAdvance >> 6, GlyphMetric->vertAdvance >> 6),
+        .Offset = vec2i(GlyphMetric->horiBearingX >> 6, GlyphMetric->horiBearingY >> 6),
+        .Dim = dim2i(GlyphMetric->width >> 6, GlyphMetric->height >> 6) 
     };
 }
 
-svec2 Glyph_Face_Get_Kerning(glyph_face_id FaceID, u32 GlyphA, u32 GlyphB) {
+vec2i Glyph_Face_Get_Kerning(glyph_face_id FaceID, u32 GlyphA, u32 GlyphB) {
     glyph_face* Face = Glyph_Face_Get(FaceID);
     if(!Face) return {};
 
     FT_Vector Delta;
     FT_Get_Kerning(Face->Face, GlyphA, GlyphB, FT_KERNING_DEFAULT, &Delta);
-    return svec2(Delta.x >> 6, Delta.y >> 6);
+    return vec2i(Delta.x >> 6, Delta.y >> 6);
 }
 
 glyph_bitmap Glyph_Face_Create_Bitmap(glyph_face_id FaceID, allocator* Allocator, u32 GlyphIndex) {
@@ -137,20 +137,20 @@ glyph_bitmap Glyph_Face_Create_Bitmap(glyph_face_id FaceID, allocator* Allocator
     FT_GlyphSlot GlyphSlot = Face->Face->glyph;
 
     glyph_bitmap Result = {
-        .Dim = uvec2(GlyphSlot->bitmap.width, GlyphSlot->bitmap.rows)
+        .Dim = dim2i(Safe_S32(GlyphSlot->bitmap.width), Safe_S32(GlyphSlot->bitmap.rows))
     };
 
     switch(GlyphSlot->bitmap.pixel_mode) {
         case FT_PIXEL_MODE_GRAY: {
             Result.Format = GLYPH_BITMAP_FORMAT_GREYSCALE;
             
-            uptr DataSize = Result.Dim.w*Result.Dim.y;
+            uptr DataSize = (uptr)(Result.Dim.width*Result.Dim.height);
             u8* Texels = (u8*)Allocator_Allocate_Memory(Allocator, DataSize);
 
             u8* DstTexels = Texels;
             const u8* SrcTexels = GlyphSlot->bitmap.buffer;
-            for(u32 YIndex = 0; YIndex < Result.Dim.w; YIndex++) {
-                for(u32 XIndex = 0; XIndex < Result.Dim.h; XIndex++) {
+            for(s32 YIndex = 0; YIndex < Result.Dim.width; YIndex++) {
+                for(s32 XIndex = 0; XIndex < Result.Dim.height; XIndex++) {
                     //Premultiplied alpha, assign each pixel the alpha channel
                     *DstTexels++ = *SrcTexels++;
                 }
