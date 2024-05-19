@@ -33,14 +33,14 @@ glyph_cache* Glyph_Cache_Create(const glyph_cache_create_info& CreateInfo) {
         .Allocator = Result->Arena, 
         .Dim = CreateInfo.AtlasDim
     });
-    atlas_alloc_id FirstWhitespace = Atlas_Allocator_Alloc(Result->AtlasAllocator, uvec2(2, 2));
+    atlas_alloc_id FirstWhitespace = Atlas_Allocator_Alloc(Result->AtlasAllocator, dim2i(2, 2));
 
     u32 Texels[] = {
         0xFFFFFFFF, 0xFFFFFFFF,
         0xFFFFFFFF, 0xFFFFFFFF
     };
     GDI_Context_Upload_Texture(Context, Result->Atlas.Handle, {
-        { const_buffer(Texels), 0, 0, 2, 2}
+        { const_buffer(Texels), point2i(), dim2i(2, 2)}
     });
 
     ak_slot64* CreateEntrySlots = Arena_Push_Array(Result->Arena, CreateInfo.MaxCreateEntryCount, ak_slot64);
@@ -155,7 +155,7 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
             //Then allocate a bitmap from the face with the appropriate size
             glyph_bitmap Bitmap = Font_Rasterize_Glyph(CreateEntry->Font, &Scratch, CreateEntry->Codepoint);
             if(Bitmap.Texels.Ptr) {
-                if(Bitmap.Dim.x != 0 && Bitmap.Dim.y != 0) {
+                if(Bitmap.Dim.width != 0 && Bitmap.Dim.height != 0) {
                     //Next we will try to allocate out of the current atlas allocator
                     atlas_alloc_id AtlasAlloc = Atlas_Allocator_Alloc(Cache->AtlasAllocator, Bitmap.Dim);
                     atlas_index* AtlasIndex = Atlas_Allocator_Get(Cache->AtlasAllocator, AtlasAlloc);
@@ -189,13 +189,13 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
                         const_buffer Texels = {};
                         switch(Bitmap.Format) {
                             case GLYPH_BITMAP_FORMAT_GREYSCALE: {
-                                void* NewTexels = Scratch_Push(&Scratch, Bitmap.Dim.w*Bitmap.Dim.h*4);
+                                void* NewTexels = Scratch_Push(&Scratch, Bitmap.Dim.width*Bitmap.Dim.height*4);
                                 
                                 u8* DstTexels = (u8*)NewTexels;
                                 const u8* SrcTexels = Bitmap.Texels.Ptr;
 
-                                for(u32 YIndex = 0; YIndex < Bitmap.Dim.h; YIndex++) {
-                                    for(u32 XIndex = 0; XIndex < Bitmap.Dim.w; XIndex++) {
+                                for(s32 YIndex = 0; YIndex < Bitmap.Dim.height; YIndex++) {
+                                    for(s32 XIndex = 0; XIndex < Bitmap.Dim.width; XIndex++) {
                                         //Premultiplied alpha, assign each pixel the alpha channel
                                         *DstTexels++ = *SrcTexels;
                                         *DstTexels++ = *SrcTexels;
@@ -205,7 +205,7 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
                                     }
                                 }
 
-                                Texels = const_buffer(NewTexels, Bitmap.Dim.w*Bitmap.Dim.h*4);
+                                Texels = const_buffer(NewTexels, Bitmap.Dim.width*Bitmap.Dim.height*4);
                             } break;
 
                             Invalid_Default_Case();
@@ -213,11 +213,9 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
 
 
                         Array_Push(&TextureCopies, {
-                            .Texels  = Texels,
-                            .XOffset = AtlasIndex->Rect.Min.x,
-                            .YOffset = AtlasIndex->Rect.Min.y,
-                            .Width   = Bitmap.Dim.w,
-                            .Height  = Bitmap.Dim.h
+                            .Texels = Texels,
+                            .Offset = AtlasIndex->Rect.P1,
+                            .Size   = Bitmap.Dim
                         });
 
                         Entry->AllocID = AtlasAlloc;

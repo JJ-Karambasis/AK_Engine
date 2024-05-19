@@ -19,7 +19,7 @@ struct ui_render_box {
     rect2                      ScreenRect;
     rect2                      UVRect;
     color4                     Color;
-    vec2                       TextureDim;
+    dim2                       TextureDim;
     gdi_handle<gdi_bind_group> Texture;
 };
 
@@ -37,7 +37,7 @@ struct ui_text {
     ui_text_glyph* Glyphs;
     string         Text;
     ui_font        Font;
-    vec2           Dim;
+    dim2           Dim;
 };
 
 struct ui;
@@ -63,12 +63,12 @@ struct ui_box {
     ui_key                  Key;
     ui_box_flags            Flags;
     u64                     LastUsedBuildIndex;
-    vec2                    FixedSize;
-    vec2                    FixedPosition;
+    dim2                    FixedSize;
+    point2                  FixedPosition;
     ui_size                 PrefSize[UI_AXIS2_COUNT];
     ui_axis2                ChildLayoutAxis;
-    vec4                    BackgroundColor;
-    vec4                    TextColor;
+    color4                  BackgroundColor;
+    color4                  TextColor;
     rect2                   Rect;
     ui_font                 Font;
     ui_text                 Text;
@@ -139,7 +139,7 @@ void UI_Box_Attach_Display_Text(ui* UI, ui_box* Box, string Text);
 
 //Box get attachments API
 const ui_text* UI_Box_Get_Display_Text(ui_box* Box);
-vec2           UI_Box_Get_Dim(ui_box* Box);
+dim2           UI_Box_Get_Dim(ui_box* Box);
 
 //Rendering API
 ui_render_box* UI_Begin_Render_Box(ui* UI);
@@ -152,9 +152,9 @@ void UI_Push_Fixed_Width(ui* UI, f32 Width);
 void UI_Push_Fixed_Height(ui* UI, f32 Height);
 void UI_Push_Pref_Width(ui* UI, ui_size Size);
 void UI_Push_Pref_Height(ui* UI, ui_size Size);
-void UI_Push_Background_Color(ui* UI, vec4 Color);
+void UI_Push_Background_Color(ui* UI, color4 Color);
 void UI_Push_Font(ui* UI, ui_font Font);
-void UI_Push_Text_Color(ui* UI, vec4 Color);
+void UI_Push_Text_Color(ui* UI, color4 Color);
 void UI_Push_Text_Alignment(ui* UI, ui_text_alignment_flags AlignmentFlags);
 
 //UI pop stack API
@@ -176,9 +176,9 @@ void UI_Set_Next_Fixed_Width(ui* UI, f32 Width);
 void UI_Set_Next_Fixed_Height(ui* UI, f32 Height);
 void UI_Set_Next_Pref_Width(ui* UI, ui_size Size);
 void UI_Set_Next_Pref_Height(ui* UI, ui_size Size);
-void UI_Set_Next_Background_Color(ui* UI, vec4 Color);
+void UI_Set_Next_Background_Color(ui* UI, color4 Color);
 void UI_Set_Next_Font(ui* UI, ui_font Font);
-void UI_Set_Next_Text_Color(ui* UI, vec4 Color);
+void UI_Set_Next_Text_Color(ui* UI, color4 Color);
 void UI_Set_Next_Text_Alignment(ui* UI, ui_text_alignment_flags AlignmentFlags);
 
 //UI get most recent stack api

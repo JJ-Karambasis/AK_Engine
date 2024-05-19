@@ -1,7 +1,7 @@
-internal atlas_allocator_free_list_type Atlas__Get_Free_List_Type(u32 SmallThreshold, u32 LargeThreshold, uvec2 Size) {
-    if(Size.w >= LargeThreshold || Size.h >= LargeThreshold) {
+internal atlas_allocator_free_list_type Atlas__Get_Free_List_Type(u32 SmallThreshold, u32 LargeThreshold, dim2i Size) {
+    if(Size.width >= LargeThreshold || Size.height >= LargeThreshold) {
         return ATLAS_ALLOCATOR_FREE_LIST_TYPE_LARGE;
-    } else if(Size.w >= SmallThreshold || Size.h >= SmallThreshold) {
+    } else if(Size.width >= SmallThreshold || Size.height >= SmallThreshold) {
         return ATLAS_ALLOCATOR_FREE_LIST_TYPE_MEDIUM;
     } else {
         return ATLAS_ALLOCATOR_FREE_LIST_TYPE_SMALL;
@@ -30,13 +30,13 @@ internal void Atlas__Delete_Node(atlas_allocator* Allocator, atlas_allocator_nod
     Array_Push(&Allocator->OrphanList, Node);
 }
 
-internal void Atlas__Add_Free_Rect(atlas_allocator* Allocator, atlas_allocator_node* Node, uvec2 Size) {
+internal void Atlas__Add_Free_Rect(atlas_allocator* Allocator, atlas_allocator_node* Node, dim2i Size) {
     Assert(Node->Type == ATLAS_ALLOCATOR_NODE_TYPE_FREE);
     atlas_allocator_free_list_type Type = Atlas__Get_Free_List_Type(Allocator->SmallThreshold, Allocator->LargeThreshold, Size);
     Array_Push(&Allocator->FreeLists[Type], Node);
 }
 
-internal atlas_allocator_node* Atlas__Find_Free_Rect(atlas_allocator* Allocator, uvec2 RequestSize) {
+internal atlas_allocator_node* Atlas__Find_Free_Rect(atlas_allocator* Allocator, dim2i RequestSize) {
     atlas_allocator_free_list_type ListType = Atlas__Get_Free_List_Type(Allocator->SmallThreshold, Allocator->LargeThreshold, RequestSize);
     bool UseWorstFit = ListType == ATLAS_ALLOCATOR_FREE_LIST_TYPE_LARGE;
 
@@ -56,11 +56,10 @@ internal atlas_allocator_node* Atlas__Find_Free_Rect(atlas_allocator* Allocator,
 
             Assert(FreeNode->Type == ATLAS_ALLOCATOR_NODE_TYPE_FREE);
 
-            uvec2 Size = Rect2u_Get_Dim(FreeNode->Rect);
+            dim2i Size = Rect2i_Get_Dim(FreeNode->Rect);
 
-            //Sizes are always unsigned, but subtracting the sizes can yield negatives
-            s32 dx = (s32)Size.w - (s32)RequestSize.w;
-            s32 dy = (s32)Size.h - (s32)RequestSize.h;
+            s32 dx = Size.width  - RequestSize.width;
+            s32 dy = Size.height - RequestSize.height;
 
             if(dx >= 0 && dy >= 0) {
                 if(dx == 0 || dy == 0) {
@@ -95,19 +94,19 @@ internal atlas_allocator_node* Atlas__Find_Free_Rect(atlas_allocator* Allocator,
 internal void Atlas__Merge_Siblings(atlas_allocator* Allocator, atlas_allocator_node* Node, atlas_allocator_node* Next, b32 IsVertical) {
     Assert(Node->Type == ATLAS_ALLOCATOR_NODE_TYPE_FREE);
     Assert(Next->Type == ATLAS_ALLOCATOR_NODE_TYPE_FREE);
-    rect2u R1 = Node->Rect;
-    rect2u R2 = Next->Rect;
+    rect2i R1 = Node->Rect;
+    rect2i R2 = Next->Rect;
 
     //Merge the nodes based on alignment
-    uvec2 MergeSize = Rect2u_Get_Dim(R2);
+    dim2i MergeSize = Rect2i_Get_Dim(R2);
     if(IsVertical) {
-        Assert(R1.Min.x == R2.Min.x);
-        Assert(R1.Max.x == R2.Max.x);
-        Node->Rect.Max.y += MergeSize.h;
+        Assert(R1.P1.x == R2.P1.x);
+        Assert(R1.P2.x == R2.P2.x);
+        Node->Rect.P2.y += MergeSize.height;
     } else {
-        Assert(R1.Min.y == R2.Min.y);
-        Assert(R1.Max.y == R2.Max.y);
-        Node->Rect.Max.x += MergeSize.w;
+        Assert(R1.P1.y == R2.P1.y);
+        Assert(R1.P2.y == R2.P2.y);
+        Node->Rect.P2.x += MergeSize.width;
     }
 
     //Remove the merged node from the sibling list
@@ -121,33 +120,33 @@ internal void Atlas__Merge_Siblings(atlas_allocator* Allocator, atlas_allocator_
     Atlas__Delete_Node(Allocator, Next);
 }
 
-internal void Atlas__Guillotine_Rect(rect2u* ChosenRect, uvec2 RequestSize, b32 IsVertical, rect2u* OutSplitRect, rect2u* OutLeftoverRect, b32* OutIsVertical) {
-    rect2u LeftoverRectToRight(
-        ChosenRect->Min + uvec2(RequestSize.w, 0),
-        uvec2(ChosenRect->Max.x, ChosenRect->Min.y+RequestSize.h)
+internal void Atlas__Guillotine_Rect(rect2i* ChosenRect, dim2i RequestSize, b32 IsVertical, rect2i* OutSplitRect, rect2i* OutLeftoverRect, b32* OutIsVertical) {
+    rect2i LeftoverRectToRight(
+        ChosenRect->P1 + dim2i(RequestSize.width, 0),
+        point2i(ChosenRect->P2.x, ChosenRect->P1.y+RequestSize.height)
     );
 
-    rect2u LeftoverRectToBottom(
-        ChosenRect->Min + uvec2(0, RequestSize.h),
-        uvec2(ChosenRect->Min.x + RequestSize.w, ChosenRect->Max.y)
+    rect2i LeftoverRectToBottom(
+        ChosenRect->P1 + dim2i(0, RequestSize.height),
+        point2i(ChosenRect->P1.x + RequestSize.width, ChosenRect->P2.y)
     );
 
-    if(RequestSize == Rect2u_Get_Dim(*ChosenRect)) {
+    if(RequestSize == Rect2i_Get_Dim(*ChosenRect)) {
         *OutIsVertical = IsVertical;
-        *OutSplitRect = Rect2u_Empty();
-        *OutLeftoverRect = Rect2u_Empty();
-    } else if(Rect2u_Area(LeftoverRectToRight) > Rect2u_Area(LeftoverRectToBottom)) {
+        *OutSplitRect = rect2i();
+        *OutLeftoverRect = rect2i();
+    } else if(Rect2i_Area(LeftoverRectToRight) > Rect2i_Area(LeftoverRectToBottom)) {
         *OutLeftoverRect = LeftoverRectToBottom;
-        *OutSplitRect = Rect2u(
-            LeftoverRectToRight.Min,
-            uvec2(LeftoverRectToRight.Max.x, ChosenRect->Max.y)
+        *OutSplitRect = rect2i(
+            LeftoverRectToRight.P1,
+            point2i(LeftoverRectToRight.P2.x, ChosenRect->P2.y)
         );
         *OutIsVertical = false;
     } else {
         *OutLeftoverRect = LeftoverRectToRight;
-        *OutSplitRect = Rect2u(
-            LeftoverRectToBottom.Min,
-            uvec2(ChosenRect->Max.x, LeftoverRectToBottom.Max.y)
+        *OutSplitRect = rect2i(
+            LeftoverRectToBottom.P1,
+            point2i(ChosenRect->P2.x, LeftoverRectToBottom.P2.y)
         );
         *OutIsVertical = true;
     }
@@ -167,14 +166,14 @@ void Atlas__Check_Siblings(atlas_allocator_node* Node, atlas_allocator_node* Nex
         return;
     }
 
-    rect2u R1 = Node->Rect;
-    rect2u R2 = Next->Rect;
+    rect2i R1 = Node->Rect;
+    rect2i R2 = Next->Rect;
     if(IsVertical) {
-        Assert(R1.Min.x == R2.Min.x);
-        Assert(R1.Max.x == R2.Max.x);
+        Assert(R1.P1.x == R2.P1.x);
+        Assert(R1.P2.x == R2.P2.x);
     } else {
-        Assert(R1.Min.y == R2.Min.y);
-        Assert(R1.Max.y == R2.Max.y);
+        Assert(R1.P1.y == R2.P1.y);
+        Assert(R1.P2.y == R2.P2.y);
     }
 }
 
@@ -210,10 +209,10 @@ void Atlas__Check_Tree(atlas_allocator* Allocator) {
 
 atlas_allocator* Atlas_Allocator_Create(const atlas_allocator_create_info& CreateInfo) {
     Assert(CreateInfo.Allocator);
-    Assert(CreateInfo.Dim.w > 0);
-    Assert(CreateInfo.Dim.h > 0);
-    Assert(CreateInfo.Alignment.w > 0);
-    Assert(CreateInfo.Alignment.h > 0);
+    Assert(CreateInfo.Dim.width > 0);
+    Assert(CreateInfo.Dim.height > 0);
+    Assert(CreateInfo.Alignment.x > 0);
+    Assert(CreateInfo.Alignment.y > 0);
     Assert(CreateInfo.LargeSizeThreshold >= CreateInfo.SmallSizeThreshold);
     
     arena* Arena = Arena_Create(CreateInfo.Allocator);
@@ -230,7 +229,7 @@ atlas_allocator* Atlas_Allocator_Create(const atlas_allocator_create_info& Creat
     Array_Init(&Result->OrphanList, Arena);
 
     atlas_allocator_node* Node = Atlas__Create_Node(Result);
-    Node->Rect                 = Rect2u_From_Dim(Result->Size);
+    Node->Rect                 = Rect2i_From_Dim(Result->Size);
     Node->IsVertical           = true;
     Node->Type                 = ATLAS_ALLOCATOR_NODE_TYPE_FREE;
     Atlas__Add_Free_Rect(Result, Node, Result->Size);
@@ -241,14 +240,14 @@ atlas_allocator* Atlas_Allocator_Create(const atlas_allocator_create_info& Creat
 
 void             Atlas_Allocator_Delete(atlas_allocator* Allocator);
 
-atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim) {
-    if(Dim.x == 0 || Dim.y == 0) {
+atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, dim2i Dim) {
+    if(Dim.width == 0 || Dim.height == 0) {
         //Cannot allocate into the atlas if we don't request any space
         return {};
     }
 
-    Dim.w = Align_U32(Allocator->Alignment.w, Dim.w);
-    Dim.h = Align_U32(Allocator->Alignment.h, Dim.y);
+    Dim.width = Align_U32(Allocator->Alignment.x, Dim.width);
+    Dim.height = Align_U32(Allocator->Alignment.y, Dim.height);
     
     atlas_allocator_node* Node = Atlas__Find_Free_Rect(Allocator, Dim);
     if(!Node) {
@@ -256,11 +255,11 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim) {
         return {};
     }
 
-    rect2u Rect(Node->Rect.Min, Node->Rect.Min+Dim);
+    rect2i Rect(Node->Rect.P1, Node->Rect.P1+Dim);
     Assert(Node->Type == ATLAS_ALLOCATOR_NODE_TYPE_FREE);
 
-    rect2u SplitRect;
-    rect2u LeftoverRect;
+    rect2i SplitRect;
+    rect2i LeftoverRect;
     b32    IsVertical;
     Atlas__Guillotine_Rect(&Node->Rect, Dim, Node->IsVertical, &SplitRect, &LeftoverRect, &IsVertical);
 
@@ -269,7 +268,7 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim) {
     atlas_allocator_node* LeftoverNode = nullptr;
 
     if(IsVertical == Node->IsVertical) {
-        if(!Rect2u_Is_Empty(SplitRect)) {
+        if(!Rect2i_Is_Empty(SplitRect)) {
             atlas_allocator_node* NextSibling = Node->Next;
             SplitNode = Atlas__Create_Node(Allocator);
 
@@ -286,7 +285,7 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim) {
             }
         }
 
-        if(!Rect2u_Is_Empty(LeftoverRect)) {
+        if(!Rect2i_Is_Empty(LeftoverRect)) {
             Node->Type = ATLAS_ALLOCATOR_NODE_TYPE_CONTAINER;
 
             AllocatedNode = Atlas__Create_Node(Allocator);
@@ -313,7 +312,7 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim) {
     } else {
         Node->Type = ATLAS_ALLOCATOR_NODE_TYPE_CONTAINER;
 
-        if(!Rect2u_Is_Empty(SplitRect)) {
+        if(!Rect2i_Is_Empty(SplitRect)) {
             SplitNode = Atlas__Create_Node(Allocator);
             SplitNode->Parent = Node;
             SplitNode->Next = nullptr;
@@ -323,13 +322,13 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim) {
             SplitNode->IsVertical = !Node->IsVertical;
         }
 
-        if(!Rect2u_Is_Empty(LeftoverRect)) {
+        if(!Rect2i_Is_Empty(LeftoverRect)) {
             Assert(SplitNode);
             atlas_allocator_node* ContainerNode = Atlas__Create_Node(Allocator);
             ContainerNode->Parent = Node;
             ContainerNode->Next = SplitNode;
             ContainerNode->Prev = nullptr;
-            ContainerNode->Rect = Rect2u_Empty();
+            ContainerNode->Rect = rect2i();
             ContainerNode->Type = ATLAS_ALLOCATOR_NODE_TYPE_CONTAINER;
             ContainerNode->IsVertical = !Node->IsVertical;
 
@@ -366,11 +365,11 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim) {
 
     Assert(AllocatedNode->Type == ATLAS_ALLOCATOR_NODE_TYPE_ALLOC);
     if(SplitNode) {
-        Atlas__Add_Free_Rect(Allocator, SplitNode, Rect2u_Get_Dim(SplitRect));
+        Atlas__Add_Free_Rect(Allocator, SplitNode, Rect2i_Get_Dim(SplitRect));
     }
 
     if(LeftoverNode) {
-        Atlas__Add_Free_Rect(Allocator, LeftoverNode, Rect2u_Get_Dim(LeftoverRect));
+        Atlas__Add_Free_Rect(Allocator, LeftoverNode, Rect2i_Get_Dim(LeftoverRect));
     }
 
 #ifdef DEBUG_BUILD
@@ -414,7 +413,7 @@ void Atlas_Allocator_Free(atlas_allocator* Allocator, atlas_alloc_id AllocID) {
                 Atlas__Delete_Node(Allocator, Node);
                 Node = Parent;
             } else {
-                Atlas__Add_Free_Rect(Allocator, Node, Rect2u_Get_Dim(Node->Rect));
+                Atlas__Add_Free_Rect(Allocator, Node, Rect2i_Get_Dim(Node->Rect));
                 break;
             }
         }

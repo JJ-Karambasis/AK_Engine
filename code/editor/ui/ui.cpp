@@ -85,7 +85,6 @@ internal void UI_Layout_Enforce_Constraints(ui* UI, ui_box* Root, ui_axis2 Axis)
             scratch Scratch = Scratch_Get();
 
             //Find out how much all the children take in total
-            f32 ChildFixupSum = 0.0f;
             fixed_array<f32> ChildFixups(&Scratch, Root->ChildCount);
 
             uptr ChildIndex = 0;
@@ -93,7 +92,6 @@ internal void UI_Layout_Enforce_Constraints(ui* UI, ui_box* Root, ui_axis2 Axis)
                 f32 FixupSizeThisChild = Child->FixedSize.Data[Axis] * (1.0f-Child->PrefSize[Axis].Strictness);
                 FixupSizeThisChild = Max(0, FixupSizeThisChild);
                 ChildFixups[ChildIndex] = FixupSizeThisChild;
-                ChildFixupSum += FixupSizeThisChild;
             }
 
             //Fixup child sizes
@@ -125,13 +123,13 @@ internal void UI_Layout_Positions(ui* UI, ui_box* Root, ui_axis2 Axis) {
             LayoutPosition += Child->FixedSize.Data[Axis];
         } 
 
-        Child->Rect.Min.Data[Axis] = Root->Rect.Min.Data[Axis] + Child->FixedPosition.Data[Axis];
-        Child->Rect.Max.Data[Axis] = Child->Rect.Min.Data[Axis] + Child->FixedSize.Data[Axis];
+        Child->Rect.P1.Data[Axis] = Root->Rect.P1.Data[Axis] + Child->FixedPosition.Data[Axis];
+        Child->Rect.P2.Data[Axis] = Child->Rect.P1.Data[Axis] + Child->FixedSize.Data[Axis];
 
-        Child->Rect.Min.x = Floor_F32(Child->Rect.Min.x);
-        Child->Rect.Min.y = Floor_F32(Child->Rect.Min.y);
-        Child->Rect.Max.x = Floor_F32(Child->Rect.Max   .x);
-        Child->Rect.Max.y = Floor_F32(Child->Rect.Max.y);
+        Child->Rect.P1.x = Floor_F32(Child->Rect.P1.x);
+        Child->Rect.P1.y = Floor_F32(Child->Rect.P1.y);
+        Child->Rect.P2.x = Floor_F32(Child->Rect.P2.x);
+        Child->Rect.P2.y = Floor_F32(Child->Rect.P2.y);
     }
 
     for(ui_box* Child = Root->FirstChild; Child; Child = Child->NextSibling) {
@@ -216,14 +214,14 @@ internal void UI_Shape(ui* UI, ui_box* Box, string Text) {
     const text_shape_pos* Positions = ShapeResult.Positions;
 
     //Only LTR text is supported right now
-    vec2 Dim = {};
+    dim2 Dim = {};
 
-    vec2 Cursor = {};
+    point2 Cursor = {};
     for(u32 i = 0; i < ShapeResult.GlyphCount; i++) {
         glyph_metrics Metrics = Font_Get_Glyph_Metrics(Font->Font, Glyphs[i].Codepoint);
 
         if(i != 0) {
-            svec2 Kerning = Font_Get_Kerning(Font->Font, Glyphs[i-1].Codepoint, Glyphs[i].Codepoint);
+            vec2i Kerning = Font_Get_Kerning(Font->Font, Glyphs[i-1].Codepoint, Glyphs[i].Codepoint);
             Cursor.x += (f32)Kerning.x;
         }
 
@@ -232,19 +230,19 @@ internal void UI_Shape(ui* UI, ui_box* Box, string Text) {
         //text shaper offsets are not zero
         vec2 Offset = vec2(Positions[i].Offset + Metrics.Offset);
         Offset.y = (f32)Ascender - Offset.y;
-        vec2 PixelP = Cursor + Offset;
+        point2 PixelP = Cursor + Offset;
 
         Glyph->Codepoint = Glyphs[i].Codepoint;
-        Glyph->ScreenRect = Rect2(PixelP, PixelP+Metrics.Dim);
+        Glyph->ScreenRect = rect2(PixelP, PixelP+dim2(Metrics.Dim));
 
         //If this is the last entry in the shape, the size of the shapes
         //combined is position of the last glyph plus the width of the last shape.
         //This just ends up being the final glyphs ScreenRect.x since we always
         //start from zero
         if(i == (ShapeResult.GlyphCount-1)) {
-            Dim.x = Glyph->ScreenRect.Max.x;
+            Dim.width = Glyph->ScreenRect.P2.x;
         }
-        Dim.y = Max(Dim.y, Glyph->ScreenRect.Max.y);
+        Dim.height = Max(Dim.height, Glyph->ScreenRect.P2.y);
 
         Cursor.x += (f32)Metrics.Advance.x;
     } 
@@ -277,8 +275,8 @@ internal void UI_Render_Root(ui* UI, ui_box* Root) {
                 u32 Index = i*3;
 
                 f32 Padding = UI_Get_Padding(Root->PrefSize[i]);
-                f32 Max = Max(Root->Rect.Max.Data[i]-Padding, 0.0f);
-                f32 Min = Min(Root->Rect.Min.Data[i]+Padding, Max);
+                f32 Max = Max(Root->Rect.P2.Data[i]-Padding, 0.0f);
+                f32 Min = Min(Root->Rect.P1.Data[i]+Padding, Max);
 
                 if(Root->TextAlignment & (1 << Index)) {
                     Assert(!(Root->TextAlignment & (1 << (Index+1))));
@@ -304,8 +302,8 @@ internal void UI_Render_Root(ui* UI, ui_box* Root) {
                 const glyph_entry* CacheGlyph = Glyph_Cache_Get(UI->GlyphCache, Text->Font.Font, Glyph->Codepoint);
                 if(CacheGlyph) {
                     RenderBox = UI_Begin_Render_Box(UI);
-                    RenderBox->ScreenRect = Rect2_Translate(Glyph->ScreenRect, Offset);
-                    RenderBox->UVRect = Rect2(CacheGlyph->AtlasRect);
+                    RenderBox->ScreenRect += Offset;
+                    RenderBox->UVRect = rect2(CacheGlyph->AtlasRect);
                     RenderBox->Color  = Root->TextColor;
                     RenderBox->TextureDim = AtlasTexture->Dim;
                     RenderBox->Texture = AtlasTexture->BindGroup;
@@ -348,8 +346,8 @@ void UI_Begin_Build(ui* UI, window_handle WindowHandle) {
 
     //First setup top level root
     {
-        UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.w);
-        UI_Set_Next_Fixed_Height(UI, (f32)Window->Size.h);
+        UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.width);
+        UI_Set_Next_Fixed_Height(UI, (f32)Window->Size.height);
         UI_Set_Next_Child_Layout_Axis(UI, UI_AXIS2_X);
         UI->Root = UI_Build_Box_From_StringF(UI, 0, "###%I64x", (u64)(uptr)Window);
     }
@@ -434,7 +432,7 @@ ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key) {
         Box->LastUsedBuildIndex = UI->BuildIndex;
         if(ui_stack_fixed_width* FixedWidth = UI_Current_Fixed_Width(UI)) {
             Box->Flags |= UI_BOX_FLAG_FIXED_WIDTH_BIT;
-            Box->FixedSize.w = FixedWidth->Value;
+            Box->FixedSize.width = FixedWidth->Value;
         } else {
             ui_stack_pref_width* PrefWidth = UI_Current_Pref_Width(UI);
             Box->PrefSize[UI_AXIS2_X] = PrefWidth->Value;
@@ -442,7 +440,7 @@ ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key) {
 
         if(ui_stack_fixed_height* FixedHeight = UI_Current_Fixed_Height(UI)) {
             Box->Flags |= UI_BOX_FLAG_FIXED_HEIGHT_BIT;
-            Box->FixedSize.h = FixedHeight->Value;
+            Box->FixedSize.height = FixedHeight->Value;
         } else {
             ui_stack_pref_height* PrefHeight = UI_Current_Pref_Height(UI);
             Box->PrefSize[UI_AXIS2_Y] = PrefHeight->Value;
@@ -539,7 +537,7 @@ const ui_text* UI_Box_Get_Display_Text(ui_box* Box) {
     return &Box->Text;
 }
 
-vec2 UI_Box_Get_Dim(ui_box* Box) {
+dim2 UI_Box_Get_Dim(ui_box* Box) {
     return Box->FixedSize;
 }
 
@@ -595,7 +593,7 @@ void UI_Push_Pref_Height(ui* UI, ui_size Size) {
     UI_Push_Type(UI_STACK_TYPE_PREF_HEIGHT, ui_stack_pref_height, Size);
 }
 
-void UI_Push_Background_Color(ui* UI, vec4 Color) {
+void UI_Push_Background_Color(ui* UI, color4 Color) {
     UI_Push_Type(UI_STACK_TYPE_BACKGROUND_COLOR, ui_stack_background_color, Color);
 }
 
@@ -603,7 +601,7 @@ void UI_Push_Font(ui* UI, ui_font Font) {
     UI_Push_Type(UI_STACK_TYPE_FONT, ui_stack_font, Font);
 }
 
-void UI_Push_Text_Color(ui* UI, vec4 Color) {
+void UI_Push_Text_Color(ui* UI, color4 Color) {
     UI_Push_Type(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color, Color);
 }
 
@@ -677,7 +675,7 @@ void UI_Set_Next_Pref_Height(ui* UI, ui_size Size) {
     UI_Autopush_Type(UI_STACK_TYPE_PREF_HEIGHT, ui_stack_pref_height, Size);
 }
 
-void UI_Set_Next_Background_Color(ui* UI, vec4 Color) {
+void UI_Set_Next_Background_Color(ui* UI, color4 Color) {
     UI_Autopush_Type(UI_STACK_TYPE_BACKGROUND_COLOR, ui_stack_background_color, Color);
 }
 
@@ -685,7 +683,7 @@ void UI_Set_Next_Font(ui* UI, ui_font Font) {
     UI_Autopush_Type(UI_STACK_TYPE_FONT, ui_stack_font, Font);
 }
 
-void UI_Set_Next_Text_Color(ui* UI, vec4 Color) {
+void UI_Set_Next_Text_Color(ui* UI, color4 Color) {
     UI_Autopush_Type(UI_STACK_TYPE_TEXT_COLOR, ui_stack_text_color, Color);
 }
 

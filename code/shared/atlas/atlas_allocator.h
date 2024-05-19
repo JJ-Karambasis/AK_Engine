@@ -2,7 +2,7 @@
 #define ATLAS_ALLOCATOR_H
 
 struct atlas_index {
-    rect2u Rect;
+    rect2i Rect;
 };
 
 struct atlas_alloc_id {
@@ -41,8 +41,8 @@ struct atlas_allocator_node : public atlas_index {
 
 struct atlas_allocator {
     arena*                       Arena;
-    uvec2                        Size;
-    uvec2                        Alignment;
+    dim2i                        Size;
+    vec2i                        Alignment;
     u32                          SmallThreshold;
     u32                          LargeThreshold;
     array<atlas_allocator_node*> FreeLists[ATLAS_ALLOCATOR_FREE_LIST_TYPE_COUNT];
@@ -56,15 +56,15 @@ struct atlas_allocator {
 
 struct atlas_allocator_create_info {
     allocator* Allocator = Core_Get_Base_Allocator();
-    uvec2      Dim;
-    uvec2      Alignment = uvec2(1, 1);
+    dim2i      Dim;
+    vec2i      Alignment = vec2i(1, 1);
     u32        SmallSizeThreshold = 32;
     u32        LargeSizeThreshold = 256;
 };
 
 atlas_allocator* Atlas_Allocator_Create(const atlas_allocator_create_info& CreateInfo);
 void             Atlas_Allocator_Delete(atlas_allocator* Allocator);
-atlas_alloc_id   Atlas_Allocator_Alloc(atlas_allocator* Allocator, uvec2 Dim);
+atlas_alloc_id   Atlas_Allocator_Alloc(atlas_allocator* Allocator, dim2i Dim);
 void             Atlas_Allocator_Free(atlas_allocator* Allocator, atlas_alloc_id AllocID);
 atlas_index*     Atlas_Allocator_Get(atlas_allocator* Allocator, atlas_alloc_id AllocID);
 

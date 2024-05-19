@@ -6,7 +6,7 @@ struct renderer_texture {
     gdi_handle<gdi_texture>      Handle;
     gdi_handle<gdi_texture_view> View;
     gdi_handle<gdi_bind_group>   BindGroup;
-    uvec2                        Dim;
+    dim2i                        Dim;
 
     inline bool Is_Null() const {
         return Handle.Is_Null() || View.Is_Null() || BindGroup.Is_Null();
@@ -16,7 +16,7 @@ struct renderer_texture {
 struct renderer_texture_create_info {
     bool         IsSRGB = false;
     gdi_format   Format;
-    uvec2        Dim;
+    dim2i        Dim;
     const_buffer Texels;
 };
 

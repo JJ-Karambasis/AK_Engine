@@ -2,8 +2,7 @@ renderer_texture Renderer_Texture_Create(renderer* Renderer, const renderer_text
     gdi_context* Context = Renderer->Context;
     gdi_handle<gdi_texture> Texture = GDI_Context_Create_Texture(Context, {
         .Format = CreateInfo.Format,
-        .Width  = CreateInfo.Dim.w,
-        .Height = CreateInfo.Dim.y,
+        .Size = CreateInfo.Dim,
         .UsageFlags = GDI_TEXTURE_USAGE_FLAG_SAMPLED_BIT|GDI_TEXTURE_USAGE_FLAG_COPIED_BIT,
         .InitialData = CreateInfo.Texels
     });

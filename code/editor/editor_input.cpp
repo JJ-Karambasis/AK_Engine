@@ -1,29 +1,29 @@
-bool editor_input_manager::Is_Down(os_keyboard_key Key) {
+bool editor_input_manager::Is_Key_Down(os_keyboard_key Key) {
     Assert(Key < OS_KEYBOARD_KEY_COUNT);
     return KeyboardInput[Key].Is_Down();
 }
 
-bool editor_input_manager::Is_Pressed(os_keyboard_key Key) {
+bool editor_input_manager::Is_Key_Pressed(os_keyboard_key Key) {
     Assert(Key < OS_KEYBOARD_KEY_COUNT);
     return KeyboardInput[Key].Is_Pressed();
 }
 
-bool editor_input_manager::Is_Released(os_keyboard_key Key) {
+bool editor_input_manager::Is_Key_Released(os_keyboard_key Key) {
     Assert(Key < OS_KEYBOARD_KEY_COUNT);
     return KeyboardInput[Key].Is_Released();
 }
 
-bool editor_input_manager::Is_Down(os_mouse_key Key) {
+bool editor_input_manager::Is_Mouse_Down(os_mouse_key Key) {
     Assert(Key < OS_MOUSE_KEY_COUNT);
     return MouseInput[Key].Is_Down();
 }
 
-bool editor_input_manager::Is_Pressed(os_mouse_key Key) {
+bool editor_input_manager::Is_Mouse_Pressed(os_mouse_key Key) {
     Assert(Key < OS_MOUSE_KEY_COUNT);
     return MouseInput[Key].Is_Pressed();
 }
 
-bool editor_input_manager::Is_Released(os_mouse_key Key) {
+bool editor_input_manager::Is_Mouse_Released(os_mouse_key Key) {
     Assert(Key < OS_MOUSE_KEY_COUNT);
     return MouseInput[Key].Is_Released();
 }

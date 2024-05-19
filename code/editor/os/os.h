@@ -67,6 +67,7 @@ void*        OS_Window_Get_Data(os_window_id WindowID);
 void         OS_Window_Set_Title(os_window_id WindowID, string Title);
 dim2i        OS_Window_Get_Size(os_window_id WindowID);
 point2i      OS_Window_Get_Pos(os_window_id WindowID);
+gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID);
 
 //Event api
 typedef u32 os_keyboard_key;

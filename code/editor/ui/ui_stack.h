@@ -53,7 +53,7 @@ struct ui_stack_pref_height : ui_stack_entry {
 };
 
 struct ui_stack_background_color : ui_stack_entry {
-    vec4 Value;
+    color4 Value;
 };
 
 struct ui_stack_font : ui_stack_entry {
@@ -61,7 +61,7 @@ struct ui_stack_font : ui_stack_entry {
 };
 
 struct ui_stack_text_color : ui_stack_entry {
-    vec4 Value;
+    color4 Value;
 };
 
 struct ui_stack_text_alignment : ui_stack_entry {

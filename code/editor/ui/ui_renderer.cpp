@@ -25,10 +25,10 @@ internal DRAW_CALLBACK(UI_Renderer_Update) {
         }
 
         Array_Push(&DrawBoxes, {
-            .DstP0 = RenderBox->ScreenRect.Min,
-            .DstP1 = RenderBox->ScreenRect.Max,
-            .SrcP0 = RenderBox->UVRect.Min,
-            .SrcP1 = RenderBox->UVRect.Max,
+            .DstP0 = RenderBox->ScreenRect.P1,
+            .DstP1 = RenderBox->ScreenRect.P2,
+            .SrcP0 = RenderBox->UVRect.P1,
+            .SrcP1 = RenderBox->UVRect.P2,
             .Color = RenderBox->Color
         });
 
@@ -66,8 +66,8 @@ internal DRAW_CALLBACK(UI_Renderer_Update) {
     for(ui_box_instance Instance : BoxInstances) {
         dynamic_binding InstanceData = Dynamic_Buffer_Push<ui_box_shader_info>(DynamicBuffer);
         ui_box_shader_info* ShaderInfo = (ui_box_shader_info*)InstanceData.Data;
-        ShaderInfo->InvRes = 1.0f / vec2(Resolution);
-        ShaderInfo->InvTexRes = 1.0f / vec2(Instance.Dim);
+        ShaderInfo->InvRes = 1.0f / Resolution;
+        ShaderInfo->InvTexRes = 1.0f / Instance.Dim;
         
         Draw_Stream_Set_Bind_Groups(DrawStream, {Instance.BindGroup});
         Draw_Stream_Set_Dynamic_Bind_Groups(DrawStream, {InstanceData.BindGroup}, {InstanceData.Offset});

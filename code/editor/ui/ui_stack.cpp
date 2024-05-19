@@ -52,8 +52,8 @@ internal void UI_Reset_Stacks(ui* UI) {
     //Push default stack values
     UI_Push_Pref_Width(UI, UI_Pixels(250.0f, 1.0f));
     UI_Push_Pref_Height(UI, UI_Pixels(30.0f, 1.0f));
-    UI_Push_Background_Color(UI, vec4(1.0f, 0.0f, 1.0f, 1.0f));
-    UI_Push_Text_Color(UI, vec4(1.0f, 0.0f, 1.0f, 1.0f));
+    UI_Push_Background_Color(UI, color4(1.0f, 0.0f, 1.0f, 1.0f));
+    UI_Push_Text_Color(UI, color4(1.0f, 0.0f, 1.0f, 1.0f));
     UI_Push_Text_Alignment(UI, UI_TEXT_ALIGNMENT_LEFT_BIT|UI_TEXT_ALIGNMENT_TOP_BIT);
 }
 

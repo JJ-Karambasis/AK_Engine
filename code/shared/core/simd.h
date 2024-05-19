@@ -29,7 +29,15 @@ struct f32_2x {
     union {
         f32 Data[2];
     };
+
+    inline f32& operator[](u32 Index) {
+        Assert(Index < 2);
+        return Data[Index];
+    }
 };
+
+f32_2x operator+(f32_2x A, f32_2x B);
+f32_2x operator/(f32 A, const f32_2x& B);
 
 struct f32_3x {
     union {

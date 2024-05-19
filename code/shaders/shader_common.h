@@ -7,8 +7,11 @@
 #define b32 int
 #define f32 float
 #define vec2 float2
+#define dim2 float2
+#define point2 float2
 #define vec3 float3
 #define vec4 float4
+#define color4 float4
 #define matrix3 float3x3
 #define matrix4 float4x4
 #define matrix4_affine float4x3

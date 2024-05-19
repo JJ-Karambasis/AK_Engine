@@ -291,10 +291,10 @@ internal AK_JOB_SYSTEM_CALLBACK_DEFINE(Render_Graph_Draw_Callback) {
     gdi_context* Context = Renderer->Context;
     renderer_thread_context* ThreadContext = Renderer_Get_Thread_Context(Renderer);
 
-    uvec2 Resolution = GDI_Context_Get_Framebuffer_Resolution(Context, RenderTask->Framebuffer);
+    dim2i Resolution = GDI_Context_Get_Framebuffer_Size(Context, RenderTask->Framebuffer);
 
     draw_stream* DrawStream = &RenderTask->DrawStream;
-    RenderTask->Callback(JobSystem, Context, DrawStream, &ThreadContext->DynamicBuffer, vec2(Resolution), RenderTask->UserData);
+    RenderTask->Callback(JobSystem, Context, DrawStream, &ThreadContext->DynamicBuffer, Resolution, RenderTask->UserData);
 
     scratch Scratch = Scratch_Get();
 

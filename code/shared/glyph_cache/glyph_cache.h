@@ -2,7 +2,7 @@
 #define GLYPH_CACHE_H
 
 struct glyph_entry {
-    rect2u AtlasRect;
+    rect2i AtlasRect;
 };
 
 struct glyph_cache_key {
@@ -57,7 +57,7 @@ struct glyph_cache {
 struct glyph_cache_create_info {
     renderer*  Renderer;
     allocator* Allocator           = Core_Get_Base_Allocator();
-    uvec2      AtlasDim            = uvec2(1024, 1024);
+    dim2i      AtlasDim            = dim2i(1024, 1024);
     u32        MaxUpdateEntryCount = 1024;
     u32        MaxCreateEntryCount = 1024;
 };

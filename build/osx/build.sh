@@ -20,8 +20,14 @@ script=$(realpath "$0")
 script_path=$(dirname "$script")
 base_path="$script_path/../.."
 code_path="$base_path/code"
-shared_path="$code_path/shared"
-dependencies_path="$code_path/dependencies"
+dependencies_path="${code_path}/dependencies"
+runtime_path="${code_path}/runtime"
+shared_path="${code_path}/shared"
+shader_path="${code_path}/shaders"
+editor_path="${code_path}/editor"
+editor_os_path="${editor_path}/os"
+vk_include="${dependencies_path}/Vulkan-Headers/include"
+packages_path="${base_path}/bin/packages"
 
 clang_warnings="-Werror -Wall -Wno-switch -Wno-unused-variable -Wno-unused-function"
 clang_common="-g -fdiagnostics-absolute-paths -flto"
@@ -42,11 +48,12 @@ if [ $clang -eq 1 ]; then compile_out=${clang_out}; fi
 if [ $clang -eq 1 ]; then cpp="-std=c++20"; fi
 if [ $clang -eq 1 ]; then inc="-I"; fi
 if [ $clang -eq 1 ]; then only_compile="-c"; fi
+if [ $clang -eq 1 ]; then def="-D"; fi
 
 if [ $debug -eq 1 ]; then compile=${compile_debug}; fi
 if [ $release -eq 1 ]; then compile=${compile_release}; fi
 
-include_common="${inc}${dependencies_path}/ak_lib ${inc}${dependencies_path}/stb ${inc}${shared_path}"
+include_common="${inc}${dependencies_path}/ak_lib ${inc}${dependencies_path}/stb ${inc}${dependencies_path}/harfbuzz/src ${inc}${shared_path}/text/uba/sheenbidi/config ${inc}${dependencies_path}/SheenBidi/Headers ${inc}${shared_path}/glyph_rasterizer/freetype/config ${inc}${dependencies_path}/freetype/include ${inc}${runtime_path}/core ${inc}${runtime_path} ${inc}${runtime_path}/engine ${inc}${code_path}/shaders ${inc}${code_path}/shared"
 
 compile="$compile $include_common"
 
@@ -54,8 +61,7 @@ if [ ! -d "$base_path/bin" ]; then
     mkdir "$base_path/bin"
 fi
 
-echo $compile
-
 pushd "$base_path/bin"
-    ${compile} ${cpp} ${inc}${code_path}/editor/os -framework AppKit ${code_path}/os_test.cpp ${code_path}/editor/os/osx/osx.mm ${compile_link} ${compile_out} os_test
+    ${compile} ${def}EDITOR_PACKAGE_FILE_SYSTEM ${inc}${code_path}/editor/os ${cpp} -framework AppKit ${code_path}/editor/editor.cpp ${code_path}/editor/os/osx/osx.mm ${compile_link} ${compile_out} AK_Engine 
+    # ${compile} ${cpp} ${inc}${code_path}/editor/os -framework AppKit ${code_path}/os_test.cpp ${code_path}/editor/os/osx/osx.mm ${compile_link} ${compile_out} os_test 
 popd

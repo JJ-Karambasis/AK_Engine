@@ -11,7 +11,7 @@ struct ui_pipeline {
 
 struct ui_box_instance {
     gdi_handle<gdi_bind_group> BindGroup;
-    vec2                       Dim;
+    dim2                       Dim;
     u32                        InstanceCount;
 };
 

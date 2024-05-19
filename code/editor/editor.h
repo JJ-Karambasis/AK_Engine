@@ -6,11 +6,11 @@
 #include <os.h>
 
 #include "editor_input.h"
+#include "windows.h"
 #include "ui/ui.h"
 
 // #include "level_editor/level_editor.h"
 
-#include "windows.h"
 
 struct editor {
     arena*                            Arena;

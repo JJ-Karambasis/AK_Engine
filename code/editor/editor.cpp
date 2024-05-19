@@ -44,14 +44,8 @@ struct comparer<vtx_idx_p_uv> {
     }
 };
 
-window_handle::window_handle(window* _Window) {
-    Assert(_Window);
-    Window = _Window;
-    Generation = Window->Generation;
-}
-
 internal void Window_Handle_Resize(editor* Editor, window* Window) {
-    dim2i CurrentWindowSize = OS_Window_Get_Size(Window->WindowID);
+    dim2i CurrentWindowSize = OS_Window_Get_Size(Window->OSHandle);
     if(CurrentWindowSize.width != 0 && CurrentWindowSize.height != 0) {
         if(CurrentWindowSize != Window->Size) {
             gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
@@ -89,109 +83,6 @@ internal void Window_Handle_Resize(editor* Editor, window* Window) {
         }
     }
     Window->Size = CurrentWindowSize;
-}
-
-inline bool Window_Is_Open(window_handle Handle) {
-    return Handle.Window && Handle.Generation && (Handle.Window->Generation == Handle.Generation);
-}
-
-window_handle Window_Open(editor* Editor, os_monitor_id MonitorID, point2i Offset, vec2i Size, u32 Border, string Name) {
-    window* Window = Editor->FreeWindows;
-    if(Editor->FreeWindows) SLL_Pop_Front(Editor->FreeWindows);
-    else {
-        Window = Arena_Push_Struct(Editor->Arena, window);
-        Window->Generation = 1;
-    }
-
-    DLL_Push_Back(Editor->FirstWindow, Editor->LastWindow, Window);
-
-    Window->Arena = Arena_Create(Core_Get_Base_Allocator(), MB(1));
-    Array_Init(&Window->SwapchainViews, Window->Arena);
-    Array_Init(&Window->Framebuffers, Window->Arena);
-
-    Window->WindowID = OS_Open_Window({
-        .Flags = OS_WINDOW_FLAG_NONE,
-        .MonitorID = MonitorID,
-        .
-        .XOffset = Offset.x,
-        .YOffset = Offset.y,
-        .Width = Size.x,
-        .Height = Size.y,
-        .Border = Border,
-        .TargetFormat = GDI_FORMAT_R8G8B8A8_SRGB,
-        .UsageFlags = GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT
-    });
-
-    Window->Swapchain = OS_Window_Get_Swapchain(Window->WindowID, &Window->SwapchainFormat);
-    
-    //Right now we must use a valid render target format that is srgb compatible, so
-    //we can create srgb views for the swapchain. Not all monitors support this though,
-    //so at some point we will need to implement a workaround for this
-    Assert(GDI_Get_SRGB_Format(Window->SwapchainFormat) != GDI_FORMAT_NONE);
-
-    if(Editor->UIRenderPass.RenderPass.Is_Null()) {
-        //Make sure no threads can duplicate the same render pass
-        scoped_lock Lock(&Editor->WindowLock);
-        if(Editor->UIRenderPass.RenderPass.Is_Null()) {
-            Editor->UIRenderPass = UI_Render_Pass_Create(Editor->Renderer, Window->SwapchainFormat);
-        }
-    }
-
-    if(Editor->UIPipeline.Pipeline.Is_Null()) {
-        //Make sure no threads can duplicate the same pipeline
-        scoped_lock Lock(&Editor->WindowLock);
-        if(Editor->UIPipeline.Pipeline.Is_Null()) {
-            Editor->UIPipeline = UI_Pipeline_Create(Editor->Renderer, Editor->Packages, &Editor->UIRenderPass);
-        }
-    }
-
-    Window->UI = UI_Create({
-        .Allocator = Window->Arena, 
-        .GlyphCache = Editor->GlyphCache, 
-        .Renderer = Editor->Renderer, 
-        .Pipeline = &Editor->UIPipeline
-    }); 
-
-    return window_handle(Window);
-}
-
-void Window_Close(editor* Editor, window_handle Handle) {
-    window* Window = Window_Get(Handle);
-    if(Window) {
-        DLL_Remove(Editor->FirstWindow, Editor->LastWindow, Window);
-
-        gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
-
-        if(Window->Framebuffers.Count) {
-            for(gdi_handle<gdi_framebuffer> Framebuffer : Window->Framebuffers) {
-                GDI_Context_Delete_Framebuffer(Context, Framebuffer);
-            }
-        }
-
-        if(Window->SwapchainViews.Count) {
-            for(gdi_handle<gdi_texture_view> SwapchainView : Window->SwapchainViews) {
-                GDI_Context_Delete_Texture_View(Context, SwapchainView);
-            }
-        }
-
-        GDI_Context_Delete_Swapchain(Context, Window->Swapchain);
-        OS_Close_Window(Window->OSHandle);        
-        Arena_Delete(Window->Arena);
-
-        Window->Arena = nullptr;
-        Window->WindowID = 0;
-        Window->Swapchain = {};
-        Window->SwapchainFormat = GDI_FORMAT_NONE;
-        Window->SwapchainViews = {};
-        Window->Framebuffers = {};
-        Window->Generation++;
-
-        SLL_Push_Front(Editor->FreeWindows, Window);
-    }
-}
-
-window* Window_Get(window_handle Handle) {
-    return Window_Is_Open(Handle) ? Handle.Window : nullptr;
 }
 
 #if 0
@@ -341,21 +232,21 @@ void Window_Update(editor* Editor, window* Window) {
     f32 ButtonSize = 100;
 
     UI_Push_Fixed_Height(UI, ButtonSize);
-    UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.w);
+    UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.width);
     UI_Set_Next_Child_Layout_Axis(UI, UI_AXIS2_X);
-    UI_Push_Background_Color(UI, Vec4_Red());
+    UI_Push_Background_Color(UI, Color4_Red());
     ui_box* MenuBox = UI_Build_Box_From_StringF(UI, 0, "###%llux", (u64)(uptr)Window);
     UI_Push_Parent(UI, MenuBox);
     {
-        f32 MenuWidth = UI_Box_Get_Dim(MenuBox).w;
+        f32 MenuWidth = UI_Box_Get_Dim(MenuBox).width;
 
-        UI_Set_Next_Background_Color(UI, Vec4_Yellow());
-        UI_Set_Next_Text_Color(UI, Vec4_Blue());
+        UI_Set_Next_Background_Color(UI, Color4_Yellow());
+        UI_Set_Next_Text_Color(UI, Color4_Blue());
         UI_Set_Next_Pref_Width(UI, UI_Text(4, 1.0));
         UI_Set_Next_Text_Alignment(UI, UI_TEXT_ALIGNMENT_CENTER);
         UI_Build_Box_From_String(UI, UI_BOX_FLAG_DRAW_TEXT, String_Lit("Help###Menu Box 1"));
         
-        f32 Width = UI_Box_Get_Dim(UI_Current_Box(UI)).w;
+        f32 Width = UI_Box_Get_Dim(UI_Current_Box(UI)).width;
 
         f32 FinalButtonsSize = ButtonSize*3;
         f32 NextRect = Max(0.0f, MenuWidth - (FinalButtonsSize+Width));
@@ -365,13 +256,13 @@ void Window_Update(editor* Editor, window* Window) {
 
         UI_Push_Fixed_Width(UI, ButtonSize);
         
-        UI_Set_Next_Background_Color(UI, Vec4_Blue());
+        UI_Set_Next_Background_Color(UI, Color4_Blue());
         UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 2"));
 
-        UI_Set_Next_Background_Color(UI, Vec4_Green());
+        UI_Set_Next_Background_Color(UI, Color4_Green());
         UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 3"));
 
-        UI_Set_Next_Background_Color(UI, Vec4_Magenta());
+        UI_Set_Next_Background_Color(UI, Color4_Magenta());
         UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 4"));
 
         UI_Pop_Fixed_Width(UI);
@@ -562,7 +453,7 @@ bool Application_Main() {
         gdi_format TargetFormat = GDI_FORMAT_R8G8B8A8_SRGB;
 
         scratch Scratch = Scratch_Get();
-        array<gdi_format> WindowFormats = GDI_Context_Supported_Window_Formats(OS->GDIContext, OS_Window_Get_GDI_Data(MainWindowID), Scratch.Arena);
+        array<gdi_format> WindowFormats = GDI_Context_Supported_Window_Formats(Context, OS_Window_Get_GDI_Data(MainWindowID), Scratch.Arena);
         gdi_format WindowFormat = GDI_FORMAT_NONE;
         
         for(gdi_format Format : WindowFormats) {
@@ -577,8 +468,8 @@ bool Application_Main() {
         }
 
         gdi_texture_usage_flags UsageFlags = GDI_TEXTURE_USAGE_FLAG_COLOR_ATTACHMENT_BIT; 
-        gdi_handle<gdi_swapchian> Swapchain = GDI_Context_Create_Swapchain(GDIContext, {
-            .WindowData   = OS_Window_Get_GDI_Data(MainWindowID)
+        gdi_handle<gdi_swapchain> Swapchain = GDI_Context_Create_Swapchain(Context, {
+            .WindowData   = OS_Window_Get_GDI_Data(MainWindowID),
             .TargetFormat = WindowFormat,
             .UsageFlags   = UsageFlags
         });
@@ -588,17 +479,17 @@ bool Application_Main() {
             return false;
         }
 
-        Editor->UIRenderPass = UI_Render_Pass_Create(Editor->Renderer, WindowFormat);
-        Editor->UIPipeline = UI_Pipeline_Create(Editor->Renderer, Editor->Packages, &Editor->UIRenderPass);
-        Window_Manager_Create(&Editor->WindowManager, {
+        Editor.UIRenderPass = UI_Render_Pass_Create(Editor.Renderer, WindowFormat);
+        Editor.UIPipeline = UI_Pipeline_Create(Editor.Renderer, Editor.Packages, &Editor.UIRenderPass);
+        Window_Manager_Create(&Editor.WindowManager, {
             .Allocator = Core_Get_Base_Allocator(),
-            .Context = GDIContext,
-            .Pipeline = Editor->UIPipeline,
+            .Renderer = Editor.Renderer,
+            .Pipeline = &Editor.UIPipeline,
             .Format = WindowFormat,
             .UsageFlags = UsageFlags
         });
 
-        Window_Open_With_Handle(&Editor->WindowManager, MainWindowID, Swapchain);
+        window_handle Handle = Window_Open_With_Handle(&Editor.WindowManager, MainWindowID, Swapchain);
     }
     
     editor_input_manager* InputManager = &Editor.InputManager;
@@ -650,23 +541,24 @@ bool Application_Main() {
         while(const os_event* Event = OS_Next_Event()) {
             switch(Event->Type) {
                 case OS_EVENT_TYPE_WINDOW_CLOSED: {
-                    window* Window = OS_Window_Get_Data(Event->Window);
+                    window* Window = (window*)OS_Window_Get_Data(Event->Window);
                     Window_Close(&Editor.WindowManager, window_handle(Window));
                 } break;
 
                 case OS_EVENT_TYPE_MOUSE_DELTA: {
                     const os_mouse_delta_event* DeltaEvent = (const os_mouse_delta_event*)Event;
-                    InputManager->MouseDelta = DeltaEvent->Delta;
+                    InputManager->MouseDelta = vec2(DeltaEvent->Delta);
                 } break;
 
                 case OS_EVENT_TYPE_MOUSE_SCROLL: {
                     const os_mouse_scroll_event* ScrollEvent = (const os_mouse_scroll_event*)Event;
-                    InputManager->Scroll = ScrollEvent->Scroll;
+                    InputManager->MouseScroll = ScrollEvent->Scroll;
                 } break;
             }
         }
 
-        for(window* Window = Editor.FirstWindow; Window; Window = Window->Next) {
+        window_manager* WindowManager = &Editor.WindowManager;
+        for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
             Window_Update(&Editor, Window);
         }
 
@@ -675,7 +567,7 @@ bool Application_Main() {
         scratch Scratch = Scratch_Get();
         array<window_handle> Windows(&Scratch);
         array<gdi_handle<gdi_swapchain>> Swapchains(&Scratch);
-        for(window* Window = Editor.FirstWindow; Window; Window = Window->Next) {
+        for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
             s32 Texture = -1;
             do {
                 Texture = GDI_Context_Get_Swapchain_Texture_Index(Context, Window->Swapchain);
@@ -738,7 +630,6 @@ bool Application_Main() {
 
     AK_Job_System_Delete(Editor.JobSystemHigh);
     AK_Job_System_Delete(Editor.JobSystemLow);
-    OS_Delete();
 
     GDI_Context_Delete(Context);
     Arena_Delete(Editor.Arena);
@@ -782,11 +673,3 @@ bool Application_Main() {
 #include "editor_input.cpp"
 #include <engine_source.cpp>
 #include <core/core.cpp>
-
-#pragma comment(lib, "ftsystem.lib")
-#pragma comment(lib, "hb.lib")
-#pragma comment(lib, "sheenbidi.lib")
-
-#if defined(OS_WIN32)
-#pragma comment(lib, "user32.lib")
-#endif

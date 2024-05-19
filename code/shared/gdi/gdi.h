@@ -309,13 +309,25 @@ struct gdi_win32_window_data {
 };
 #endif
 
+#if defined(OS_OSX)
+#ifdef __OBJC__
+@class CAMetalLayer;
+#else
+typedef void CAMetalLayer;
+#endif
+
+struct gdi_osx_window_data {
+    CAMetalLayer* Layer;
+};
+#endif
+
 struct gdi_window_data {
 #if defined(OS_WIN32)
     gdi_win32_window_data Win32;
 #elif defined(OS_ANDROID)
 #error "Not Implemented"
 #elif defined(OS_OSX)
-#error "Not Implemented"
+    gdi_osx_window_data OSX;
 #else
 #error "Not Implemented"
 #endif

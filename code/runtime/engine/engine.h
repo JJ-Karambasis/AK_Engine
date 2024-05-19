@@ -12,7 +12,7 @@
 #include <glyph_cache/glyph_cache.h>
 
 #include "modules.h"
-#include "camera.h"
+//#include "camera.h"
 
 #define AK_ENGINE_MAJOR_VERSION 0
 #define AK_ENGINE_MINOR_VERSION 1

@@ -22,7 +22,7 @@ struct render_graph_id {
     struct render_graph* Graph;
 };
 
-#define DRAW_CALLBACK(name) void name(ak_job_system* JobSystem, gdi_context* Context, draw_stream* DrawStream, dynamic_buffer* DynamicBuffer, vec2 Resolution, void* UserData)
+#define DRAW_CALLBACK(name) void name(ak_job_system* JobSystem, gdi_context* Context, draw_stream* DrawStream, dynamic_buffer* DynamicBuffer, dim2 Resolution, void* UserData)
 typedef DRAW_CALLBACK(draw_callback_func);
 
 struct draw_callback_data {
