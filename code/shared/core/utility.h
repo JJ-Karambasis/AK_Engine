@@ -47,6 +47,7 @@ f32 Exp(f32 Value);
 bool Is_Nan(f32 Value);
 bool Is_Finite(f32 Value);
 s32 Random_Between(s32 Min, s32 Max);
+s32 Align_S32(s32 Alignment, s32 Value);
 u32 Align_U32(u32 Alignment, u32 Value);
 bool In_Range(u32 Value, u32 Min, u32 Max);
 bool In_Range(u64 Value, u64 Min, u64 Max);

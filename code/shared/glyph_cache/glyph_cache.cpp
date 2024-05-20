@@ -189,7 +189,7 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
                         const_buffer Texels = {};
                         switch(Bitmap.Format) {
                             case GLYPH_BITMAP_FORMAT_GREYSCALE: {
-                                void* NewTexels = Scratch_Push(&Scratch, Bitmap.Dim.width*Bitmap.Dim.height*4);
+                                void* NewTexels = Scratch_Push(&Scratch, Bitmap.Dim.width*Bitmap.Dim.height*4u);
                                 
                                 u8* DstTexels = (u8*)NewTexels;
                                 const u8* SrcTexels = Bitmap.Texels.Ptr;
@@ -205,7 +205,7 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
                                     }
                                 }
 
-                                Texels = const_buffer(NewTexels, Bitmap.Dim.width*Bitmap.Dim.height*4);
+                                Texels = const_buffer(NewTexels, Bitmap.Dim.width*Bitmap.Dim.height*4u);
                             } break;
 
                             Invalid_Default_Case();

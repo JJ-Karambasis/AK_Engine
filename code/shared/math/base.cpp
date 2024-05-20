@@ -1,4 +1,4 @@
-vec2::vec2(const vec2i& Vec) : x(Vec.x), y(Vec.y) { }
+vec2::vec2(const vec2i& Vec) : x((f32)Vec.x), y((f32)Vec.y) { }
 vec2::vec2(const point2& P) : Data(P.Data) { }
 
 vec2i::vec2i(s32 _x, s32 _y) : x(_x), y(_y) { }
@@ -16,7 +16,7 @@ vec2i operator+(const vec2i& A, const vec2i& B) {
     return A.Data + B.Data;
 }
 
-point2::point2(const point2i& P) : x(P.x), y(P.y) {}
+point2::point2(const point2i& P) : x((f32)P.x), y((f32)P.y) {}
 
 point2 operator+(const point2& A, const vec2& B) {
     point2 Result;
@@ -87,6 +87,11 @@ bool operator==(const dim2i& A, const dim2i& B) {
 rect2::rect2(const point2& Min, const point2& Max) : P1(Min), P2(Max) { }
 rect2::rect2(const rect2i& Rect) : P1(Rect.P1), P2(Rect.P2) { }
 
+rect2 operator+(const rect2& A, const vec2& B) {
+    rect2 Result = {A.P1+B, A.P2+B};
+    return Result;
+}
+
 rect2& operator+=(rect2& A, const vec2& B) {
     A.P1 += B;
     A.P2 += B;
@@ -101,6 +106,20 @@ s32 Rect2i_Get_Height(const rect2i& Rect) {
 
 dim2i Rect2i_Get_Dim(const rect2i& Rect) {
     return Rect.P2-Rect.P1;
+}
+
+s32 Rect2i_Area(const rect2i& Rect) {
+    dim2i Dim = Rect2i_Get_Dim(Rect);
+    return Dim.width*Dim.height;
+}
+
+rect2i Rect2i_From_Dim(const dim2i& Dim) {
+    return rect2i(point2i(), point2i(Dim.width, Dim.height));
+}
+
+bool Rect2i_Is_Empty(const rect2i& Rect) {
+    dim2i Dim = Rect2i_Get_Dim(Rect);
+    return Dim.width == 0 || Dim.height == 0;
 }
 
 color4::color4(f32 _r, f32 _g, f32 _b, f32 _a) : r(_r), g(_g), b(_b), a(_a) {}

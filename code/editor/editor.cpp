@@ -434,6 +434,10 @@ bool Application_Main() {
         return false;
     }
 
+    Editor.GlyphCache = Glyph_Cache_Create({
+        .Renderer = Editor.Renderer
+    });
+
     Editor.FontManager = Font_Manager_Create({});
 
     resource* FontResource = Packages_Get_Resource(Editor.Packages, String_Lit("fonts"), String_Lit("liberation mono"), String_Lit("regular"));
@@ -443,7 +447,9 @@ bool Application_Main() {
     {
         os_monitor_id MonitorID = OS_Get_Primary_Monitor();
         os_window_id  MainWindowID = OS_Open_Window({
-            .Flags = OS_WINDOW_FLAG_MAIN_BIT|OS_WINDOW_FLAG_MAXIMIZE_BIT
+            .Flags = OS_WINDOW_FLAG_MAIN_BIT,
+            .Monitor = MonitorID,
+            .Size = dim2i(1920, 1080)
         });
         if(!MainWindowID) {
             Fatal_Error_Message();
@@ -484,6 +490,7 @@ bool Application_Main() {
         Window_Manager_Create(&Editor.WindowManager, {
             .Allocator = Core_Get_Base_Allocator(),
             .Renderer = Editor.Renderer,
+            .GlyphCache = Editor.GlyphCache,
             .Pipeline = &Editor.UIPipeline,
             .Format = WindowFormat,
             .UsageFlags = UsageFlags
@@ -493,10 +500,6 @@ bool Application_Main() {
     }
     
     editor_input_manager* InputManager = &Editor.InputManager;
-    
-    Editor.GlyphCache = Glyph_Cache_Create({
-        .Renderer = Editor.Renderer
-    });
     
     if(!Editor.GlyphCache) {
         Fatal_Error_Message();
@@ -672,4 +675,3 @@ bool Application_Main() {
 #include "ui/ui.cpp"
 #include "editor_input.cpp"
 #include <engine_source.cpp>
-#include <core/core.cpp>

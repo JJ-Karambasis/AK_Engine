@@ -302,7 +302,7 @@ internal void UI_Render_Root(ui* UI, ui_box* Root) {
                 const glyph_entry* CacheGlyph = Glyph_Cache_Get(UI->GlyphCache, Text->Font.Font, Glyph->Codepoint);
                 if(CacheGlyph) {
                     RenderBox = UI_Begin_Render_Box(UI);
-                    RenderBox->ScreenRect += Offset;
+                    RenderBox->ScreenRect = Glyph->ScreenRect+Offset;
                     RenderBox->UVRect = rect2(CacheGlyph->AtlasRect);
                     RenderBox->Color  = Root->TextColor;
                     RenderBox->TextureDim = AtlasTexture->Dim;

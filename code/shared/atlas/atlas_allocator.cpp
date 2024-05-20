@@ -1,4 +1,4 @@
-internal atlas_allocator_free_list_type Atlas__Get_Free_List_Type(u32 SmallThreshold, u32 LargeThreshold, dim2i Size) {
+internal atlas_allocator_free_list_type Atlas__Get_Free_List_Type(s32 SmallThreshold, s32 LargeThreshold, dim2i Size) {
     if(Size.width >= LargeThreshold || Size.height >= LargeThreshold) {
         return ATLAS_ALLOCATOR_FREE_LIST_TYPE_LARGE;
     } else if(Size.width >= SmallThreshold || Size.height >= SmallThreshold) {
@@ -246,8 +246,8 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, dim2i Dim) {
         return {};
     }
 
-    Dim.width = Align_U32(Allocator->Alignment.x, Dim.width);
-    Dim.height = Align_U32(Allocator->Alignment.y, Dim.height);
+    Dim.width = Align_S32(Allocator->Alignment.x, Dim.width);
+    Dim.height = Align_S32(Allocator->Alignment.y, Dim.height);
     
     atlas_allocator_node* Node = Atlas__Find_Free_Rect(Allocator, Dim);
     if(!Node) {

@@ -7,6 +7,7 @@ window_handle::window_handle(window* _Window) {
 void Window_Manager_Create(window_manager* Manager, const window_manager_create_info& CreateInfo) {
     Manager->Arena = Arena_Create(CreateInfo.Allocator);
     Manager->Renderer = CreateInfo.Renderer;
+    Manager->GlyphCache = CreateInfo.GlyphCache;
     Manager->Pipeline = CreateInfo.Pipeline;
     Manager->Format = CreateInfo.Format;
     Manager->UsageFlags = CreateInfo.UsageFlags;

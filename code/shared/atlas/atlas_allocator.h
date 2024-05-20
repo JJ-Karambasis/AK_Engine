@@ -43,8 +43,8 @@ struct atlas_allocator {
     arena*                       Arena;
     dim2i                        Size;
     vec2i                        Alignment;
-    u32                          SmallThreshold;
-    u32                          LargeThreshold;
+    s32                          SmallThreshold;
+    s32                          LargeThreshold;
     array<atlas_allocator_node*> FreeLists[ATLAS_ALLOCATOR_FREE_LIST_TYPE_COUNT];
     array<atlas_allocator_node*> OrphanList;
     atlas_allocator_node*        RootNode;
@@ -58,8 +58,8 @@ struct atlas_allocator_create_info {
     allocator* Allocator = Core_Get_Base_Allocator();
     dim2i      Dim;
     vec2i      Alignment = vec2i(1, 1);
-    u32        SmallSizeThreshold = 32;
-    u32        LargeSizeThreshold = 256;
+    s32        SmallSizeThreshold = 32;
+    s32        LargeSizeThreshold = 256;
 };
 
 atlas_allocator* Atlas_Allocator_Create(const atlas_allocator_create_info& CreateInfo);

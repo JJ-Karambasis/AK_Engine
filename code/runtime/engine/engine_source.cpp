@@ -3,3 +3,4 @@
 #include <glyph_cache/glyph_cache.cpp>
 #include <atlas/atlas.cpp>
 #include <renderer/renderer.cpp>
+#include <math/math.cpp>

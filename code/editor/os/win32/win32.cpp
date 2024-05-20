@@ -29,6 +29,13 @@ string OS_Get_Executable_Path() {
     return OS->ExecutablePath;
 }
 
+void OS_Message_Box(string Message, string Title) {
+    scratch Scratch = Scratch_Get();
+    wstring TitleW(&Scratch, Title);
+    wstring MessageW(&Scratch, Message);
+    MessageBoxW(NULL, MessageW.Str, TitleW.Str, MB_OK);
+}
+
 os_process_id OS_Exec_Process(string App, string Parameters) {
     os* OS = OS_Get();
     Assert(OS);
@@ -216,6 +223,18 @@ point2i OS_Window_Get_Pos(os_window_id WindowID) {
 
     s64 PosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->PosPacked);
     return Unpack_S64(PosPacked);
+}
+
+gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return {};
+
+    return {
+        .Win32 = {
+            .Window = Window->Handle,
+            .Instance = GetModuleHandleW(nullptr)
+        } 
+    };
 }
 
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
@@ -557,5 +576,4 @@ void OS_Set(os* OS) {
 #pragma comment(lib, "sheenbidi.lib")
 #pragma comment(lib, "user32.lib")
 #include <core/core.cpp>
-#include <math/math.cpp>
 #include <os_event.cpp>

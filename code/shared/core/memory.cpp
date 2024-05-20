@@ -1176,7 +1176,7 @@ void operator delete[](void* Memory, allocator* Allocator) noexcept {
 	Allocator_Free_Memory(Allocator, Memory);
 }
 
-inline memory_stream Memory_Stream_Begin(void* Start, void* End) {
+memory_stream Memory_Stream_Begin(void* Start, void* End) {
     return {
         .Start = (u8*)Start,
         .End = (u8*)End,
@@ -1184,15 +1184,15 @@ inline memory_stream Memory_Stream_Begin(void* Start, void* End) {
     };
 }
 
-inline bool Memory_Stream_Is_Valid(memory_stream* Stream) {
+bool Memory_Stream_Is_Valid(memory_stream* Stream) {
     return Stream->At < Stream->End;
 }
 
-inline const void* Memory_Stream_Current(memory_stream* Stream) {
+const void* Memory_Stream_Current(memory_stream* Stream) {
     return Stream->At;
 }
 
-inline void Memory_Stream_Skip(memory_stream* Stream, uptr Size) {
+void Memory_Stream_Skip(memory_stream* Stream, uptr Size) {
     Stream->At += Size;
     Assert(Stream->At <= Stream->End);
 }

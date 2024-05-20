@@ -22,7 +22,7 @@ set packages_path=%base_path%\bin\packages
 if "%msvc%"=="1" if "%x86%"=="1" call %base_path%\build\win32\init_compiler.bat x86
 if "%msvc%"=="1" if "%x64%"=="1" call %base_path%\build\win32\init_compiler.bat x64
 
-set cl_warnings=/WX /Wall /wd4061 /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4582 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262 /wd4091
+set cl_warnings=/WX /Wall /wd4061 /wd4062 /wd4065 /wd4100 /wd4189 /wd4191 /wd4201 /wd4255 /wd4505 /wd4577 /wd4582 /wd4625 /wd4626 /wd4668 /wd4710 /wd4711 /wd4774 /wd4820 /wd5045 /wd5262 /wd4091 /wd5246
 set cl_common=  /nologo /FC /Z7 /Gs- /D_CRT_SECURE_NO_WARNINGS
 set cl_debug= 	call cl /Od /DDEBUG_BUILD /MTd %cl_common% %cl_warnings%
 set cl_release= call cl /O2 %cl_common% %cl_warnings%

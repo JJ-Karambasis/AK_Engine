@@ -3,6 +3,7 @@
 
 #include <core/core.h>
 #include <math/math.h>
+#include <gdi/gdi.h>
 #include <os.h>
 #include <os_event.h>
 

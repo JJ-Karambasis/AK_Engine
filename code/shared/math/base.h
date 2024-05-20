@@ -117,6 +117,7 @@ struct rect2 {
     rect2(const rect2i& Rect);
 };
 
+rect2 operator+(const rect2& A, const vec2& B);
 rect2& operator+=(rect2& A, const vec2& B);
 
 struct rect2i {
