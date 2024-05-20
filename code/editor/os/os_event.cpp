@@ -77,10 +77,11 @@ os_event_stream* OS_Event_Manager_Allocate_Stream(os_event_manager* EventManager
 }
 
 os_event* OS_Event_Stream_Allocate_Event(os_event_stream* EventStream, os_event_type EventType) {
+    
+    
     //All events are in the structure
     //Event type: 4 bytes
     //Event data: N bytes (can be retrieved from G_OSEventTypeSize with event type)
-    
     os_event_buffer* Buffer = OS_Event_Stream__Get_Current_Buffer(EventStream, EventType);
     if(!Buffer) {
         Buffer = OS_Event_Stream__Allocate_Buffer(EventStream);

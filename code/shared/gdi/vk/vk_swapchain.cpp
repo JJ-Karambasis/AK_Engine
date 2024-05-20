@@ -99,6 +99,12 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
     VkSurfaceCapabilitiesKHR SurfaceCaps;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Context->PhysicalDevice->Device, Swapchain->Surface, &SurfaceCaps);
 
+    if(SurfaceCaps.currentExtent.width == 0 || SurfaceCaps.currentExtent.height == 0) {
+        //This is a valid case that can occur
+        Swapchain->Size = dim2i();
+        return true;
+    }
+
     VkCompositeAlphaFlagBitsKHR CompositeAlphaFlags = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
     if (SurfaceCaps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) {
         CompositeAlphaFlags = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;

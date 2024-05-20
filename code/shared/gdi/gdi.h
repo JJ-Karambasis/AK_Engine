@@ -457,6 +457,7 @@ void                              GDI_Context_Delete_Buffer(gdi_context* Context
 
 gdi_handle<gdi_swapchain>         GDI_Context_Create_Swapchain(gdi_context* Context, const gdi_swapchain_create_info& CreateInfo);
 void                              GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
+dim2i                             GDI_Context_Get_Swapchain_Size(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 bool                              GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 span<gdi_handle<gdi_texture>>     GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 s32                               GDI_Context_Get_Swapchain_Texture_Index(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);

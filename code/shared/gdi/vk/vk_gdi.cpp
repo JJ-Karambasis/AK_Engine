@@ -1407,6 +1407,14 @@ void GDI_Context_Delete_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain
     }
 }
 
+dim2i GDI_Context_Get_Swapchain_Size(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
+    vk_resource_context* ResourceContext = &Context->ResourceContext;
+    vk_handle<vk_swapchain> SwapchainHandle(Handle.ID);
+    vk_swapchain* Swapchain = VK_Resource_Get(ResourceContext->Swapchains, SwapchainHandle);
+    if(!Swapchain) return {};
+    return Swapchain->Size;
+}
+
 bool GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle) {
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     vk_handle<vk_swapchain> SwapchainHandle(Handle.ID);
@@ -1424,6 +1432,13 @@ bool GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain
         if(!VK_Create_Swapchain(Context, Swapchain, CreateInfo)) {
             //todo: some error logging
             return false;
+        }
+
+        //A zero size swapchain chain is totally valid, so we return true
+        //immediately however we don't delete or recreate texture resources
+        //since technically the swapchain couldn't be recreated
+        if(Swapchain->Size.width == 0 && Swapchain->Size.height == 0) {
+            return true;
         }
 
         if(!VK_Create_Swapchain_Textures(Context, Swapchain)) {
@@ -1684,7 +1699,7 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
 
     VK_Thread_Context_Manager_New_Frame(&Context->ThreadContextManager);
 
-    return true;
+    return Result;
 }
 
 void GDI_Cmd_List_Barrier(gdi_cmd_list* _CmdList, span<gdi_barrier> Barriers) {

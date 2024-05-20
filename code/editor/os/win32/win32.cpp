@@ -286,6 +286,8 @@ internal HWND Win32_Create_Window(WNDCLASSEXW* WindowClass, DWORD Style, LONG XO
 
 internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam) {
     LRESULT Result = 0;
+    bool DefaultMessage = false; 
+
 
     os* OS = OS_Get();
     switch(Message) {
@@ -315,6 +317,7 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
 
             WINDOWPOS* WindowPos = (WINDOWPOS*)LParam;
             AK_Atomic_Store_U64_Relaxed(&OSWindow->PosPacked, (u64)Pack_S64(WindowPos->x, WindowPos->y));
+            DefaultMessage = true; //Other we will not get WM_SIZE messages
         } break;
 
         case WM_SIZE: {
@@ -328,9 +331,12 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
         } break;
 
         default: {
-            Result = DefWindowProcW(Window, Message, WParam, LParam);
+            DefaultMessage = true;
         } break;
     }
+
+    if(DefaultMessage)
+        Result = DefWindowProcW(Window, Message, WParam, LParam);
 
     return Result;
 }
@@ -437,6 +443,9 @@ int main() {
     OS.Arena = Arena_Create(Core_Get_Base_Allocator());
     OS_Set(&OS);
 
+    OS_Event_Manager_Create(&OS.EventManager, 1);
+    OS.EventStream = OS_Event_Manager_Allocate_Stream(&OS.EventManager);
+
     {
         scratch Scratch = Scratch_Get();
         string ExecutableFilePath = Win32_Get_Executable_Path(&Scratch);
@@ -499,8 +508,6 @@ int main() {
         OS.Monitors[i].MonitorInfo.Name = string(OS.Arena, wstring(DisplayDevice.DeviceString));
     }
 
-    OS_Event_Manager_Create(&OS.EventManager, 1);
-
     Async_Pool_Create(&OS.ProcessPool, OS.Arena, OS_MAX_PROCESS_COUNT);
     Async_Pool_Create(&OS.WindowPool, OS.Arena, OS_MAX_WINDOW_COUNT);
 
@@ -511,9 +518,7 @@ int main() {
     for(;;) {
         MSG Message;
         if(!PeekMessageW(&Message, NULL, 0, 0, PM_REMOVE)) {
-            if(OS.EventStream) {
-                OS_Event_Manager_Push_Back_Stream(&OS.EventManager, OS.EventStream);
-            }
+            OS_Event_Manager_Push_Back_Stream(&OS.EventManager, OS.EventStream);
             OS.EventStream = OS_Event_Manager_Allocate_Stream(&OS.EventManager);
 
             BOOL Status = GetMessageW(&Message, NULL, 0, 0);

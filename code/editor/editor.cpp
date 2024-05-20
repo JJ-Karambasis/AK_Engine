@@ -44,45 +44,51 @@ struct comparer<vtx_idx_p_uv> {
     }
 };
 
+internal void Window_Resize(editor* Editor, window* Window) {
+    gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
+    if(Window->Framebuffers.Count) {
+        for(gdi_handle<gdi_framebuffer> Framebuffer : Window->Framebuffers) {
+            GDI_Context_Delete_Framebuffer(Context, Framebuffer);
+        }
+        Array_Clear(&Window->Framebuffers);
+    }
+
+    if(Window->SwapchainViews.Count) {
+        for(gdi_handle<gdi_texture_view> SwapchainView : Window->SwapchainViews) {
+            GDI_Context_Delete_Texture_View(Context, SwapchainView);
+        }
+        Array_Clear(&Window->SwapchainViews);
+    }
+
+    if(!GDI_Context_Resize_Swapchain(Context, Window->Swapchain)) {
+        Assert(false);
+        return;
+    }
+    
+    Window->Size = GDI_Context_Get_Swapchain_Size(Context, Window->Swapchain);
+    if(Window->Size.width == 0 || Window->Size.height == 0) return;
+
+    span<gdi_handle<gdi_texture>> Textures = GDI_Context_Get_Swapchain_Textures(Context, Window->Swapchain);
+    for(uptr i = 0; i < Textures.Count; i++) {
+        Array_Push(&Window->SwapchainViews, GDI_Context_Create_Texture_View(Context, {
+            .Texture = Textures[i]
+        }));
+
+        Array_Push(&Window->Framebuffers, GDI_Context_Create_Framebuffer(Context, {
+            .Attachments = {Window->SwapchainViews[i]},
+            .RenderPass = Editor->UIRenderPass.RenderPass
+        }));
+    }
+
+}
+
 internal void Window_Handle_Resize(editor* Editor, window* Window) {
     dim2i CurrentWindowSize = OS_Window_Get_Size(Window->OSHandle);
     if(CurrentWindowSize.width != 0 && CurrentWindowSize.height != 0) {
         if(CurrentWindowSize != Window->Size) {
-            gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
-
-            if(Window->Framebuffers.Count) {
-                for(gdi_handle<gdi_framebuffer> Framebuffer : Window->Framebuffers) {
-                    GDI_Context_Delete_Framebuffer(Context, Framebuffer);
-                }
-                Array_Clear(&Window->Framebuffers);
-            }
-
-            if(Window->SwapchainViews.Count) {
-                for(gdi_handle<gdi_texture_view> SwapchainView : Window->SwapchainViews) {
-                    GDI_Context_Delete_Texture_View(Context, SwapchainView);
-                }
-                Array_Clear(&Window->SwapchainViews);
-            }
-
-            if(!GDI_Context_Resize_Swapchain(Context, Window->Swapchain)) {
-                Assert(false);
-                return;
-            }
-
-            span<gdi_handle<gdi_texture>> Textures = GDI_Context_Get_Swapchain_Textures(Context, Window->Swapchain);
-            for(uptr i = 0; i < Textures.Count; i++) {
-                Array_Push(&Window->SwapchainViews, GDI_Context_Create_Texture_View(Context, {
-                    .Texture = Textures[i]
-                }));
-
-                Array_Push(&Window->Framebuffers, GDI_Context_Create_Framebuffer(Context, {
-                    .Attachments = {Window->SwapchainViews[i]},
-                    .RenderPass = Editor->UIRenderPass.RenderPass
-                }));
-            }
+            Window_Resize(Editor, Window);
         }
     }
-    Window->Size = CurrentWindowSize;
 }
 
 #if 0
@@ -353,6 +359,45 @@ void Window_Update(editor* Editor, window* Window) {
 #endif
 }
 
+bool Editor_Render(editor* Editor, span<window*> WindowsToRender) {
+    scratch Scratch = Scratch_Get();
+    render_graph_id RenderGraph = Renderer_Create_Graph(Editor->Renderer);
+    gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
+
+    array<gdi_handle<gdi_swapchain>> Swapchains(&Scratch, WindowsToRender.Count);
+    for(uptr i = 0; i < WindowsToRender.Count; i++) {
+        window* Window = WindowsToRender[i];
+        if(Window->Size.width == 0 || Window->Size.height == 0) continue;
+
+        s32 Texture = GDI_Context_Get_Swapchain_Texture_Index(Context, Window->Swapchain);
+        if(Texture == -1) {
+            Renderer_Delete_Graph(Editor->Renderer, RenderGraph);
+            return false;
+        }
+
+        Assert(Texture >= 0);
+
+        ui_renderer* UIRenderer = &Window->UI->Renderer;
+
+        Render_Task_Attach_Render_Pass(Editor->Renderer, UIRenderer->RenderTask, {
+            .RenderPass = Editor->UIRenderPass.RenderPass,
+            .Framebuffer = Window->Framebuffers[(uptr)Texture],
+            .ClearValues = {
+                gdi_clear::Color(0.0f, 0.0f, 1.0f, 1.0f)
+            }
+        },
+        {GDI_RESOURCE_STATE_COLOR});
+
+        Array_Push(&Swapchains, Window->Swapchain);
+        Render_Graph_Add_Task(RenderGraph, UIRenderer->RenderTask, 0);
+    }
+
+    bool Result = Renderer_Execute(Editor->Renderer, RenderGraph, Swapchains);
+    Renderer_Delete_Graph(Editor->Renderer, RenderGraph);
+
+    return Result;
+}
+
 bool Application_Main() {
     gdi* GDI = GDI_Create({
         .LoggingCallbacks = {
@@ -564,71 +609,44 @@ bool Application_Main() {
         for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
             Window_Update(&Editor, Window);
         }
+        Glyph_Cache_Update(Editor.GlyphCache);
 
-        render_graph_id RenderGraph = Renderer_Create_Graph(Editor.Renderer);
-        
         scratch Scratch = Scratch_Get();
-        array<window_handle> Windows(&Scratch);
-        array<gdi_handle<gdi_swapchain>> Swapchains(&Scratch);
+
+        //Sometimes a window can fail to render because it resizes so we need
+        //to keep a sepearate list of windows to render 
+        bool RenderResult = true;
+        array<window*> WindowsToRender(&Scratch);
         for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
-            s32 Texture = -1;
-            do {
-                Texture = GDI_Context_Get_Swapchain_Texture_Index(Context, Window->Swapchain);
-                if(Texture == -1) {
+            Array_Push(&WindowsToRender, Window);
+        }
+        
+        do {
+            RenderResult = Editor_Render(&Editor, WindowsToRender); 
+            if(!RenderResult) {
+                array<window*> NewWindowsToRender(&Scratch);
+
+                for(window* Window : WindowsToRender) {
                     gdi_swapchain_status PresentStatus = GDI_Context_Get_Swapchain_Status(Context, Window->Swapchain); 
                     if(PresentStatus == GDI_SWAPCHAIN_STATUS_RESIZE) {
-                        Window_Handle_Resize(&Editor, Window);    
+                        Window_Resize(&Editor, Window);
+                        Array_Push(&NewWindowsToRender, Window); 
                     } else if (PresentStatus != GDI_SWAPCHAIN_STATUS_OK) {
                         Assert(false);
                         //todo: Actual error logging
                         return false;
                     }
                 }
-            } while(Texture == -1);
 
-            Assert(Texture >= 0);
-
-            ui_renderer* UIRenderer = &Window->UI->Renderer;
-
-            Render_Task_Attach_Render_Pass(Editor.Renderer, UIRenderer->RenderTask, {
-                .RenderPass = Editor.UIRenderPass.RenderPass,
-                .Framebuffer = Window->Framebuffers[(uptr)Texture],
-                .ClearValues = {
-                    gdi_clear::Color(0.0f, 0.0f, 1.0f, 1.0f)
-                }
-            },
-            {GDI_RESOURCE_STATE_COLOR});
-
-            Array_Push(&Windows, window_handle(Window));
-            Array_Push(&Swapchains, Window->Swapchain);
-
-            Render_Graph_Add_Task(RenderGraph, UIRenderer->RenderTask, 0);
-        }
-        
-        Glyph_Cache_Update(Editor.GlyphCache);
-        while(!Renderer_Execute(Editor.Renderer, RenderGraph, Swapchains)) {
-            bool HandledError = false;
-            for(window_handle WindowHandle : Windows) {
-                window* Window = Window_Get(WindowHandle);
-                gdi_swapchain_status PresentStatus = GDI_Context_Get_Swapchain_Status(Context, Window->Swapchain); 
-                if(PresentStatus == GDI_SWAPCHAIN_STATUS_RESIZE) {
-                    Window_Handle_Resize(&Editor, Window);
-                    HandledError = true;    
-                } else if (PresentStatus != GDI_SWAPCHAIN_STATUS_OK) {
+                if(!NewWindowsToRender.Count) {
                     Assert(false);
                     //todo: Actual error logging
                     return false;
                 }
-            }
 
-            if(!HandledError) {
-                Assert(false);
-                //todo: Actual error logging
-                return false;
+                WindowsToRender = NewWindowsToRender;
             }
-        }
-
-        Renderer_Delete_Graph(Editor.Renderer, RenderGraph);
+        } while(!RenderResult);
     }
 
     AK_Job_System_Delete(Editor.JobSystemHigh);
