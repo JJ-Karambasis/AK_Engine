@@ -50,11 +50,13 @@ struct point2 {
     
     point2() = default;
     point2(const point2i& P);
+    point2(f32 x, f32 y);
 };
 
 point2 operator+(const point2& A, const vec2& B);
 point2 operator+(const point2& A, const dim2& B);
 point2& operator+=(point2& A, const vec2& B);
+point2 operator/(const point2& A, const dim2& B);
 
 struct point2i {
     union {

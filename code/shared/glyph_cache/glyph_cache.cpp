@@ -221,7 +221,11 @@ void Glyph_Cache_Update(glyph_cache* Cache) {
                         Entry->AllocID = AtlasAlloc;
                         Entry->Key = Key;
                         Entry->Hash = CreateEntry->Hash;
-                        Entry->AtlasRect = AtlasIndex->Rect;
+                        
+                        Entry->UVRect = {
+                            point2(AtlasIndex->Rect.P1) / dim2(Cache->Atlas.Dim),
+                            point2(AtlasIndex->Rect.P2) / dim2(Cache->Atlas.Dim)
+                        };
 
                         Hashmap_Add_By_Hash(&Cache->Cache, {
                             .FontBufferPtr = FontBuffer.Ptr,

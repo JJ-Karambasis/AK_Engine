@@ -57,7 +57,7 @@ struct atlas_allocator {
 struct atlas_allocator_create_info {
     allocator* Allocator = Core_Get_Base_Allocator();
     dim2i      Dim;
-    vec2i      Alignment = vec2i(1, 1);
+    vec2i      Alignment = vec2i(4, 4);
     s32        SmallSizeThreshold = 32;
     s32        LargeSizeThreshold = 256;
 };

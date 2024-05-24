@@ -178,13 +178,18 @@ s32 Random_Between(s32 Min, s32 Max) {
     return Min + x % n;
 }
 
-s32 Align_S32(s32 Alignment, s32 Value) {
+s32 Align(s32 Alignment, s32 Value) {
     s32 Remainder = Value % Alignment;
     return Remainder ? Value + (Alignment-Remainder) : Value;
 }
 
-u32 Align_U32(u32 Alignment, u32 Value) {
+u32 Align(u32 Alignment, u32 Value) {
     u32 Remainder = Value % Alignment;
+    return Remainder ? Value + (Alignment-Remainder) : Value;
+}
+
+u64 Align(u64 Alignment, u64 Value) {
+    u64 Remainder = Value % Alignment;
     return Remainder ? Value + (Alignment-Remainder) : Value;
 }
 

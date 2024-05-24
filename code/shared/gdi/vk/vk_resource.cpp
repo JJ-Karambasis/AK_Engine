@@ -65,6 +65,7 @@ internal inline void VK_Delete_Resource(gdi_context* Context, vk_buffer* Buffer)
 } 
 
 internal inline void VK_Delete_Resource(gdi_context* Context, vk_swapchain* Swapchain) {
+    
     VK_Delete_Swapchain(Context, Swapchain);
 } 
 

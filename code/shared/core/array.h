@@ -15,6 +15,16 @@ struct static_array {
         return Array[Index];
     }
 
+    inline type& At(uptr Index) {
+        Assert(Index < N);
+        return Array[Index];
+    }
+
+    inline const type& At(uptr Index) const {
+        Assert(Index < N);
+        return Array[Index];
+    }
+
     inline static constexpr uptr Count() {
         return N;
     }
@@ -91,6 +101,7 @@ inline void Array_Clear(array<type>* Array) {
 
 template <typename type>
 inline void Array_Init(array<type>* Array, allocator* Allocator, uptr InitialCapacity=32) {
+    Zero_Struct(Array);
     Array->Allocator = Allocator;
     Array_Reserve(Array, InitialCapacity);
 }

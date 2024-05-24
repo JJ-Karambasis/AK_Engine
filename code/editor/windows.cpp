@@ -8,7 +8,8 @@ void Window_Manager_Create(window_manager* Manager, const window_manager_create_
     Manager->Arena = Arena_Create(CreateInfo.Allocator);
     Manager->Renderer = CreateInfo.Renderer;
     Manager->GlyphCache = CreateInfo.GlyphCache;
-    Manager->Pipeline = CreateInfo.Pipeline;
+    Manager->UIPipeline = CreateInfo.UIPipeline;
+    Manager->UIGlobalLayout = CreateInfo.UIGlobalLayout;
     Manager->Format = CreateInfo.Format;
     Manager->UsageFlags = CreateInfo.UsageFlags;
 }
@@ -36,9 +37,10 @@ window_handle Window_Open_With_Handle(window_manager* Manager, os_window_id Wind
 
     Window->UI = UI_Create({
         .Allocator = Window->Arena,
-        .GlyphCache = Manager->GlyphCache,
         .Renderer = Manager->Renderer,
-        .Pipeline = Manager->Pipeline
+        .GlyphCache = Manager->GlyphCache,
+        .Pipeline = Manager->UIPipeline,
+        .GlobalLayout = Manager->UIGlobalLayout
     });
 
     OS_Window_Set_Data(Window->OSHandle, Window);

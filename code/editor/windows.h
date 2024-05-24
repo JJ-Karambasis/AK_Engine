@@ -29,12 +29,13 @@ struct window {
 };
 
 struct window_manager {
-    arena*                  Arena;
-    renderer*               Renderer;
-    glyph_cache*            GlyphCache;
-    ui_pipeline*            Pipeline;
-    gdi_format              Format;
-    gdi_texture_usage_flags UsageFlags;
+    arena*                            Arena;
+    renderer*                         Renderer;
+    glyph_cache*                      GlyphCache;
+    gdi_handle<gdi_pipeline>          UIPipeline;
+    gdi_handle<gdi_bind_group_layout> UIGlobalLayout;
+    gdi_format                        Format;
+    gdi_texture_usage_flags           UsageFlags;
 
     //Windows
     window* FirstWindow;
@@ -45,12 +46,13 @@ struct window_manager {
 };
 
 struct window_manager_create_info {
-    allocator*              Allocator;
-    renderer*               Renderer;
-    glyph_cache*            GlyphCache;
-    ui_pipeline*            Pipeline;
-    gdi_format              Format;
-    gdi_texture_usage_flags UsageFlags;
+    allocator*                        Allocator;
+    renderer*                         Renderer;
+    glyph_cache*                      GlyphCache;
+    gdi_handle<gdi_pipeline>          UIPipeline;
+    gdi_handle<gdi_bind_group_layout> UIGlobalLayout;
+    gdi_format                        Format;
+    gdi_texture_usage_flags           UsageFlags;
 };
 
 void          Window_Manager_Create(window_manager* Manager, const window_manager_create_info& CreateInfo);

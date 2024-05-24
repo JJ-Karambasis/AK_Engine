@@ -1,6 +1,24 @@
 #ifndef VK_GDI_H
 #define VK_GDI_H
 
+/*
+todo: 
+-There is a chance for swapchain resizing to fail. This is very complicating
+ and difficult to reproduce. This might also just be a vulkan validation error
+ issue and in release there is no problem. The problem is that when we delete 
+ the swapchain we also release the semaphores with the swapchain and recreate 
+ them. Vulkan throws a validation error layer saying that the semaphore cannot
+ be used in a submitted buffer, even though the fence that submitted the commands
+ have been finished. I suspect this is because the fence only signals when swapchains
+ is finished in the command buffers and not when the presentation engine is 
+ finished waiting on the swapchain. There is some ambiguity with the spec as 
+ shown by this post and the links it has: 
+ https://stackoverflow.com/questions/75437792/how-to-synchronize-vulkan-swapchain-presentation-with-sempahore-destruction 
+ Ultimately the way the semaphores and queue submissions work needs a rework,
+ but since this might need to be changed or updated for async copy/compute, ray tracing,
+ sparse resources, or different presentation queue families, we can fix this later.
+*/
+
 #include <core/core.h>
 #include <math/math.h>
 #include <gdi/gdi.h>

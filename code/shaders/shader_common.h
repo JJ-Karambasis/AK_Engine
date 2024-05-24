@@ -9,6 +9,8 @@
 #define vec2 float2
 #define dim2 float2
 #define point2 float2
+#define point3 float3
+#define point4 float4
 #define vec3 float3
 #define vec4 float4
 #define color4 float4

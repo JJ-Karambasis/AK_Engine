@@ -69,7 +69,7 @@ if "%clang%"=="1" set def=             -D
 if "%clang%"=="1" set cpp=             -std=c++20
 if "%clang%"=="1" set c=               -std=c17
 
-set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%dependencies_path%\harfbuzz\src %inc%%shared_path%\text\uba\sheenbidi\config %inc%%dependencies_path%\SheenBidi\Headers %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%runtime_path%\engine %inc%%code_path%\shaders %inc%%code_path%\shared
+set include_common=%inc%%dependencies_path%\ak_lib %inc%%dependencies_path%\stb %inc%%dependencies_path%\harfbuzz\src %inc%%shared_path%\text\uba\sheenbidi\config %inc%%dependencies_path%\SheenBidi\Headers %inc%%shared_path%\glyph_rasterizer\freetype\config %inc%%dependencies_path%\freetype\include %inc%%runtime_path%\core %inc%%runtime_path% %inc%%code_path%\shaders %inc%%code_path%\shared
 
 if "%debug%"=="1"   set compile=%compile_debug%
 if "%release%"=="1" set compile=%compile_release%
@@ -182,8 +182,8 @@ if "%release%"=="1" set shader=%shader_release% %include_common%
 set vtx_shader=%shader% -T vs_6_0 -E VS_Main -fvk-invert-y
 set pxl_shader=%shader% -T ps_6_0 -E PS_Main
 
-mkdir %packages_path%\shaders\ui_box 2> NUL
-pushd %packages_path%\shaders\ui_box
-    %vtx_shader% /Fo vtx_shader.shader %shader_path%\ui_box.hlsl 
-    %pxl_shader% /Fo pxl_shader.shader %shader_path%\ui_box.hlsl
+mkdir %packages_path%\shaders\ui 2> NUL
+pushd %packages_path%\shaders\ui
+    %vtx_shader% /Fo ui_vtx.shader %shader_path%\ui.hlsl 
+    %pxl_shader% /Fo ui_pxl.shader %shader_path%\ui.hlsl
 popd

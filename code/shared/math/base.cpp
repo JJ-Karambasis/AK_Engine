@@ -18,6 +18,8 @@ vec2i operator+(const vec2i& A, const vec2i& B) {
 
 point2::point2(const point2i& P) : x((f32)P.x), y((f32)P.y) {}
 
+point2::point2(f32 _x, f32 _y) : x(_x), y(_y) { }
+
 point2 operator+(const point2& A, const vec2& B) {
     point2 Result;
     Result.Data = A.Data+B.Data;
@@ -33,6 +35,12 @@ point2 operator+(const point2& A, const dim2& B) {
 point2& operator+=(point2& A, const vec2& B) {
     A = A+B;
     return A;
+}
+
+point2 operator/(const point2& A, const dim2& B) {
+    point2 Result;
+    Result.Data = A.Data/B.Data;
+    return Result;
 }
 
 point2i::point2i(s32 _x, s32 _y) : x(_x), y(_y) { }

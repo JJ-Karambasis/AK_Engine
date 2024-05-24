@@ -66,7 +66,7 @@ namespace draw_bits {
     static const RENDERER_DIRTY_FLAG_TYPE PrimCount = (1u << draw_bit_index::PrimCountIndex);
     static const RENDERER_DIRTY_FLAG_TYPE InstCount = (1u << draw_bit_index::InstCountIndex);
     static const RENDERER_DIRTY_FLAG_TYPE IsVtxDraw = (1u << draw_bit_index::IsVtxDrawIndex);
-    static const dyn_bind_group_indices DynOffsets = Compute_Bits<dyn_bind_group_indices>(draw_bit_index::DynOffsetIndices);
+    static const dyn_bind_group_bits DynOffsets = Compute_Bits<dyn_bind_group_bits>(draw_bit_index::DynOffsetIndices);
     static const RENDERER_DIRTY_FLAG_TYPE Count = (1u << draw_bit_index::Count); //Hopefully this protects against overflow by compiler
 };
 

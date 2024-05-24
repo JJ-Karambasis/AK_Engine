@@ -38,6 +38,7 @@ struct f32_2x {
 
 f32_2x operator+(f32_2x A, f32_2x B);
 f32_2x operator/(f32 A, const f32_2x& B);
+f32_2x operator/(const f32_2x& A, const f32_2x& B);
 
 struct f32_3x {
     union {

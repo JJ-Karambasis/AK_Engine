@@ -7,5 +7,6 @@
 #define To_Radians(degrees) ((degrees)*PI*0.00555555555f)
 
 #include "base.h"
+#include "matrix.h"
 
 #endif

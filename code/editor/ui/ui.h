@@ -5,7 +5,6 @@ struct ui;
 
 #include "ui_common.h"
 #include "ui_stack.h"
-#include "ui_renderer.h"
 
 typedef u32 ui_box_flags;
 
@@ -43,7 +42,7 @@ struct ui_text {
 struct ui;
 struct ui_box;
 
-#define UI_CUSTOM_RENDER_FUNC_DEFINE(name) void name(ui* UI, ui_box* Box, void* UserData)
+#define UI_CUSTOM_RENDER_FUNC_DEFINE(name) void name(ui* UI, ui_box* Box, im_renderer* Renderer, void* UserData)
 typedef UI_CUSTOM_RENDER_FUNC_DEFINE(ui_custom_render_func);
 
 struct ui_box {
@@ -78,10 +77,11 @@ struct ui_box {
 };
 
 struct ui_create_info {
-    allocator*   Allocator;
-    glyph_cache* GlyphCache;
-    renderer*    Renderer;
-    ui_pipeline* Pipeline;
+    allocator*                        Allocator;
+    renderer*                         Renderer;
+    glyph_cache*                      GlyphCache;
+    gdi_handle<gdi_pipeline>          Pipeline;
+    gdi_handle<gdi_bind_group_layout> GlobalLayout;
 };
 
 struct ui {
@@ -89,8 +89,13 @@ struct ui {
     arena*  Arena;
 
     //Dependencies
-    glyph_cache* GlyphCache;
-    ui_renderer  Renderer;
+    glyph_cache*             GlyphCache;
+
+    //Rendering
+    im_renderer*               Renderer;
+    gdi_handle<gdi_pipeline>   Pipeline;
+    gdi_handle<gdi_bind_group> GlobalBindGroup;
+    gdi_handle<gdi_buffer>     GlobalBuffer;
 
     //Build arenas
     u64    BuildIndex;
@@ -103,11 +108,6 @@ struct ui {
     //Build Hierarchy
     ui_box* Root;
 
-    //Rendering
-    u32                  RenderBoxCount;
-    ui_render_box_entry* FirstRenderBox;
-    ui_render_box_entry* LastRenderBox;
-    ui_render_box_entry* CurrentRenderBox;
 
     //Current box
     ui_box* CurrentBox;
@@ -140,10 +140,6 @@ void UI_Box_Attach_Display_Text(ui* UI, ui_box* Box, string Text);
 //Box get attachments API
 const ui_text* UI_Box_Get_Display_Text(ui_box* Box);
 dim2           UI_Box_Get_Dim(ui_box* Box);
-
-//Rendering API
-ui_render_box* UI_Begin_Render_Box(ui* UI);
-void           UI_End_Render_Box(ui* UI);
 
 //UI push stack API
 void UI_Push_Parent(ui* UI, ui_box* Box);

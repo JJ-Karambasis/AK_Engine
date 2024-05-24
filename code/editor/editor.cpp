@@ -1,7 +1,7 @@
 #include "editor.h"
 
 #include <shader_common.h>
-#include <ui_box_shader.h>
+#include <ui_shader.h>
 
 void Fatal_Error_Message() {
     OS_Message_Box("A fatal error occurred during initialization!\nPlease view the error logs for more info.", "Error");
@@ -25,24 +25,61 @@ GDI_LOG_DEFINE(GDI_Log_Error) {
     Assert(false);
 }
 
-struct vtx_idx_p_uv {
-    u32 P;
-    u32 UV;
-};
+internal void Create_UI_Handles(editor* Editor, gdi_format Format) {
+    gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
+    gdi_handle<gdi_bind_group_layout> TextureLayout = Renderer_Get_Texture_Layout(Editor->Renderer);
 
-template <>
-struct hasher<vtx_idx_p_uv> {
-    inline u32 Hash(vtx_idx_p_uv V) {
-        return Hash_Combine(V.P, V.UV);
-    }
-};
+    Editor->UIRenderPass = GDI_Context_Create_Render_Pass(Context, {
+        .Attachments = {
+            gdi_render_pass_attachment::Color(Format, GDI_LOAD_OP_CLEAR, GDI_STORE_OP_STORE)
+        }
+    });
 
-template <>
-struct comparer<vtx_idx_p_uv> {
-    inline bool Equal(vtx_idx_p_uv A, vtx_idx_p_uv B) {
-        return A.P == B.P && A.UV == B.UV;
-    }
-};
+    packages* Packages = Editor->Packages;
+
+    scratch Scratch = Scratch_Get();
+    package* UIShaderPackage = Packages_Get_Package(Packages, String_Lit("shaders"), String_Lit("ui")); 
+    resource* UIVtxShaderResource = Packages_Get_Resource(Packages, UIShaderPackage, String_Lit("ui_vtx"));
+    resource* UIPxlShaderResource = Packages_Get_Resource(Packages, UIShaderPackage, String_Lit("ui_pxl"));
+
+    const_buffer VtxShader = Packages_Load_Entire_Resource(Packages, UIVtxShaderResource, &Scratch);
+    const_buffer PxlShader = Packages_Load_Entire_Resource(Packages, UIPxlShaderResource, &Scratch);
+
+    Editor->UIPipeline = GDI_Context_Create_Graphics_Pipeline(Context, {
+        .VS = {VtxShader, String_Lit("VS_Main")},
+        .PS = {PxlShader, String_Lit("PS_Main")},
+        .Layouts = {Editor->GlobalLayout, TextureLayout},
+        .GraphicsState = {
+            .VtxBufferBindings = { {
+                    .ByteStride = sizeof(ui_vertex),
+                    .InputRate = GDI_VTX_INPUT_RATE_VTX,
+                    .Attributes = { { 
+                            .Semantic = String_Lit("Position"),
+                            .ByteOffset = offsetof(ui_vertex, P),
+                            .Format = GDI_FORMAT_R32G32_FLOAT
+                        }, {
+                            .Semantic = String_Lit("Texcoord"),
+                            .ByteOffset = offsetof(ui_vertex, UV),
+                            .Format = GDI_FORMAT_R32G32_FLOAT
+                        }, {
+                            .Semantic = String_Lit("Color"),
+                            .ByteOffset = offsetof(ui_vertex, C),
+                            .Format = GDI_FORMAT_R32G32B32A32_FLOAT
+                        }
+                    }
+                }
+            },
+            .Topology = GDI_TOPOLOGY_TRIANGLE_LIST,
+            .BlendStates = { { 
+                    .BlendEnabled = true,
+                    .SrcColor = GDI_BLEND_ONE,
+                    .DstColor = GDI_BLEND_ONE_MINUS_SRC_ALPHA
+                }
+            }
+        },
+        .RenderPass = Editor->UIRenderPass
+    });
+}
 
 internal void Window_Resize(editor* Editor, window* Window) {
     gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
@@ -76,7 +113,7 @@ internal void Window_Resize(editor* Editor, window* Window) {
 
         Array_Push(&Window->Framebuffers, GDI_Context_Create_Framebuffer(Context, {
             .Attachments = {Window->SwapchainViews[i]},
-            .RenderPass = Editor->UIRenderPass.RenderPass
+            .RenderPass = Editor->UIRenderPass
         }));
     }
 
@@ -377,10 +414,10 @@ bool Editor_Render(editor* Editor, span<window*> WindowsToRender) {
 
         Assert(Texture >= 0);
 
-        ui_renderer* UIRenderer = &Window->UI->Renderer;
+        im_renderer* UIRenderer = Window->UI->Renderer;
 
         Render_Task_Attach_Render_Pass(Editor->Renderer, UIRenderer->RenderTask, {
-            .RenderPass = Editor->UIRenderPass.RenderPass,
+            .RenderPass = Editor->UIRenderPass,
             .Framebuffer = Window->Framebuffers[(uptr)Texture],
             .ClearValues = {
                 gdi_clear::Color(0.0f, 0.0f, 1.0f, 1.0f)
@@ -483,6 +520,14 @@ bool Application_Main() {
         .Renderer = Editor.Renderer
     });
 
+    Editor.GlobalLayout = GDI_Context_Create_Bind_Group_Layout(Context, {
+        .Bindings = { { 
+                .Type = GDI_BIND_GROUP_TYPE_CONSTANT,
+                .StageFlags = GDI_SHADER_STAGE_ALL
+            }
+        }
+    });
+
     Editor.FontManager = Font_Manager_Create({});
 
     resource* FontResource = Packages_Get_Resource(Editor.Packages, String_Lit("fonts"), String_Lit("liberation mono"), String_Lit("regular"));
@@ -530,13 +575,13 @@ bool Application_Main() {
             return false;
         }
 
-        Editor.UIRenderPass = UI_Render_Pass_Create(Editor.Renderer, WindowFormat);
-        Editor.UIPipeline = UI_Pipeline_Create(Editor.Renderer, Editor.Packages, &Editor.UIRenderPass);
+        Create_UI_Handles(&Editor, WindowFormat);
         Window_Manager_Create(&Editor.WindowManager, {
             .Allocator = Core_Get_Base_Allocator(),
             .Renderer = Editor.Renderer,
             .GlyphCache = Editor.GlyphCache,
-            .Pipeline = &Editor.UIPipeline,
+            .UIPipeline = Editor.UIPipeline,
+            .UIGlobalLayout = Editor.GlobalLayout,
             .Format = WindowFormat,
             .UsageFlags = UsageFlags
         });
@@ -658,37 +703,6 @@ bool Application_Main() {
     return true;
 }
 
-// void Window_Update_And_Render(editor* Editor, window* Window) {
-//     gdi_context* GDIContext = Window->GDIContext;
-//     gdi_cmd_list* CmdList = GDI_Context_Begin_Cmd_List(GDIContext, gdi_cmd_list_type::Graphics, Window->Swapchain); 
-//     Window->CmdList = GDI_Context_Begin_Cmd_List(GDIContext, gdi_cmd_list_type::Graphics);
-    
-//     u32 TextureIndex = GDI_Cmd_List_Get_Swapchain_Texture_Index(CmdList, GDI_RESOURCE_STATE_COLOR);
-//     span<gdi_handle<gdi_texture>> SwapchainTextures = GDI_Context_Get_Swapchain_Textures(GDIContext, Window->Swapchain);
-
-//     GDI_Cmd_List_Barrier(CmdList, {
-//         {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_NONE, GDI_RESOURCE_STATE_COLOR}, 
-//     });
-
-//     GDI_Cmd_List_Begin_Render_Pass(CmdList, {
-//         .RenderPass = Editor->UIRenderPass,
-//         .Framebuffer = Window->SwapchainFramebuffers[TextureIndex],
-//         .ClearValues = { 
-//             gdi_clear::Color(0.0f, 0.0f, 1.0f, 0.0f)
-//         }
-//     });
-
-//     //todo: Render common window properties here
-
-//     GDI_Cmd_List_Execute_Cmds(CmdList, {Window->CmdList});
-
-//     GDI_Cmd_List_End_Render_Pass(CmdList);
-//     GDI_Cmd_List_Barrier(CmdList, {
-//         {gdi_resource::Texture(SwapchainTextures[TextureIndex]), GDI_RESOURCE_STATE_COLOR, GDI_RESOURCE_STATE_PRESENT}
-//     });
-// }
-
-//#include "level_editor/level_editor.cpp"
 #include "windows.cpp"
 #include "ui/ui.cpp"
 #include "editor_input.cpp"

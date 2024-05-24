@@ -249,21 +249,12 @@ internal void UI_Shape(ui* UI, ui_box* Box, string Text) {
     DisplayText->Dim = Dim;
 }
 
-internal void UI_Render_Root(ui* UI, ui_box* Root) {
+void UI_Render_Root(ui* UI, ui_box* Root, im_renderer* Renderer) {
     if(Root->CustomRenderFunc) {
-        Root->CustomRenderFunc(UI, Root, Root->RenderFuncUserData);
+        Root->CustomRenderFunc(UI, Root, Renderer, Root->RenderFuncUserData);
     }
 
-    //todo: Render box here
-    const renderer_texture* AtlasTexture = Glyph_Cache_Get_Atlas(UI->GlyphCache);
-
-    ui_render_box* RenderBox = UI_Begin_Render_Box(UI);
-    RenderBox->ScreenRect = Root->Rect;
-    RenderBox->UVRect = {};
-    RenderBox->Color  = Root->BackgroundColor;
-    RenderBox->TextureDim = AtlasTexture->Dim;
-    RenderBox->Texture    = AtlasTexture->BindGroup; 
-    UI_End_Render_Box(UI);
+    IM_Draw_Quad(Renderer, Root->Rect, {}, Root->BackgroundColor);
 
     if(Root->Flags & UI_BOX_FLAG_DRAW_TEXT) {
         ui_text* Text = &Root->Text;
@@ -301,21 +292,37 @@ internal void UI_Render_Root(ui* UI, ui_box* Root) {
                 ui_text_glyph* Glyph = Text->Glyphs + i;
                 const glyph_entry* CacheGlyph = Glyph_Cache_Get(UI->GlyphCache, Text->Font.Font, Glyph->Codepoint);
                 if(CacheGlyph) {
-                    RenderBox = UI_Begin_Render_Box(UI);
-                    RenderBox->ScreenRect = Glyph->ScreenRect+Offset;
-                    RenderBox->UVRect = rect2(CacheGlyph->AtlasRect);
-                    RenderBox->Color  = Root->TextColor;
-                    RenderBox->TextureDim = AtlasTexture->Dim;
-                    RenderBox->Texture = AtlasTexture->BindGroup;
-                    UI_End_Render_Box(UI);
+                    IM_Draw_Quad(Renderer, Glyph->ScreenRect+Offset, CacheGlyph->UVRect, Root->TextColor);
                 }
             }
         }
     }
 
     for(ui_box* Child = Root->FirstChild; Child; Child = Child->NextSibling) {
-        UI_Render_Root(UI, Child);
+        UI_Render_Root(UI, Child, Renderer);
     }
+}
+
+IM_CALLBACK_DEFINE(UI_Render) {
+    ui* UI = (ui*)UserData;
+
+    ui_global_data GlobalData {
+        .Projection = Transpose(Ortho_Projection2D(Resolution.width, Resolution.height))
+    };
+
+    GDI_Context_Buffer_Write(IM_Context(Renderer), UI->GlobalBuffer, &GlobalData);
+
+    const renderer_texture* AtlasTexture = Glyph_Cache_Get_Atlas(UI->GlyphCache);
+
+    IM_Push_Pipeline(Renderer, UI->Pipeline);
+    IM_Push_Bind_Group(Renderer, 0, UI->GlobalBindGroup);
+    IM_Push_Bind_Group(Renderer, 1, AtlasTexture->BindGroup);
+
+    UI_Render_Root(UI, UI->Root, Renderer);
+
+    IM_Pop_Bind_Group(Renderer, 1);
+    IM_Pop_Bind_Group(Renderer, 0);
+    IM_Pop_Pipeline(Renderer);
 }
 
 ui* UI_Create(const ui_create_info& CreateInfo) {
@@ -323,7 +330,31 @@ ui* UI_Create(const ui_create_info& CreateInfo) {
     ui* UI = Arena_Push_Struct(Arena, ui);
     UI->Arena = Arena;
     UI->GlyphCache = CreateInfo.GlyphCache;
-    UI_Renderer_Create(&UI->Renderer, CreateInfo.Renderer, CreateInfo.Pipeline, UI);
+    UI->Pipeline = CreateInfo.Pipeline;
+    
+    UI->Renderer = IM_Create({
+        .Allocator = Arena,
+        .Renderer = CreateInfo.Renderer,
+        .Callback = UI_Render,
+        .UserData = UI
+    });
+
+    gdi_context* Context = IM_Context(UI->Renderer);
+    UI->GlobalBuffer = GDI_Context_Create_Buffer(Context, {
+        .ByteSize = sizeof(ui_global_data),
+        .UsageFlags = GDI_BUFFER_USAGE_FLAG_CONSTANT_BUFFER_BIT 
+    });
+
+    UI->GlobalBindGroup = GDI_Context_Create_Bind_Group(Context, {
+        .Layout = CreateInfo.GlobalLayout,
+        .WriteInfo = {
+            .Bindings = { {
+                    .Type = GDI_BIND_GROUP_TYPE_CONSTANT,
+                    .BufferBinding = {UI->GlobalBuffer}
+                }
+            }
+        }
+    });
 
     UI->BuildArenas[0] = Arena_Create(UI->Arena);
     UI->BuildArenas[1] = Arena_Create(UI->Arena);
@@ -381,8 +412,6 @@ void UI_End_Build(ui* UI) {
     for(u32 i = 0; i < UI_AXIS2_COUNT; i++) {
         UI_Layout_Root(UI, UI->Root, (ui_axis2)i);
     }
-
-    UI_Render_Root(UI, UI->Root);
 
     UI->BuildIndex++;
     Arena_Clear(UI_Build_Arena(UI));
@@ -539,20 +568,6 @@ const ui_text* UI_Box_Get_Display_Text(ui_box* Box) {
 
 dim2 UI_Box_Get_Dim(ui_box* Box) {
     return Box->FixedSize;
-}
-
-ui_render_box* UI_Begin_Render_Box(ui* UI) {
-    Assert(!UI->CurrentRenderBox);
-    ui_render_box_entry* Result = Arena_Push_Struct(UI_Build_Arena(UI), ui_render_box_entry);
-    UI->CurrentRenderBox = Result;
-    return Result;
-}
-
-void UI_End_Render_Box(ui* UI) {
-    Assert(UI->CurrentRenderBox);
-    SLL_Push_Back(UI->FirstRenderBox, UI->LastRenderBox, UI->CurrentRenderBox);
-    UI->RenderBoxCount++;
-    UI->CurrentRenderBox = nullptr;
 }
 
 #define UI_Current_Stack_Entry(constant, type) (type*)(UI->Stacks[constant].Last)
@@ -731,5 +746,3 @@ ui_stack_text_color* UI_Current_Text_Color(ui* UI) {
 ui_stack_text_alignment* UI_Current_Text_Alignment(ui* UI) {
     return UI_Current_Stack_Entry(UI_STACK_TYPE_TEXT_ALIGNMENT, ui_stack_text_alignment);
 }
-
-#include "ui_renderer.cpp"

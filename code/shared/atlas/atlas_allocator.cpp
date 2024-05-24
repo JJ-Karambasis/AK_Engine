@@ -246,8 +246,8 @@ atlas_alloc_id Atlas_Allocator_Alloc(atlas_allocator* Allocator, dim2i Dim) {
         return {};
     }
 
-    Dim.width = Align_S32(Allocator->Alignment.x, Dim.width);
-    Dim.height = Align_S32(Allocator->Alignment.y, Dim.height);
+    Dim.width = Align(Allocator->Alignment.x, Dim.width);
+    Dim.height = Align(Allocator->Alignment.y, Dim.height);
     
     atlas_allocator_node* Node = Atlas__Find_Free_Rect(Allocator, Dim);
     if(!Node) {

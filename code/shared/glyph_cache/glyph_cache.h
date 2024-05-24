@@ -2,7 +2,7 @@
 #define GLYPH_CACHE_H
 
 struct glyph_entry {
-    rect2i AtlasRect;
+    rect2 UVRect;
 };
 
 struct glyph_cache_key {

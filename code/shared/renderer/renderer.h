@@ -50,4 +50,6 @@ void Render_Graph_Clear(render_graph_id RenderGraph);
 
 void Render_Task_Attach_Render_Pass(renderer* Renderer, render_task_id Task, const gdi_render_pass_begin_info& RenderPassInfo, span<gdi_resource_state> AttachmentStates);
 
+#include "im/im_renderer.h"
+
 #endif

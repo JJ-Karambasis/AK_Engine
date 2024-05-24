@@ -18,11 +18,12 @@ struct editor {
     ak_job_system*                    JobSystemLow;
     renderer*                         Renderer;
     packages*                         Packages;
-    font_manager*                     FontManager;
+    font_manager*                     FontManager; 
     window_manager                    WindowManager;
     glyph_cache*                      GlyphCache;
-    ui_render_pass                    UIRenderPass;
-    ui_pipeline                       UIPipeline;
+    gdi_handle<gdi_bind_group_layout> GlobalLayout;
+    gdi_handle<gdi_render_pass>       UIRenderPass;
+    gdi_handle<gdi_pipeline>          UIPipeline;
     editor_input_manager              InputManager;
     renderer_texture                  DefaultTexture;
     const_buffer                      MainFontBuffer;

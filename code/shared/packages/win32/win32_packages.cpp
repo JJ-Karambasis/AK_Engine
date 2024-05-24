@@ -1,5 +1,5 @@
 #include <packages/packages.cpp>
-#include <os2/win32/win32_shared.h>
+#include <os_shared/win32/win32_shared.cpp>
 
 struct win32_file_resource : resource {
     HANDLE                 Handle;
@@ -261,5 +261,3 @@ void Packages_Wait_On_Task(packages* Packages, package_io_task Task) {
         AK_Auto_Reset_Event_Wait(&ReadTask->Event);
     }
 }
-
-#include <os2/win32/win32_shared.cpp>
