@@ -310,7 +310,6 @@ IM_CALLBACK_DEFINE(UI_Render) {
         .Projection = Transpose(Ortho_Projection2D(Resolution.width, Resolution.height))
     };
 
-    Log_Debug_Simple("%f %f", Resolution.width, Resolution.height);
 
     GDI_Context_Buffer_Write(IM_Context(Renderer), UI->GlobalBuffer, &GlobalData);
 

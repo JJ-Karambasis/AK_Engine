@@ -648,8 +648,6 @@ bool Application_Main() {
         LastCounter = StartCounter;
         Editor_Input_Manager_New_Frame(InputManager, dt);
 
-        Log_Debug_Simple("dt %f", dt);
-
         for(u32 KeyIndex = 0; KeyIndex < OS_KEYBOARD_KEY_COUNT; KeyIndex++) {
             if(OS_Keyboard_Get_Key_State((os_keyboard_key)KeyIndex)) {
                 InputManager->KeyboardInput[KeyIndex].IsDown = true;
@@ -708,7 +706,6 @@ bool Application_Main() {
         }
 
         if(Render) Editor_Render(&Editor, WindowsToRender);
-        else Log_Debug_Simple("Skipped");
         AK_Mutex_Unlock(&Editor.RenderLock);
     }
 
