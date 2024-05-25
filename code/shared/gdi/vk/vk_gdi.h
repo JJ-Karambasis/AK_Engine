@@ -61,9 +61,20 @@ struct vk_device {
     string                           Name;
 };
 
+struct vk_fence {
+    VkFence Fence;
+    u64     Value;
+    u32     NextFreeIndex;
+};
+
 struct vk_frame_context {
     VkCommandBuffer CopyCmdBuffer;
-    VkFence         Fence;
+    u64             Fence;
+};
+
+struct vk_fence_storage {
+    array<vk_fence> Array;
+    u32             FirstFreeIndex;
 };
 
 struct gdi_context {
@@ -80,6 +91,7 @@ struct gdi_context {
     vk_descriptor_pool      DescriptorPool;
     u64                     TotalFramesRendered;
     array<vk_frame_context> Frames;
+    vk_fence_storage        Fences;
 
     vk_thread_context_manager ThreadContextManager;
     vk_resource_context       ResourceContext;

@@ -156,6 +156,7 @@ struct vk_resource_context {
 
 void VK_Resource_Record_Frame(vk_resource_base* Resource);
 void VK_Resource_Update_Last_Frame_Indices(vk_resource_context* ResourceContext);
+void VK_Resource_Reset(vk_resource_context* ResourceContext);
 bool VK_Resource_Should_Delete(gdi_context* Context, vk_resource_base* Resource, u64* OutDeleteFrameIndex);
 void VK_Resource_Context_Create(gdi_context* Context, vk_resource_context* ResourceContext, const gdi_context_create_info& CreateInfo);
 void VK_Resource_Context_Delete(vk_resource_context* ResourceContext);

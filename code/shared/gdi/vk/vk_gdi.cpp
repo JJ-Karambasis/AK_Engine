@@ -747,16 +747,9 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
             //todo: logging
             return false;
         }
-
-        VkFenceCreateInfo FenceCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
-        };
-
-        if(i != 0) {
-            FenceCreateInfo.flags |= VK_FENCE_CREATE_SIGNALED_BIT;
-        }
-        vkCreateFence(Context->Device, &FenceCreateInfo, Context->VKAllocator, &Frame->Fence);
     }
+    Array_Init(&Context->Fences.Array, Context->Arena);
+    Context->Fences.FirstFreeIndex = (u32)-1;
 
     return true;
 }
@@ -767,6 +760,40 @@ u64 VK_Get_Current_Frame_Index(gdi_context* Context) {
 
 vk_frame_context* VK_Get_Current_Frame_Context(gdi_context* Context) {
     return &Context->Frames[Context->TotalFramesRendered % Context->Frames.Count];
+}
+
+vk_fence* VK_Allocate_Fence(gdi_context* Context) {
+    vk_fence_storage* FenceStorage = &Context->Fences;
+    
+    u32 Index;
+    if(FenceStorage->FirstFreeIndex != (u32)-1) {
+        Index = FenceStorage->FirstFreeIndex;
+        FenceStorage->FirstFreeIndex = FenceStorage->Array[Index].NextFreeIndex;
+    } else {
+        Index = Safe_U32(FenceStorage->Array.Count);
+        vk_fence Fence = {
+            .NextFreeIndex = (u32)-1
+        };
+
+        VkFenceCreateInfo FenceCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+        };
+        vkCreateFence(Context->Device, &FenceCreateInfo, Context->VKAllocator, &Fence.Fence);
+        Array_Push(&FenceStorage->Array, Fence);
+    }
+
+    vk_fence* Fence = &FenceStorage->Array[Index];
+    Fence->NextFreeIndex = Index;
+
+    return Fence;
+}
+
+void VK_Free_Fence(gdi_context* Context, u32 FenceIndex) {
+    vk_fence* Fence = &Context->Fences.Array[FenceIndex];
+    if(Fence->NextFreeIndex == FenceIndex) {
+        Fence->NextFreeIndex = Context->Fences.FirstFreeIndex;
+        Context->Fences.FirstFreeIndex = FenceIndex;
+    }
 }
 
 vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context, bool IsPrimary) {
@@ -795,6 +822,7 @@ vk_cmd_list* VK_Allocate_Cmd_List(gdi_context* Context, bool IsPrimary) {
         }
     }
     CmdList->Pipeline = nullptr;
+    CmdList->Submitted = false;
     DLL_Push_Back(CmdStorage->Head, CmdStorage->Tail, CmdList);
 
     return CmdList;
@@ -878,8 +906,8 @@ void GDI_Context_Delete(gdi_context* Context) {
         //Delete any remaining resources that are not on the delete queue
         VK_Resource_Context_Delete(&Context->ResourceContext);
 
-        for(vk_frame_context& FrameContext : Context->Frames) {
-            vkDestroyFence(Context->Device, FrameContext.Fence, Context->VKAllocator);
+        for(vk_fence& Fence : Context->Fences.Array) {
+            vkDestroyFence(Context->Device, Fence.Fence, Context->VKAllocator);
         }
 
         VK_Descriptor_Pool_Delete(&Context->DescriptorPool);
@@ -1485,7 +1513,7 @@ s32 GDI_Context_Get_Swapchain_Texture_Index(gdi_context* Context, gdi_handle<gdi
         u32 ImageIndex;
         VkResult SwapchainStatus = vkAcquireNextImageKHR(Context->Device, Swapchain->Handle, UINT64_MAX, Swapchain->AcquireLocks[FrameIndex], VK_NULL_HANDLE, &ImageIndex);
         if(SwapchainStatus != VK_SUCCESS) {
-            Swapchain->Status = SwapchainStatus == VK_SUBOPTIMAL_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_ERROR;
+            Swapchain->Status = SwapchainStatus == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_ERROR;
             return -1;
         }
         Swapchain->Status = GDI_SWAPCHAIN_STATUS_OK;
@@ -1570,6 +1598,7 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
     VK_Thread_Context_Manager_Copy_Data(&Context->ThreadContextManager, CopyCmdList->CmdBuffer);
     vkEndCommandBuffer(CopyCmdList->CmdBuffer);
     Array_Push(&CmdBuffers, CopyCmdList->CmdBuffer);
+    CopyCmdList->Submitted = true;
 
     u64 FrameIndex = VK_Get_Current_Frame_Index(Context);
 
@@ -1578,9 +1607,10 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
         vk_cmd_pool* CmdPool = VK_Get_Current_Cmd_Pool(&Context->ThreadContextManager, ThreadContext);
         
         for(vk_cmd_list* CmdList = CmdPool->PrimaryCmds.Head; CmdList; CmdList = CmdList->Next) {
-            if(CmdList != CopyCmdList) {
+            if(!CmdList->Submitted) {
                 vkEndCommandBuffer(CmdList->CmdBuffer);
                 Array_Push(&CmdBuffers, CmdList->CmdBuffer);
+                CmdList->Submitted = true;
             }
         }
 
@@ -1624,12 +1654,17 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
             .pSignalSemaphores = PresentSemaphores.Ptr
         };
 
-        if(vkQueueSubmit(Context->GraphicsQueue, 1, &SubmitInfo, FrameContext->Fence) != VK_SUCCESS) {
+        vk_fence* Fence = VK_Allocate_Fence(Context);
+        if(vkQueueSubmit(Context->GraphicsQueue, 1, &SubmitInfo, Fence->Fence) != VK_SUCCESS) {
             Assert(false);
             //todo: See todo above the function
             return false;
         }
+        Fence->Value = FrameContext->Fence;
+        FrameContext->Fence++;
     }
+
+    VK_Resource_Update_Last_Frame_Indices(ResourceContext);
 
     //If we fail to submit a swapchain for presentation. This is an error
     //however, the command buffers have been submitted, and therefore they must
@@ -1667,7 +1702,7 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
                     SwapchainPtrs[i]->Status = Results[i] == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_OK;
                 }
                 //While this is an error case. Command buffers
-                //return false;
+                return false;
             } break;
 
             default: {
@@ -1681,24 +1716,32 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
         }
     }
 
-    VK_Resource_Update_Last_Frame_Indices(ResourceContext);
+    VK_Resource_Reset(ResourceContext);
 
     Context->TotalFramesRendered++;
     FrameContext = VK_Get_Current_Frame_Context(Context);
-    VkResult FenceStatus = vkGetFenceStatus(Context->Device, FrameContext->Fence); 
-    if(FenceStatus == VK_NOT_READY) {
-        if(vkWaitForFences(Context->Device, 1, &FrameContext->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
-            Assert(false);
-            return false;
+
+    for(uptr i = 0; i < Context->Fences.Array.Count; i++) {
+        vk_fence* Fence = &Context->Fences.Array[i];
+        if(Fence->NextFreeIndex == i && (Fence->Value < FrameContext->Fence)) {
+            VkResult FenceStatus = vkGetFenceStatus(Context->Device, Fence->Fence); 
+            if(FenceStatus == VK_NOT_READY) {
+                if(vkWaitForFences(Context->Device, 1, &Fence->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
+                    Assert(false);
+                    return false;
+                }
+            } else if (FenceStatus != VK_SUCCESS) {
+                Assert(false);
+                return false;
+            }
+            
+            if(vkResetFences(Context->Device, 1, &Fence->Fence) != VK_SUCCESS) {
+                Assert(false);
+                return false;
+            }
+
+            VK_Free_Fence(Context, Safe_U32(i));
         }
-    } else if (FenceStatus != VK_SUCCESS) {
-        Assert(false);
-        return false;
-    }
-    
-    if(vkResetFences(Context->Device, 1, &FrameContext->Fence) != VK_SUCCESS) {
-        Assert(false);
-        return false;
     }
 
     VK_Thread_Context_Manager_New_Frame(&Context->ThreadContextManager);

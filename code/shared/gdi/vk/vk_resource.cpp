@@ -75,8 +75,15 @@ inline void VK_Resource_Update_Frame_Indices(gdi_context* Context, vk_resource_p
         type* Resource = Pool.Resources + i;
         if(AK_Atomic_Load_U32(&Resource->InUse, AK_ATOMIC_MEMORY_ORDER_ACQUIRE)) {
             Resource->LastUsedFrameIndex = Context->TotalFramesRendered;
-            AK_Atomic_Store_U32(&Resource->InUse, false, AK_ATOMIC_MEMORY_ORDER_RELEASE);
         }
+    }
+}
+
+template <typename type>
+inline void VK_Resource_Reset(vk_resource_pool<type>& Pool) {
+    for(u32 i = 0; i < Pool.FreeIndices.Capacity; i++) {
+        type* Resource = Pool.Resources + i;
+        AK_Atomic_Store_U32(&Resource->InUse, false, AK_ATOMIC_MEMORY_ORDER_RELEASE);
     }
 }
 
@@ -112,6 +119,19 @@ void VK_Resource_Update_Last_Frame_Indices(vk_resource_context* ResourceContext)
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->Textures);
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->Buffers);
     VK_Resource_Update_Frame_Indices(Context, ResourceContext->Swapchains);
+}
+
+void VK_Resource_Reset(vk_resource_context* ResourceContext) {
+    VK_Resource_Reset(ResourceContext->Pipelines);
+    VK_Resource_Reset(ResourceContext->BindGroups);
+    VK_Resource_Reset(ResourceContext->BindGroupLayouts);
+    VK_Resource_Reset(ResourceContext->Framebuffers);
+    VK_Resource_Reset(ResourceContext->RenderPasses);
+    VK_Resource_Reset(ResourceContext->Samplers);
+    VK_Resource_Reset(ResourceContext->TextureViews);
+    VK_Resource_Reset(ResourceContext->Textures);
+    VK_Resource_Reset(ResourceContext->Buffers);
+    VK_Resource_Reset(ResourceContext->Swapchains);
 }
 
 bool VK_Resource_Should_Delete(gdi_context* Context, vk_resource_base* Resource, u64* OutDeleteFrameIndex) {

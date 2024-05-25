@@ -4,6 +4,7 @@
 struct vk_cmd_list {
     gdi_context*    Context;
     VkCommandBuffer CmdBuffer;
+    b32             Submitted;
     vk_pipeline*    Pipeline;
     vk_cmd_list*    Next;
     vk_cmd_list*    Prev;

@@ -213,8 +213,9 @@ void OS_Window_Set_Title(os_window_id WindowID, string Title) {
 dim2i OS_Window_Get_Size(os_window_id WindowID) {
     os_window* Window = OS_Window_Get(WindowID);
     if(!Window) return dim2i();
-    s64 SizePacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->SizePacked);
-    return Unpack_S64(SizePacked);
+    RECT WindowRect;
+    GetClientRect(Window->Handle, &WindowRect);
+    return dim2i(WindowRect.right-WindowRect.left, WindowRect.bottom-WindowRect.top);
 }
 
 point2i OS_Window_Get_Pos(os_window_id WindowID) {
@@ -309,25 +310,6 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
 
             os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_WINDOW_CLOSED);
             Event->Window = OSWindow->ID;
-        } break;
-
-        case WM_WINDOWPOSCHANGED: {
-            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
-            Assert(OSWindow->Handle == Window);
-
-            WINDOWPOS* WindowPos = (WINDOWPOS*)LParam;
-            AK_Atomic_Store_U64_Relaxed(&OSWindow->PosPacked, (u64)Pack_S64(WindowPos->x, WindowPos->y));
-            DefaultMessage = true; //Other we will not get WM_SIZE messages
-        } break;
-
-        case WM_SIZE: {
-            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
-            Assert(OSWindow->Handle == Window);
-
-            RECT WindowRect;
-            GetWindowRect(Window, &WindowRect);
-            dim2i Dim = dim2i(WindowRect.right-WindowRect.left, WindowRect.bottom-WindowRect.top);
-            AK_Atomic_Store_U64_Relaxed(&OSWindow->SizePacked, (u64)Pack_S64(Dim.Data));
         } break;
 
         default: {

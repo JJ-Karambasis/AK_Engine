@@ -260,10 +260,8 @@ void Window_Update_Panel_Tree(editor* Editor, ui* UI, panel* Panel, vec2 PanelDi
 }
 #endif
 
-void Window_Update(editor* Editor, window* Window) {
-    Window_Handle_Resize(Editor, Window);
-
-    ui* UI = Window->UI;
+void Window_Update_UI(editor* Editor, window* Window) {
+ui* UI = Window->UI;
     UI_Begin_Build(UI, window_handle(Window));
 
     UI_Push_Font(UI, {
@@ -316,6 +314,12 @@ void Window_Update(editor* Editor, window* Window) {
     UI_Pop_Font(UI);
     
     UI_End_Build(UI);
+}
+
+void Window_Update(editor* Editor, window* Window) {
+    Window_Handle_Resize(Editor, Window);
+
+    
 
 #if 0 
     UI_Begin(UI);
@@ -405,6 +409,8 @@ bool Editor_Render(editor* Editor, span<window*> WindowsToRender) {
     for(uptr i = 0; i < WindowsToRender.Count; i++) {
         window* Window = WindowsToRender[i];
         if(Window->Size.width == 0 || Window->Size.height == 0) continue;
+
+        Window_Update_UI(Editor, Window);
 
         s32 Texture = GDI_Context_Get_Swapchain_Texture_Index(Context, Window->Swapchain);
         if(Texture == -1) {
