@@ -6,6 +6,8 @@
 #include <gdi/gdi.h>
 #include <os.h>
 #include <os_event.h>
+#include <dwmapi.h>
+
 
 struct os_process {
     PROCESS_INFORMATION Information;
@@ -39,6 +41,9 @@ struct os {
     async_pool<os_window> WindowPool;
     ak_atomic_u64         MainWindowID;
     bool                  AppResult;
+
+    ak_atomic_ptr DrawWindowUserData;
+    ak_atomic_ptr DrawWindowCallbackFunc;
 };
 
 enum win32_message {

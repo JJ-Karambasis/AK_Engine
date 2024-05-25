@@ -124,6 +124,7 @@ internal void Window_Handle_Resize(editor* Editor, window* Window) {
     if(CurrentWindowSize.width != 0 && CurrentWindowSize.height != 0) {
         if(CurrentWindowSize != Window->Size) {
             Window_Resize(Editor, Window);
+            Assert(CurrentWindowSize == Window->Size);
         }
     }
 }
@@ -281,12 +282,11 @@ ui* UI = Window->UI;
     {
         f32 MenuWidth = UI_Box_Get_Dim(MenuBox).width;
 
-        UI_Set_Next_Background_Color(UI, Color4_Yellow());
-        UI_Set_Next_Text_Color(UI, Color4_Blue());
-        UI_Set_Next_Pref_Width(UI, UI_Text(4, 1.0));
-        UI_Set_Next_Text_Alignment(UI, UI_TEXT_ALIGNMENT_CENTER);
-        UI_Build_Box_From_String(UI, UI_BOX_FLAG_DRAW_TEXT, String_Lit("Help###Menu Box 1"));
-        
+        UI_Push_Fixed_Width(UI, ButtonSize);
+
+        UI_Set_Next_Background_Color(UI, Color4_White());
+        UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 1"));
+
         f32 Width = UI_Box_Get_Dim(UI_Current_Box(UI)).width;
 
         f32 FinalButtonsSize = ButtonSize*3;
@@ -294,8 +294,6 @@ ui* UI = Window->UI;
 
         UI_Set_Next_Fixed_Width(UI, NextRect);
         UI_Build_Box_From_String(UI, 0, String_Lit("###Filler Box"));
-
-        UI_Push_Fixed_Width(UI, ButtonSize);
         
         UI_Set_Next_Background_Color(UI, Color4_Blue());
         UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 2"));
@@ -440,6 +438,52 @@ bool Editor_Render(editor* Editor, span<window*> WindowsToRender) {
     Glyph_Cache_Update(Editor->GlyphCache);
 
     return Result;
+}
+
+internal OS_DRAW_WINDOW_CALLBACK_DEFINE(Application_Draw_Window) {
+    window* Window = (window*)OS_Window_Get_Data(WindowID);
+    editor* Editor = (editor*)UserData;
+    AK_Mutex_Lock(&Editor->RenderLock);
+    bool Failed = false;
+    do {
+        Window_Handle_Resize(Editor, Window);
+        Failed = !Editor_Render(Editor, {Window});
+    } while(Failed);
+    // Window_Handle_Resize(Editor, Window);
+    // Editor_Render(Editor, {Window});
+    AK_Mutex_Unlock(&Editor->RenderLock);
+}
+
+internal void Editor_Render_Windows(editor* Editor, span<window*> WindowsToRender) {
+    bool RenderResult;
+    scratch Scratch = Scratch_Get();
+    gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
+    do {
+        RenderResult = Editor_Render(Editor, WindowsToRender); 
+        if(!RenderResult) {
+            array<window*> NewWindowsToRender(&Scratch);
+
+            for(window* Window : WindowsToRender) {
+                gdi_swapchain_status PresentStatus = GDI_Context_Get_Swapchain_Status(Context, Window->Swapchain); 
+                if(PresentStatus == GDI_SWAPCHAIN_STATUS_RESIZE) {
+                    Window_Resize(Editor, Window);
+                    Array_Push(&NewWindowsToRender, Window); 
+                } else if (PresentStatus != GDI_SWAPCHAIN_STATUS_OK) {
+                    Assert(false);
+                    //todo: Actual error logging
+                    return;
+                }
+            }
+
+            if(!NewWindowsToRender.Count) {
+                Assert(false);
+                //todo: Actual error logging
+                return;
+            }
+
+            WindowsToRender = NewWindowsToRender;
+        }
+    } while(!RenderResult);
 }
 
 bool Application_Main() {
@@ -621,11 +665,17 @@ bool Application_Main() {
     u64 Frequency = AK_Query_Performance_Frequency();
     u64 LastCounter = AK_Query_Performance_Counter();
 
+    AK_Mutex_Create(&Editor.RenderLock);
+    OS_Set_Draw_Window_Callback(Application_Draw_Window, &Editor);
+
+
     while(OS_Window_Is_Open(OS_Get_Main_Window())) {
         u64 StartCounter = AK_Query_Performance_Counter();
         f64 dt = (double)(StartCounter-LastCounter)/(double)Frequency;
         LastCounter = StartCounter;
         Editor_Input_Manager_New_Frame(InputManager, dt);
+
+        Log_Debug_Simple("dt %f", dt);
 
         for(u32 KeyIndex = 0; KeyIndex < OS_KEYBOARD_KEY_COUNT; KeyIndex++) {
             if(OS_Keyboard_Get_Key_State((os_keyboard_key)KeyIndex)) {
@@ -669,32 +719,9 @@ bool Application_Main() {
             Array_Push(&WindowsToRender, Window);
         }
         
-        do {
-            RenderResult = Editor_Render(&Editor, WindowsToRender); 
-            if(!RenderResult) {
-                array<window*> NewWindowsToRender(&Scratch);
-
-                for(window* Window : WindowsToRender) {
-                    gdi_swapchain_status PresentStatus = GDI_Context_Get_Swapchain_Status(Context, Window->Swapchain); 
-                    if(PresentStatus == GDI_SWAPCHAIN_STATUS_RESIZE) {
-                        Window_Resize(&Editor, Window);
-                        Array_Push(&NewWindowsToRender, Window); 
-                    } else if (PresentStatus != GDI_SWAPCHAIN_STATUS_OK) {
-                        Assert(false);
-                        //todo: Actual error logging
-                        return false;
-                    }
-                }
-
-                if(!NewWindowsToRender.Count) {
-                    Assert(false);
-                    //todo: Actual error logging
-                    return false;
-                }
-
-                WindowsToRender = NewWindowsToRender;
-            }
-        } while(!RenderResult);
+        AK_Mutex_Lock(&Editor.RenderLock);
+        Editor_Render_Windows(&Editor, WindowsToRender);
+        AK_Mutex_Unlock(&Editor.RenderLock);
     }
 
     AK_Job_System_Delete(Editor.JobSystemHigh);

@@ -69,6 +69,10 @@ dim2i        OS_Window_Get_Size(os_window_id WindowID);
 point2i      OS_Window_Get_Pos(os_window_id WindowID);
 gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID);
 
+#define OS_DRAW_WINDOW_CALLBACK_DEFINE(name) void name(os_window_id WindowID, void* UserData)
+typedef OS_DRAW_WINDOW_CALLBACK_DEFINE(os_draw_window_callback_func);
+void OS_Set_Draw_Window_Callback(os_draw_window_callback_func* Callback, void* UserData);
+
 //Event api
 typedef u32 os_keyboard_key;
 typedef u32 os_mouse_key;

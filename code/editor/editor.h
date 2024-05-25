@@ -28,6 +28,7 @@ struct editor {
     renderer_texture                  DefaultTexture;
     const_buffer                      MainFontBuffer;
     font_id                           MainFont;
+    ak_mutex                          RenderLock;
 };
 
 void Window_Update(editor* Editor, window* Window);

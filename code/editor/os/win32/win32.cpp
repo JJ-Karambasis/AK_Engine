@@ -237,6 +237,12 @@ gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID) {
     };
 }
 
+void OS_Set_Draw_Window_Callback(os_draw_window_callback_func* Callback, void* UserData) {
+    os* OS = OS_Get();
+    AK_Atomic_Store_Ptr_Relaxed(&OS->DrawWindowUserData, UserData);
+    AK_Atomic_Store_Ptr(&OS->DrawWindowCallbackFunc, Callback, AK_ATOMIC_MEMORY_ORDER_RELEASE);
+}
+
 bool OS_Keyboard_Get_Key_State(os_keyboard_key Key) {
     //Command is not supported on win32
     if(Key == OS_KEYBOARD_KEY_COMMAND) {
@@ -311,6 +317,10 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
             Event->Window = OSWindow->ID;
         } break;
 
+        case WM_ERASEBKGND: {
+            Result = 1;
+        } break;
+
         case WM_WINDOWPOSCHANGED: {
             os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
             Assert(OSWindow->Handle == Window);
@@ -320,16 +330,32 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
             DefaultMessage = true; //Other we will not get WM_SIZE messages
         } break;
 
-        case WM_SIZE: {
+        case WM_SIZE:
+        case WM_PAINT:
+        {
             os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
             Assert(OSWindow->Handle == Window);
 
             RECT WindowRect;
-            GetWindowRect(Window, &WindowRect);
+            GetClientRect(Window, &WindowRect);
             dim2i Dim = dim2i(WindowRect.right-WindowRect.left, WindowRect.bottom-WindowRect.top);
             AK_Atomic_Store_U64_Relaxed(&OSWindow->SizePacked, (u64)Pack_S64(Dim.Data));
-            DefaultMessage = true; //Other we will not get WM_SIZE messages
+
+            os_draw_window_callback_func* Draw_Window = (os_draw_window_callback_func*)AK_Atomic_Load_Ptr(&OS->DrawWindowCallbackFunc, AK_ATOMIC_MEMORY_ORDER_ACQUIRE);
+            if(Draw_Window) {
+                void* UserData = AK_Atomic_Load_Ptr_Relaxed(&OS->DrawWindowUserData);
+                PAINTSTRUCT PaintStruct;
+                BeginPaint(Window, &PaintStruct);
+                Draw_Window(OSWindow->ID, UserData);
+                EndPaint(Window, &PaintStruct);
+            } else {
+                DefaultMessage = true;
+            }
         } break;
+
+        case WM_NCCALCSIZE: {
+            DefaultMessage = true;
+        }break;
 
         default: {
             DefaultMessage = true;
@@ -373,8 +399,8 @@ internal LRESULT Win32_OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARAM
             AK_Atomic_Store_U64_Relaxed(&Window->PosPacked, (u64)Pack_S64(Origin.x, Origin.y));
             AK_Atomic_Store_U64_Relaxed(&Window->SizePacked, (u64)Pack_S64(Dim.width, Dim.height));
 
-            DWORD ExStyle = 0;
-            DWORD Style = WS_OVERLAPPEDWINDOW;
+            DWORD ExStyle = WS_EX_APPWINDOW;
+            DWORD Style = WS_OVERLAPPEDWINDOW|WS_SIZEBOX;
 
             Window->Handle = CreateWindowExW(ExStyle, WIN32_GLOBAL_WINDOW_CLASS, L"", Style, 
                                              Origin.x, Origin.y, Dim.width, Dim.height, 
@@ -462,9 +488,10 @@ int main() {
 
     WNDCLASSEXW MainWindowClass = {
         .cbSize = sizeof(WNDCLASSEXW),
+        .style = CS_VREDRAW|CS_HREDRAW,
         .lpfnWndProc = Win32_OS_Main_Window_Proc,
         .hInstance = GetModuleHandleW(NULL),
-        .lpszClassName = WIN32_GLOBAL_WINDOW_CLASS
+        .lpszClassName = WIN32_GLOBAL_WINDOW_CLASS,
     };
 
     if(!RegisterClassExW(&BaseWindowClass)) {
@@ -581,5 +608,6 @@ void OS_Set(os* OS) {
 #pragma comment(lib, "hb.lib")
 #pragma comment(lib, "sheenbidi.lib")
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "Dwmapi.lib")
 #include <core/core.cpp>
 #include <os_event.cpp>

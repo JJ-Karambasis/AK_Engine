@@ -129,6 +129,12 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
 
     VkFormat TargetFormat = VK_Get_Format(Swapchain->Format);
 
+    //todo: This bullshit is crap.
+    //swapchain being mailbox mode is a temporary workaround for the BS that is
+    //resizing windows on win32. It stutters and jitterings the ui if you don't
+    //render fast enough, and because the DWM is horrible, it tends to update 
+    //faster than the vsync. Not sure what to do about this, probably need custom
+    //border logic and a whole lot of ridiculous shenanigans to get it working 
     VkSwapchainCreateInfoKHR SwapchainCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = Swapchain->Surface,
@@ -141,7 +147,7 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
         .compositeAlpha = CompositeAlphaFlags,
-        .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
         .oldSwapchain = Swapchain->Handle
     };
 
