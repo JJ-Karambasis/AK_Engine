@@ -32,6 +32,7 @@ struct window_manager {
     arena*                            Arena;
     renderer*                         Renderer;
     glyph_cache*                      GlyphCache;
+    gdi_handle<gdi_render_pass>       UIRenderPass;
     gdi_handle<gdi_pipeline>          UIPipeline;
     gdi_handle<gdi_bind_group_layout> UIGlobalLayout;
     gdi_format                        Format;
@@ -49,6 +50,7 @@ struct window_manager_create_info {
     allocator*                        Allocator;
     renderer*                         Renderer;
     glyph_cache*                      GlyphCache;
+    gdi_handle<gdi_render_pass>       UIRenderPass;
     gdi_handle<gdi_pipeline>          UIPipeline;
     gdi_handle<gdi_bind_group_layout> UIGlobalLayout;
     gdi_format                        Format;
@@ -61,6 +63,6 @@ window_handle Window_Open_With_Handle(window_manager* Manager, os_window_id Wind
 window_handle Window_Open(window_manager* Manager, const os_open_window_info& OpenInfo);
 void          Window_Close(window_manager* Manager, window_handle Handle);
 window*       Window_Get(window_handle Handle);
-
+void          Window_Resize(window_manager* Manager, window* Window);
 
 #endif

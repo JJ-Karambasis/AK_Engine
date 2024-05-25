@@ -437,6 +437,7 @@ bool Editor_Render(editor* Editor, span<window*> WindowsToRender) {
 
     bool Result = Renderer_Execute(Editor->Renderer, RenderGraph, Swapchains);
     Renderer_Delete_Graph(Editor->Renderer, RenderGraph);
+    Glyph_Cache_Update(Editor->GlyphCache);
 
     return Result;
 }
@@ -586,6 +587,7 @@ bool Application_Main() {
             .Allocator = Core_Get_Base_Allocator(),
             .Renderer = Editor.Renderer,
             .GlyphCache = Editor.GlyphCache,
+            .UIRenderPass = Editor.UIRenderPass,
             .UIPipeline = Editor.UIPipeline,
             .UIGlobalLayout = Editor.GlobalLayout,
             .Format = WindowFormat,
@@ -657,11 +659,6 @@ bool Application_Main() {
         }
 
         window_manager* WindowManager = &Editor.WindowManager;
-        for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
-            Window_Update(&Editor, Window);
-        }
-        Glyph_Cache_Update(Editor.GlyphCache);
-
         scratch Scratch = Scratch_Get();
 
         //Sometimes a window can fail to render because it resizes so we need

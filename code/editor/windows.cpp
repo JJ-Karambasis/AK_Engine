@@ -8,6 +8,7 @@ void Window_Manager_Create(window_manager* Manager, const window_manager_create_
     Manager->Arena = Arena_Create(CreateInfo.Allocator);
     Manager->Renderer = CreateInfo.Renderer;
     Manager->GlyphCache = CreateInfo.GlyphCache;
+    Manager->UIRenderPass = CreateInfo.UIRenderPass;
     Manager->UIPipeline = CreateInfo.UIPipeline;
     Manager->UIGlobalLayout = CreateInfo.UIGlobalLayout;
     Manager->Format = CreateInfo.Format;
@@ -44,6 +45,7 @@ window_handle Window_Open_With_Handle(window_manager* Manager, os_window_id Wind
     });
 
     OS_Window_Set_Data(Window->OSHandle, Window);
+    Window_Resize(Manager, Window);
     return window_handle(Window);
 }
 
@@ -85,4 +87,42 @@ void Window_Close(window_manager* Manager, window_handle Handle) {
 
 window* Window_Get(window_handle Handle) {
     return Window_Is_Open(Handle) ? Handle.Window : nullptr;
+}
+
+void Window_Resize(window_manager* WindowManager, window* Window) {
+    gdi_context* Context = Renderer_Get_Context(WindowManager->Renderer);
+    if(Window->Framebuffers.Count) {
+        for(gdi_handle<gdi_framebuffer> Framebuffer : Window->Framebuffers) {
+            GDI_Context_Delete_Framebuffer(Context, Framebuffer);
+        }
+        Array_Clear(&Window->Framebuffers);
+    }
+
+    if(Window->SwapchainViews.Count) {
+        for(gdi_handle<gdi_texture_view> SwapchainView : Window->SwapchainViews) {
+            GDI_Context_Delete_Texture_View(Context, SwapchainView);
+        }
+        Array_Clear(&Window->SwapchainViews);
+    }
+
+    if(!GDI_Context_Resize_Swapchain(Context, Window->Swapchain)) {
+        Assert(false);
+        return;
+    }
+    
+    Window->Size = GDI_Context_Get_Swapchain_Size(Context, Window->Swapchain);
+    if(Window->Size.width == 0 || Window->Size.height == 0) return;
+
+    span<gdi_handle<gdi_texture>> Textures = GDI_Context_Get_Swapchain_Textures(Context, Window->Swapchain);
+    for(uptr i = 0; i < Textures.Count; i++) {
+        Array_Push(&Window->SwapchainViews, GDI_Context_Create_Texture_View(Context, {
+            .Texture = Textures[i]
+        }));
+
+        Array_Push(&Window->Framebuffers, GDI_Context_Create_Framebuffer(Context, {
+            .Attachments = {Window->SwapchainViews[i]},
+            .RenderPass = WindowManager->UIRenderPass
+        }));
+    }
+
 }
