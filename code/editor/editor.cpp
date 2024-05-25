@@ -121,11 +121,9 @@ internal void Window_Resize(editor* Editor, window* Window) {
 
 internal void Window_Handle_Resize(editor* Editor, window* Window) {
     dim2i CurrentWindowSize = OS_Window_Get_Size(Window->OSHandle);
-    if(CurrentWindowSize.width != 0 && CurrentWindowSize.height != 0) {
-        if(CurrentWindowSize != Window->Size) {
-            Window_Resize(Editor, Window);
-            Assert(CurrentWindowSize == Window->Size);
-        }
+    if(CurrentWindowSize != Window->Size) {
+        Window_Resize(Editor, Window);
+        Assert(CurrentWindowSize == Window->Size);
     }
 }
 
@@ -441,49 +439,24 @@ bool Editor_Render(editor* Editor, span<window*> WindowsToRender) {
 }
 
 internal OS_DRAW_WINDOW_CALLBACK_DEFINE(Application_Draw_Window) {
-    window* Window = (window*)OS_Window_Get_Data(WindowID);
     editor* Editor = (editor*)UserData;
+
+    scratch Scratch = Scratch_Get();
+    array<window*> WindowsToRender(&Scratch);
+    window_manager* WindowManager = &Editor->WindowManager;
+    for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
+        Array_Push(&WindowsToRender, Window);
+    }
+
     AK_Mutex_Lock(&Editor->RenderLock);
     bool Failed = false;
-    do {
+    for(window* Window : WindowsToRender) {
         Window_Handle_Resize(Editor, Window);
-        Failed = !Editor_Render(Editor, {Window});
-    } while(Failed);
+    }
+    Editor_Render(Editor, WindowsToRender);
     // Window_Handle_Resize(Editor, Window);
     // Editor_Render(Editor, {Window});
     AK_Mutex_Unlock(&Editor->RenderLock);
-}
-
-internal void Editor_Render_Windows(editor* Editor, span<window*> WindowsToRender) {
-    bool RenderResult;
-    scratch Scratch = Scratch_Get();
-    gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
-    do {
-        RenderResult = Editor_Render(Editor, WindowsToRender); 
-        if(!RenderResult) {
-            array<window*> NewWindowsToRender(&Scratch);
-
-            for(window* Window : WindowsToRender) {
-                gdi_swapchain_status PresentStatus = GDI_Context_Get_Swapchain_Status(Context, Window->Swapchain); 
-                if(PresentStatus == GDI_SWAPCHAIN_STATUS_RESIZE) {
-                    Window_Resize(Editor, Window);
-                    Array_Push(&NewWindowsToRender, Window); 
-                } else if (PresentStatus != GDI_SWAPCHAIN_STATUS_OK) {
-                    Assert(false);
-                    //todo: Actual error logging
-                    return;
-                }
-            }
-
-            if(!NewWindowsToRender.Count) {
-                Assert(false);
-                //todo: Actual error logging
-                return;
-            }
-
-            WindowsToRender = NewWindowsToRender;
-        }
-    } while(!RenderResult);
 }
 
 bool Application_Main() {
@@ -711,6 +684,8 @@ bool Application_Main() {
         window_manager* WindowManager = &Editor.WindowManager;
         scratch Scratch = Scratch_Get();
 
+        //If any window is resizing, we will not render
+
         //Sometimes a window can fail to render because it resizes so we need
         //to keep a sepearate list of windows to render 
         bool RenderResult = true;
@@ -720,7 +695,20 @@ bool Application_Main() {
         }
         
         AK_Mutex_Lock(&Editor.RenderLock);
-        Editor_Render_Windows(&Editor, WindowsToRender);
+        bool Render = true;
+        for(window* Window : WindowsToRender) {
+            if(Window_Is_Resizing(Window)) {
+                Render = false;
+                break;
+            }
+        }
+
+        for(window* Window : WindowsToRender) {
+            Window_Handle_Resize(&Editor, Window);
+        }
+
+        if(Render) Editor_Render(&Editor, WindowsToRender);
+        else Log_Debug_Simple("Skipped");
         AK_Mutex_Unlock(&Editor.RenderLock);
     }
 

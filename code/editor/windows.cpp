@@ -124,5 +124,8 @@ void Window_Resize(window_manager* WindowManager, window* Window) {
             .RenderPass = WindowManager->UIRenderPass
         }));
     }
+}
 
+bool Window_Is_Resizing(window* Window) {
+    return OS_Window_Is_Resizing(Window->OSHandle);
 }

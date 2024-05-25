@@ -147,7 +147,7 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
         .compositeAlpha = CompositeAlphaFlags,
-        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+        .presentMode = VK_PRESENT_MODE_FIFO_KHR,
         .oldSwapchain = Swapchain->Handle
     };
 

@@ -64,5 +64,6 @@ window_handle Window_Open(window_manager* Manager, const os_open_window_info& Op
 void          Window_Close(window_manager* Manager, window_handle Handle);
 window*       Window_Get(window_handle Handle);
 void          Window_Resize(window_manager* Manager, window* Window);
+bool          Window_Is_Resizing(window* Window);
 
 #endif

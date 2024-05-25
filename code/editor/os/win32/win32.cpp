@@ -237,6 +237,12 @@ gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID) {
     };
 }
 
+bool OS_Window_Is_Resizing(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return false;
+    return AK_Atomic_Load_U32_Relaxed(&Window->IsResizing) == true32;
+}
+
 void OS_Set_Draw_Window_Callback(os_draw_window_callback_func* Callback, void* UserData) {
     os* OS = OS_Get();
     AK_Atomic_Store_Ptr_Relaxed(&OS->DrawWindowUserData, UserData);
@@ -320,6 +326,20 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
         case WM_ERASEBKGND: {
             Result = 1;
         } break;
+
+        case WM_ENTERSIZEMOVE:
+        {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+            AK_Atomic_Store_U32_Relaxed(&OSWindow->IsResizing, true);
+        }break;
+        
+        case WM_EXITSIZEMOVE:
+        {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+            AK_Atomic_Store_U32_Relaxed(&OSWindow->IsResizing, false);
+        }break;
 
         case WM_WINDOWPOSCHANGED: {
             os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);

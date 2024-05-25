@@ -24,6 +24,7 @@ struct os_window {
     HWND          Handle;
     ak_atomic_u64 PosPacked;
     ak_atomic_u64 SizePacked;
+    ak_atomic_u32 IsResizing;
     void*         UserData;
 };
 
