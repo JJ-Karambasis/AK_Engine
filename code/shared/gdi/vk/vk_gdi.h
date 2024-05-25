@@ -68,7 +68,6 @@ struct vk_fence {
 };
 
 struct vk_frame_context {
-    VkCommandBuffer CopyCmdBuffer;
     u64             Fence;
 };
 

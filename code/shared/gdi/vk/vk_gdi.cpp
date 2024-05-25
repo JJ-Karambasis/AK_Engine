@@ -726,28 +726,6 @@ bool GDI_Create_Context__Internal(gdi_context* Context, gdi* GDI, const gdi_cont
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     VK_Resource_Context_Create(Context, ResourceContext, CreateInfo);
 
-    vk_thread_context* ThreadContext = VK_Get_Thread_Context(&Context->ThreadContextManager);
-    for(u32 i = 0; i < CreateInfo.FrameCount; i++) {
-        vk_frame_context* Frame = &Context->Frames[i];
-        vk_cmd_pool* CmdPool = &ThreadContext->CmdPools[i];
-
-        VkCommandPoolCreateInfo CmdPoolCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-            .queueFamilyIndex = Context->PhysicalDevice->GraphicsQueueFamilyIndex
-        };
-
-        VkCommandBufferAllocateInfo CmdBufferAllocateInfo = {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .commandPool = CmdPool->CommandPool,
-            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-            .commandBufferCount = 1
-        };
-
-        if(vkAllocateCommandBuffers(Context->Device, &CmdBufferAllocateInfo, &Frame->CopyCmdBuffer) != VK_SUCCESS) {
-            //todo: logging
-            return false;
-        }
-    }
     Array_Init(&Context->Fences.Array, Context->Arena);
     Context->Fences.FirstFreeIndex = (u32)-1;
 

@@ -312,6 +312,11 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
             Event->Window = OSWindow->ID;
         } break;
 
+        case WM_PAINT: {
+            Log_Debug_Simple("Painting!");
+            DefaultMessage = true;
+        } break;
+
         default: {
             DefaultMessage = true;
         } break;
