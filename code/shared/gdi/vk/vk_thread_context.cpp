@@ -351,11 +351,9 @@ void VK_Thread_Context_Manager_Delete(vk_thread_context_manager* Manager) {
     Arena_Delete(Manager->Arena);
 }
 
-void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager) {
+void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager, VkCommandBuffer CommandBuffer) {
     gdi_context* Context = Manager->Context;
     vk_resource_context* ResourceContext = &Context->ResourceContext;
-
-    vk_frame_context* FrameContext = VK_Get_Current_Frame_Context(Context);
 
     vk_thread_context* ThreadContext = (vk_thread_context*)AK_Atomic_Load_Ptr_Relaxed(&Manager->List);
     while(ThreadContext) {
@@ -370,7 +368,7 @@ void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager) {
                     .dstOffset = CopyUploadToBuffer.Offset,
                     .size = CopyUploadToBuffer.Upload.Size
                 };
-                vkCmdCopyBuffer(FrameContext->CopyCmdBuffer, CopyUploadToBuffer.Upload.Buffer, Buffer->Handle, 1, &BufferCopy);
+                vkCmdCopyBuffer(CommandBuffer, CopyUploadToBuffer.Upload.Buffer, Buffer->Handle, 1, &BufferCopy);
                 VK_Resource_Record_Frame(Buffer);
             }
         }
@@ -432,12 +430,12 @@ void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager) {
         }
 
         if(InitialMemoryBarriers.Count) {
-            vkCmdPipelineBarrier(FrameContext->CopyCmdBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            vkCmdPipelineBarrier(CommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
                                 VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, Safe_U32(InitialMemoryBarriers.Count), InitialMemoryBarriers.Ptr);
         }
 
         if(UpdateMemoryBarriers.Count) {
-            vkCmdPipelineBarrier(FrameContext->CopyCmdBuffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            vkCmdPipelineBarrier(CommandBuffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
                                 VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, Safe_U32(UpdateMemoryBarriers.Count), UpdateMemoryBarriers.Ptr);
         }
 
@@ -454,7 +452,7 @@ void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager) {
                     };
                 }
 
-                vkCmdCopyBufferToImage(FrameContext->CopyCmdBuffer, CopyUploadsToTexture.Upload.Buffer, Texture->Handle, 
+                vkCmdCopyBufferToImage(CommandBuffer, CopyUploadsToTexture.Upload.Buffer, Texture->Handle, 
                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, Safe_U32(Regions.Count), Regions.Ptr);
                 VK_Resource_Record_Frame(Texture);
             }
@@ -476,7 +474,7 @@ void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager) {
             }
         }
 
-        vkCmdPipelineBarrier(FrameContext->CopyCmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+        vkCmdPipelineBarrier(CommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
                              VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, Safe_U32(ImageMemoryBarriers.Count), ImageMemoryBarriers.Ptr);
 
 

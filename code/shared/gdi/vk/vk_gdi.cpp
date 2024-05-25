@@ -1566,16 +1566,10 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
     vk_resource_context* ResourceContext = &Context->ResourceContext;
     array<VkCommandBuffer> CmdBuffers(&Scratch);
     
-    VkCommandBufferBeginInfo BeginInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    };
-    vkBeginCommandBuffer(FrameContext->CopyCmdBuffer, &BeginInfo);
-    
-    VK_Thread_Context_Manager_Copy_Data(&Context->ThreadContextManager);
-    
-    vkEndCommandBuffer(FrameContext->CopyCmdBuffer);
-    Array_Push(&CmdBuffers, FrameContext->CopyCmdBuffer);
+    vk_cmd_list* CopyCmdList = (vk_cmd_list*)GDI_Context_Begin_Cmd_List(Context, GDI_CMD_LIST_TYPE_GRAPHICS, {}, {});
+    VK_Thread_Context_Manager_Copy_Data(&Context->ThreadContextManager, CopyCmdList->CmdBuffer);
+    vkEndCommandBuffer(CopyCmdList->CmdBuffer);
+    Array_Push(&CmdBuffers, CopyCmdList->CmdBuffer);
 
     u64 FrameIndex = VK_Get_Current_Frame_Index(Context);
 
@@ -1584,8 +1578,10 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
         vk_cmd_pool* CmdPool = VK_Get_Current_Cmd_Pool(&Context->ThreadContextManager, ThreadContext);
         
         for(vk_cmd_list* CmdList = CmdPool->PrimaryCmds.Head; CmdList; CmdList = CmdList->Next) {
-            vkEndCommandBuffer(CmdList->CmdBuffer);
-            Array_Push(&CmdBuffers, CmdList->CmdBuffer);
+            if(CmdList != CopyCmdList) {
+                vkEndCommandBuffer(CmdList->CmdBuffer);
+                Array_Push(&CmdBuffers, CmdList->CmdBuffer);
+            }
         }
 
         ThreadContext = ThreadContext->Next;
@@ -1654,26 +1650,34 @@ bool GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> 
         };
         
         VkResult PresentStatus = vkQueuePresentKHR(Context->PresentQueue, &PresentInfo);
-        if(PresentStatus == VK_ERROR_OUT_OF_DATE_KHR) {
-            for(u32 i = 0; i < Swapchains.Count; i++) {
-                SwapchainPtrs[i]->Status = Results[i] == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_OK;
-            }
-            //While this is an error case. Command buffers
-            Result = false;
-        } else if(PresentStatus != VK_SUCCESS) {
-            Assert(false);
-            for(u32 i = 0; i < Swapchains.Count; i++) {
-                SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_ERROR;
-            }
-            //todo: See todo above the function
-            Result = false;
+        
+        for(u32 i = 0; i < Swapchains.Count; i++) {
+            SwapchainPtrs[i]->TextureIndex = -1;
         }
 
-        if(PresentStatus == VK_SUCCESS) {
-            for(u32 i = 0; i < Swapchains.Count; i++) {
-                SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_OK;
-                SwapchainPtrs[i]->TextureIndex = -1;
-            }
+        switch(PresentStatus) {
+            case VK_SUCCESS: {
+                for(u32 i = 0; i < Swapchains.Count; i++) {
+                    SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_OK;
+                }
+            } break;
+
+            case VK_ERROR_OUT_OF_DATE_KHR: {
+                for(u32 i = 0; i < Swapchains.Count; i++) {
+                    SwapchainPtrs[i]->Status = Results[i] == VK_ERROR_OUT_OF_DATE_KHR ? GDI_SWAPCHAIN_STATUS_RESIZE : GDI_SWAPCHAIN_STATUS_OK;
+                }
+                //While this is an error case. Command buffers
+                //return false;
+            } break;
+
+            default: {
+                Assert(false);
+                for(u32 i = 0; i < Swapchains.Count; i++) {
+                    SwapchainPtrs[i]->Status = GDI_SWAPCHAIN_STATUS_ERROR;
+                }
+                //todo: See todo above the function
+                //return false;
+            } break;
         }
     }
 

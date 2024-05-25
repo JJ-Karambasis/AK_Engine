@@ -118,7 +118,7 @@ vk_delete_context* VK_Get_Delete_Context(vk_thread_context_manager* Manager);
 vk_thread_context* VK_Get_Thread_Context(vk_thread_context_manager* Manager);
 void VK_Thread_Context_Manager_Create(gdi_context* Context, vk_thread_context_manager* Manager);
 void VK_Thread_Context_Manager_Delete(vk_thread_context_manager* Manager);
-void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager);
+void VK_Thread_Context_Manager_Copy_Data(vk_thread_context_manager* Manager, VkCommandBuffer CommandBuffer);
 void VK_Thread_Context_Manager_New_Frame(vk_thread_context_manager* Manager);
 
 
