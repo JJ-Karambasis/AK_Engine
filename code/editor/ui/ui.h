@@ -81,8 +81,8 @@ enum {
     UI_SIGNAL_FLAG_LEFT_PRESSED_BIT  = (1 << 0),
     UI_SIGNAL_FLAG_LEFT_RELEASED_BIT = (1 << 1),
     UI_SIGNAL_FLAG_LEFT_DOWN_BIT     = (1 << 2),
-    UI_SIGNAL_FLAG_HOVERING_BIT = (1 << 3),
-    UI_SIGNAL_FLAG_DRAGGING_BIT = (1 << 4)
+    UI_SIGNAL_FLAG_HOVERING_BIT      = (1 << 3),
+    UI_SIGNAL_FLAG_DRAGGING_BIT      = (1 << 4)
 };
 typedef u32 ui_signal_flags;
 struct ui_signal {
@@ -136,6 +136,9 @@ struct ui {
     //Current box
     ui_box* CurrentBox;
 
+    //Cached signal
+    ui_signal CachedSignal;
+
     //Stacks
     ui_stack_list Stacks[UI_STACK_TYPE_COUNT];
 };
@@ -167,6 +170,10 @@ dim2           UI_Box_Get_Dim(ui_box* Box);
 
 //Box interaction api
 ui_signal UI_Signal_From_Box(ui* UI, ui_box* Box);
+ui_signal UI_Current_Signal(ui* UI);
+
+#define UI_Box_Get_Height(box) UI_Box_Get_Dim(box).height
+#define UI_Box_Get_Width(box) UI_Box_Get_Dim(box).width
 
 //UI push stack API
 void UI_Push_Parent(ui* UI, ui_box* Box);

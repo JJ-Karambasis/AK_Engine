@@ -181,5 +181,6 @@ color4 Color4_Green(f32 Alpha=1.0f);
 color4 Color4_Blue(f32 Alpha=1.0f);
 color4 Color4_Yellow(f32 Alpha=1.0f);
 color4 Color4_Magenta(f32 Alpha=1.0f);
+color4 Color4_Orange(f32 Alpha=1.0f);
 
 #endif

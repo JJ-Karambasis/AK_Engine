@@ -179,7 +179,7 @@ inline void Array_Insert_Range(array<type>* Array, uptr InsertIndex, const type*
 
 template <typename type>
 inline void Array_Remove(array<type>* Array, uptr Index) {
-    Assert(Count > 0);
+    Assert(Array->Count > 0);
     uptr IndexPlusOne = Index+1;
     for(; IndexPlusOne < Array->Count; IndexPlusOne++) {
         Index = IndexPlusOne-1;

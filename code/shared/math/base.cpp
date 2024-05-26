@@ -191,3 +191,7 @@ color4 Color4_Yellow(f32 Alpha) {
 color4 Color4_Magenta(f32 Alpha) {
     return color4(1.0f, 0.0f, 1.0f, Alpha);
 }
+
+color4 Color4_Orange(f32 Alpha) {
+    return color4(1.0f, 0.647f, 1.0f, Alpha);
+}

@@ -249,12 +249,15 @@ inline value* Hashmap_Find_Or_Create(hashmap<key, value, hasher, comparer>* Hash
 template <typename key, typename value, typename hasher, typename comparer>
 inline void Hashmap_Remove_By_Hash(hashmap<key, value, hasher, comparer>* Hashmap, const key& Key, u32 Hash) {
     u32 Slot = Find_Slot<key, comparer>(Hashmap->Slots, Hashmap->SlotCapacity, Hashmap->Keys, Key, Hash);
-    if(Slot == HASHMAP_INVALID) return;
+    if(Slot == HASHMAP_INVALID) {
+        Assert(false);
+        return;
+    }
 
     u32 SlotMask = Hashmap->SlotCapacity-1;
     u32 BaseSlot = (Hash & SlotMask);
     u32 Index = Hashmap->Slots[Slot].ItemIndex;
-    u32 LastIndex = Count-1;
+    u32 LastIndex = Hashmap->Count-1;
 
     Hashmap->Slots[BaseSlot].BaseCount--;
     Hashmap->Slots[Slot].ItemIndex = HASHMAP_INVALID;
@@ -281,8 +284,8 @@ inline void Hashmap_Clear(hashmap<key, value, hasher, comparer>* Hashmap) {
         Hashmap->Slots[SlotIndex] = hash_slot();
     }
 
-    Zero_Array(Hashmap->Keys, Count);
-    Zero_Array(Hashmap->Values, Count);
+    Zero_Array(Hashmap->Keys, Hashmap->Count);
+    Zero_Array(Hashmap->Values, Hashmap->Count);
     for(u32 ItemIndex = 0; ItemIndex < Hashmap->ItemCapacity; ItemIndex++) 
         Hashmap->ItemSlots[ItemIndex] = HASHMAP_INVALID;
     Hashmap->Count = 0;

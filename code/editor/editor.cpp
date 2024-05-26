@@ -283,23 +283,38 @@ void Window_Update_UI(editor* Editor, window* Window) {
     UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.width);
     UI_Set_Next_Child_Layout_Axis(UI, UI_AXIS2_X);
     UI_Push_Background_Color(UI, Color4_Red());
-    ui_box* MenuBox = UI_Build_Box_From_StringF(UI, 0, "###%llux", (u64)(uptr)Window);
+    ui_box* MenuBox = UI_Build_Box_From_StringF(UI, 0, "###%llu_Menu", (u64)(uptr)Window);
     UI_Push_Parent(UI, MenuBox);
     {
         f32 MenuWidth = UI_Box_Get_Dim(MenuBox).width;
 
-        UI_Push_Fixed_Width(UI, ButtonSize);
-
-        local_persist bool hovering = false;
-
-        UI_Set_Next_Background_Color(UI, hovering ? Color4_Green() : Color4_Yellow());
+        UI_Set_Next_Background_Color(UI, Color4_Yellow());
         UI_Set_Next_Text_Color(UI, Color4_Blue());
         UI_Set_Next_Pref_Width(UI, UI_Text(4, 1.0));
         UI_Set_Next_Text_Alignment(UI, UI_TEXT_ALIGNMENT_CENTER);
         UI_Build_Box_From_String(UI, UI_BOX_FLAG_DRAW_TEXT|UI_BOX_FLAG_MOUSE_CLICKABLE, String_Lit("Help###Menu Box 1"));
 
-        f32 Width = UI_Box_Get_Dim(UI_Current_Box(UI)).width;
-        hovering = UI_Hovering(UI_Signal_From_Box(UI, UI_Current_Box(UI)));
+        f32 Width = UI_Box_Get_Width(UI_Current_Box(UI));
+        if(UI_Hovering(UI_Current_Signal(UI))) {
+            UI_Current_Box(UI)->BackgroundColor = Color4_Green();
+        }
+
+        if(UI_Pressed(UI_Current_Signal(UI))) {
+            Log_Debug_Simple("Pressed");
+        }
+
+        if(UI_Released(UI_Current_Signal(UI))) {
+            Log_Debug_Simple("Released");
+        }
+
+        if(UI_Down(UI_Current_Signal(UI))) {
+            UI_Set_Next_Background_Color(UI, Color4_Orange());
+            UI_Set_Next_Text_Color(UI, Color4_Blue());
+            UI_Set_Next_Pref_Width(UI, UI_Text(4, 1.0));
+            UI_Set_Next_Text_Alignment(UI, UI_TEXT_ALIGNMENT_CENTER);
+            UI_Build_Box_From_String(UI, UI_BOX_FLAG_DRAW_TEXT|UI_BOX_FLAG_MOUSE_CLICKABLE, String_Lit("This is down###Menu Box Text"));
+            Width += UI_Box_Get_Width(UI_Current_Box(UI));
+        }
 
         f32 FinalButtonsSize = ButtonSize*3;
         f32 NextRect = Max(0.0f, MenuWidth - (FinalButtonsSize+Width));
@@ -307,6 +322,8 @@ void Window_Update_UI(editor* Editor, window* Window) {
         UI_Set_Next_Fixed_Width(UI, NextRect);
         UI_Build_Box_From_String(UI, 0, String_Lit("###Filler Box"));
         
+        UI_Push_Fixed_Width(UI, ButtonSize);
+
         UI_Set_Next_Background_Color(UI, Color4_Blue());
         UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 2"));
 

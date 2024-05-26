@@ -6,6 +6,7 @@
 internal void UI_Box_Clear_Per_Frame(ui_box* Box) {
     Box->FirstChild = Box->LastChild = Box->NextSibling = Box->PrevSibling = Box->Parent = nullptr;
     Box->Flags = 0;
+    Box->ChildCount = 0;
 }
 
 internal void UI_Box_Add_Child(ui_box* Parent, ui_box* Child) {
@@ -383,7 +384,7 @@ void UI_Begin_Build(ui* UI, window_handle WindowHandle, editor_input_manager* In
         UI_Set_Next_Fixed_Width(UI, (f32)Window->Size.width);
         UI_Set_Next_Fixed_Height(UI, (f32)Window->Size.height);
         UI_Set_Next_Child_Layout_Axis(UI, UI_AXIS2_X);
-        UI->Root = UI_Build_Box_From_StringF(UI, 0, "###%I64x", (u64)(uptr)Window);
+        UI->Root = UI_Build_Box_From_StringF(UI, 0, "###%llu_root__", (u64)(uptr)Window);
     }
 
     //Setup top level default stacks
@@ -493,6 +494,7 @@ ui_box* UI_Build_Box_From_Key(ui* UI, ui_box_flags Flags, ui_key Key) {
 
     UI_Autopop_Stacks(UI);
 
+    UI->CachedSignal = {};
     UI->CurrentBox = Box;
 
     return Box;
@@ -602,7 +604,15 @@ ui_signal UI_Signal_From_Box(ui* UI, ui_box* Box) {
         }
     }
 
+    Result.Box = Box;
     return Result;
+}
+
+ui_signal UI_Current_Signal(ui* UI) {
+    if(!UI->CachedSignal.Box) {
+        UI->CachedSignal = UI_Signal_From_Box(UI, UI_Current_Box(UI));
+    }
+    return UI->CachedSignal;
 }
 
 #define UI_Current_Stack_Entry(constant, type) (type*)(UI->Stacks[constant].Last)

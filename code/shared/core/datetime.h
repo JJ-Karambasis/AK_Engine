@@ -47,7 +47,7 @@ static_assert(Array_Count(MonthStr) == (u32)month::Count);
 static_assert(Array_Count(MonthNum) == (u32)month::Count);
 static_assert(Array_Count(MonthNumStr) == (u32)month::Count);
 
-enum day_of_week : u32 {
+enum class day_of_week : u32 {
     Sunday,
     Monday,
     Tuesday,
