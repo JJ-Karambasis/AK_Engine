@@ -260,8 +260,16 @@ void Window_Update_Panel_Tree(editor* Editor, ui* UI, panel* Panel, vec2 PanelDi
 #endif
 
 void Window_Update_UI(editor* Editor, window* Window) {
-ui* UI = Window->UI;
-    UI_Begin_Build(UI, window_handle(Window));
+    ui* UI = Window->UI;
+    
+    local_persist editor_input_manager sZeroManager;
+
+
+
+    point2i GlobalMousePos = OS_Mouse_Get_Position();
+    point2i WindowMousePos = GlobalMousePos - vec2i(OS_Window_Get_Client_Pos(Window->OSHandle));
+
+    UI_Begin_Build(UI, window_handle(Window), &Editor->InputManager, WindowMousePos);
 
     UI_Push_Font(UI, {
         .Font     = Editor->MainFont,
@@ -282,10 +290,16 @@ ui* UI = Window->UI;
 
         UI_Push_Fixed_Width(UI, ButtonSize);
 
-        UI_Set_Next_Background_Color(UI, Color4_White());
-        UI_Build_Box_From_String(UI, 0, String_Lit("###Menu Box 1"));
+        local_persist bool hovering = false;
+
+        UI_Set_Next_Background_Color(UI, hovering ? Color4_Green() : Color4_Yellow());
+        UI_Set_Next_Text_Color(UI, Color4_Blue());
+        UI_Set_Next_Pref_Width(UI, UI_Text(4, 1.0));
+        UI_Set_Next_Text_Alignment(UI, UI_TEXT_ALIGNMENT_CENTER);
+        UI_Build_Box_From_String(UI, UI_BOX_FLAG_DRAW_TEXT|UI_BOX_FLAG_MOUSE_CLICKABLE, String_Lit("Help###Menu Box 1"));
 
         f32 Width = UI_Box_Get_Dim(UI_Current_Box(UI)).width;
+        hovering = UI_Hovering(UI_Signal_From_Box(UI, UI_Current_Box(UI)));
 
         f32 FinalButtonsSize = ButtonSize*3;
         f32 NextRect = Max(0.0f, MenuWidth - (FinalButtonsSize+Width));
@@ -676,6 +690,12 @@ bool Application_Main() {
                     const os_mouse_scroll_event* ScrollEvent = (const os_mouse_scroll_event*)Event;
                     InputManager->MouseScroll = ScrollEvent->Scroll;
                 } break;
+            }
+        }
+
+        if(InputManager->Is_Key_Down(OS_KEYBOARD_KEY_ALT)) {
+            if(InputManager->Is_Key_Pressed(OS_KEYBOARD_KEY_B)) {
+                DebugBreak();
             }
         }
 

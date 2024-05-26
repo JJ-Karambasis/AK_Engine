@@ -11,7 +11,8 @@ typedef u32 ui_box_flags;
 enum {
     UI_BOX_FLAG_FIXED_WIDTH_BIT  = (1 << 0),
     UI_BOX_FLAG_FIXED_HEIGHT_BIT = (1 << 1),
-    UI_BOX_FLAG_DRAW_TEXT        = (1 << 2)
+    UI_BOX_FLAG_DRAW_TEXT        = (1 << 2),
+    UI_BOX_FLAG_MOUSE_CLICKABLE  = (1 << 3)
 };
 
 struct ui_render_box {
@@ -76,6 +77,25 @@ struct ui_box {
     void*                   RenderFuncUserData;
 };
 
+enum {
+    UI_SIGNAL_FLAG_LEFT_PRESSED_BIT  = (1 << 0),
+    UI_SIGNAL_FLAG_LEFT_RELEASED_BIT = (1 << 1),
+    UI_SIGNAL_FLAG_LEFT_DOWN_BIT     = (1 << 2),
+    UI_SIGNAL_FLAG_HOVERING_BIT = (1 << 3),
+    UI_SIGNAL_FLAG_DRAGGING_BIT = (1 << 4)
+};
+typedef u32 ui_signal_flags;
+struct ui_signal {
+    ui_box*         Box;
+    ui_signal_flags Flags;
+};
+
+#define UI_Pressed(signal)  ((signal).Flags & UI_SIGNAL_FLAG_LEFT_PRESSED_BIT)
+#define UI_Released(signal) ((signal).Flags & UI_SIGNAL_FLAG_LEFT_RELEASED_BIT)
+#define UI_Down(signal)     ((signal).Flags & UI_SIGNAL_FLAG_LEFT_DOWN_BIT)
+#define UI_Hovering(signal) ((signal).Flags & UI_SIGNAL_FLAG_HOVERING_BIT)
+#define UI_Dragging(signal) ((signal).Flags & UI_SIGNAL_FLAG_DRAGGING_BIT)
+
 struct ui_create_info {
     allocator*                        Allocator;
     renderer*                         Renderer;
@@ -89,7 +109,11 @@ struct ui {
     arena*  Arena;
 
     //Dependencies
-    glyph_cache*             GlyphCache;
+    glyph_cache*          GlyphCache;
+
+    //Input manager
+    editor_input_manager* InputManager;
+    point2i               MousePosition;               
 
     //Rendering
     im_renderer*               Renderer;
@@ -121,7 +145,7 @@ ui*  UI_Create(const ui_create_info& CreateInfo);
 void UI_Delete(ui* UI);
 
 //Build API
-void UI_Begin_Build(ui* UI, window_handle Window);
+void UI_Begin_Build(ui* UI, window_handle Window, editor_input_manager* InputManager, const point2i& MousePos);
 void UI_End_Build(ui* UI);
 
 //Cache lookup
@@ -140,6 +164,9 @@ void UI_Box_Attach_Display_Text(ui* UI, ui_box* Box, string Text);
 //Box get attachments API
 const ui_text* UI_Box_Get_Display_Text(ui_box* Box);
 dim2           UI_Box_Get_Dim(ui_box* Box);
+
+//Box interaction api
+ui_signal UI_Signal_From_Box(ui* UI, ui_box* Box);
 
 //UI push stack API
 void UI_Push_Parent(ui* UI, ui_box* Box);

@@ -67,8 +67,10 @@ void*        OS_Window_Get_Data(os_window_id WindowID);
 void         OS_Window_Set_Title(os_window_id WindowID, string Title);
 dim2i        OS_Window_Get_Size(os_window_id WindowID);
 point2i      OS_Window_Get_Pos(os_window_id WindowID);
+point2i      OS_Window_Get_Client_Pos(os_window_id WindowID);
 gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID);
 bool OS_Window_Is_Resizing(os_window_id WindowID);
+bool OS_Window_Is_Focused(os_window_id WindowID);
 
 #define OS_DRAW_WINDOW_CALLBACK_DEFINE(name) void name(os_window_id WindowID, void* UserData)
 typedef OS_DRAW_WINDOW_CALLBACK_DEFINE(os_draw_window_callback_func);

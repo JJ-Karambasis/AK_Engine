@@ -28,7 +28,6 @@ struct string {
     string(const char* Str);
     string(const char* Str, uptr Size);
     string(const char* StrBegin, const char* StrEnd);
-    string(allocator* Allocator, const char* String, uptr Count);
     string(allocator* Allocator, string Str);
     string(allocator* Allocator, wstring Str);
     string(allocator* Allocator, const char* Format, va_list Args);

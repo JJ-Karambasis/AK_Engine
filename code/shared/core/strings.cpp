@@ -149,15 +149,13 @@ string::string(const char* _Str, uptr _Size) : Str(_Str), Size(_Size) { }
 
 string::string(const char* StrBegin, const char* StrEnd) : Str(StrBegin), Size((uptr)(StrEnd-StrBegin)) { }
 
-string::string(allocator* Allocator, const char* String, uptr Count) {
-    char* Buffer = (char*)Allocator_Allocate_Memory(Allocator, sizeof(char)*(Count+1));
-    Buffer[Count] = 0;
-    Memory_Copy(Buffer, String, Count*sizeof(char));
+string::string(allocator* Allocator, string String) {
+    char* Buffer = (char*)Allocator_Allocate_Memory(Allocator, sizeof(char)*(String.Size+1));
+    Buffer[String.Size] = 0;
+    Memory_Copy(Buffer, String.Str, String.Size*sizeof(char));
     Str = Buffer;
-    Size = Count;
+    Size = String.Size;
 }
-
-string::string(allocator* Allocator, string String) : string(Allocator, String.Str, String.Size) { }
 
 string::string(allocator* Allocator, wstring Str) {
     scratch Scratch = Scratch_Get();

@@ -225,6 +225,14 @@ point2i OS_Window_Get_Pos(os_window_id WindowID) {
     return Unpack_S64(PosPacked);
 }
 
+point2i OS_Window_Get_Client_Pos(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return {};
+
+    s64 PosPacked = (s64)AK_Atomic_Load_U64_Relaxed(&Window->ClientPosPacked);
+    return Unpack_S64(PosPacked);
+}
+
 gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID) {
     os_window* Window = OS_Window_Get(WindowID);
     if(!Window) return {};
@@ -241,6 +249,12 @@ bool OS_Window_Is_Resizing(os_window_id WindowID) {
     os_window* Window = OS_Window_Get(WindowID);
     if(!Window) return false;
     return AK_Atomic_Load_U32_Relaxed(&Window->IsResizing) == true32;
+}
+
+bool OS_Window_Is_Focused(os_window_id WindowID) {
+    os_window* Window = OS_Window_Get(WindowID);
+    if(!Window) return false;
+    return Window->Handle == GetForegroundWindow();
 }
 
 void OS_Set_Draw_Window_Callback(os_draw_window_callback_func* Callback, void* UserData) {
@@ -347,6 +361,14 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
 
             WINDOWPOS* WindowPos = (WINDOWPOS*)LParam;
             AK_Atomic_Store_U64_Relaxed(&OSWindow->PosPacked, (u64)Pack_S64(WindowPos->x, WindowPos->y));
+
+            RECT WindowRect;
+            GetClientRect(Window, &WindowRect);
+            
+            POINT Point = {WindowRect.left, WindowRect.top};
+            ClientToScreen(Window, &Point);
+            AK_Atomic_Store_U64_Relaxed(&OSWindow->ClientPosPacked, (u64)Pack_S64(Point.x, Point.y));
+
             DefaultMessage = true; //Other we will not get WM_SIZE messages
         } break;
 
@@ -421,6 +443,16 @@ internal LRESULT Win32_OS_Base_Window_Proc(HWND BaseWindow, UINT Message, WPARAM
 
             DWORD ExStyle = WS_EX_APPWINDOW;
             DWORD Style = WS_OVERLAPPEDWINDOW|WS_SIZEBOX;
+
+            RECT WindowRect = {Origin.x, Origin.y, Origin.x+Dim.width, Origin.y+Dim.height};
+            
+            RECT Rect;
+            SetRectEmpty(&Rect);
+            AdjustWindowRectEx(&Rect, Style, FALSE, ExStyle);
+            WindowRect.left -= Rect.left;
+            WindowRect.top -= Rect.top;
+
+            AK_Atomic_Store_U64_Relaxed(&Window->ClientPosPacked, (u64)Pack_S64(WindowRect.left, WindowRect.top));
 
             Window->Handle = CreateWindowExW(ExStyle, WIN32_GLOBAL_WINDOW_CLASS, L"", Style, 
                                              Origin.x, Origin.y, Dim.width, Dim.height, 

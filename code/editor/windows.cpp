@@ -129,3 +129,7 @@ void Window_Resize(window_manager* WindowManager, window* Window) {
 bool Window_Is_Resizing(window* Window) {
     return OS_Window_Is_Resizing(Window->OSHandle);
 }
+
+bool Window_Is_Focused(window* Window) {
+    return OS_Window_Is_Focused(Window->OSHandle);
+}

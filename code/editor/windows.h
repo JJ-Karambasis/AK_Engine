@@ -65,5 +65,6 @@ void          Window_Close(window_manager* Manager, window_handle Handle);
 window*       Window_Get(window_handle Handle);
 void          Window_Resize(window_manager* Manager, window* Window);
 bool          Window_Is_Resizing(window* Window);
+bool          Window_Is_Focused(window* Window);
 
 #endif

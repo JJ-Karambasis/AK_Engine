@@ -34,6 +34,7 @@ struct vec2i {
     vec2i() = default;
     vec2i(s32 x, s32 y);
     vec2i(s32_2x Data);  
+    vec2i(const point2i& P);
 };
 
 bool operator!=(const vec2i& A, const vec2i& B);
@@ -53,6 +54,8 @@ struct point2 {
     point2(f32 x, f32 y);
 };
 
+bool operator>=(const point2& A, const point2& B);
+bool operator<=(const point2& A, const point2& B);
 point2 operator+(const point2& A, const vec2& B);
 point2 operator+(const point2& A, const dim2& B);
 point2& operator+=(point2& A, const vec2& B);
@@ -73,7 +76,10 @@ struct point2i {
 
 bool operator!=(const point2i& A, const point2i& B);
 bool operator==(const point2i& A, const point2i& B);
+bool operator>=(const point2i& A, const point2i& B);
+bool operator<=(const point2i& A, const point2i& B);
 point2i operator+(const point2i& A, const point2i& B);
+point2i operator-(const point2i& A, const vec2i& B);
 point2i& operator+=(point2i& A, const point2i& B);
 point2i operator+(const point2i& A, const dim2i& B);
 vec2i operator-(const point2i& A, const point2i& B);
@@ -121,6 +127,7 @@ struct rect2 {
 
 rect2 operator+(const rect2& A, const vec2& B);
 rect2& operator+=(rect2& A, const vec2& B);
+bool   Rect2_Contains_Point(const rect2& Rect, const point2& P);
 
 struct rect2i {
     point2i P1;
@@ -135,6 +142,7 @@ dim2i  Rect2i_Get_Dim(const rect2i& Rect);
 s32    Rect2i_Area(const rect2i& Rect);
 rect2i Rect2i_From_Dim(const dim2i& Dim);
 bool   Rect2i_Is_Empty(const rect2i& Rect);
+bool   Rect2i_Contains_Point(const rect2i& Rect, const point2i& P);
 
 struct vec4 {
     union {

@@ -3,6 +3,7 @@ vec2::vec2(const point2& P) : Data(P.Data) { }
 
 vec2i::vec2i(s32 _x, s32 _y) : x(_x), y(_y) { }
 vec2i::vec2i(s32_2x _Data) : Data(_Data) { }
+vec2i::vec2i(const point2i& P) : vec2i(P.Data) { }
 
 bool operator!=(const vec2i& A, const vec2i& B) {
     return A.Data != B.Data;
@@ -19,6 +20,15 @@ vec2i operator+(const vec2i& A, const vec2i& B) {
 point2::point2(const point2i& P) : x((f32)P.x), y((f32)P.y) {}
 
 point2::point2(f32 _x, f32 _y) : x(_x), y(_y) { }
+
+
+bool operator>=(const point2& A, const point2& B) {
+    return A.x >= B.x && A.y >= B.y;
+}
+
+bool operator<=(const point2& A, const point2& B) {
+    return A.x <= B.x && A.y <= B.y;
+}
 
 point2 operator+(const point2& A, const vec2& B) {
     point2 Result;
@@ -54,8 +64,22 @@ bool operator==(const point2i& A, const point2i& B) {
     return A.Data == B.Data;
 }
 
+bool operator>=(const point2i& A, const point2i& B) {
+    return A.x >= B.x && A.y >= B.y;
+}
+
+bool operator<=(const point2i& A, const point2i& B) {
+    return A.x <= B.x && A.y <= B.y;
+}
+
 point2i operator+(const point2i& A, const point2i& B) {
     return A.Data+B.Data;
+}
+
+point2i operator-(const point2i& A, const vec2i& B) {
+    point2i Result;
+    Result.Data = A.Data-B.Data;
+    return Result;
 }
 
 point2i& operator+=(point2i& A, const point2i& B) {
@@ -106,6 +130,10 @@ rect2& operator+=(rect2& A, const vec2& B) {
     return A;
 }
 
+bool Rect2_Contains_Point(const rect2& Rect, const point2& P) {
+    return P >= Rect.P1 && P <= Rect.P2; 
+}
+
 rect2i::rect2i(const point2i& _Min, const point2i& _Max) : P1(_Min), P2(_Max) { }
 
 s32 Rect2i_Get_Height(const rect2i& Rect) {
@@ -128,6 +156,10 @@ rect2i Rect2i_From_Dim(const dim2i& Dim) {
 bool Rect2i_Is_Empty(const rect2i& Rect) {
     dim2i Dim = Rect2i_Get_Dim(Rect);
     return Dim.width == 0 || Dim.height == 0;
+}
+
+bool Rect2i_Contains_Point(const rect2i& Rect, const point2i& P) {
+    return P >= Rect.P1 && P <= Rect.P2; 
 }
 
 color4::color4(f32 _r, f32 _g, f32 _b, f32 _a) : r(_r), g(_g), b(_b), a(_a) {}
