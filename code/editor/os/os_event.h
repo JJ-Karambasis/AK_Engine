@@ -62,7 +62,14 @@ static const uptr G_OSEventTypeSize[] = {
     0,
     sizeof(os_event),
     sizeof(os_mouse_delta_event),
-    sizeof(os_mouse_scroll_event)
+    sizeof(os_mouse_scroll_event),
+    sizeof(os_keyboard_event),
+    sizeof(os_keyboard_event),
+    sizeof(os_mouse_event),
+    sizeof(os_mouse_event),
+    sizeof(os_mouse_move_event),
+    sizeof(os_event),
+    sizeof(os_event),
 #ifdef TEST_BUILD
     sizeof(os_event_test),
 #endif

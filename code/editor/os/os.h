@@ -57,20 +57,20 @@ struct os_open_window_info {
 };
 
 typedef u64 os_window_id;
-os_window_id OS_Open_Window(const os_open_window_info& OpenInfo);
-void         OS_Close_Window(os_window_id WindowID);
-bool         OS_Window_Is_Open(os_window_id WindowID);
-void         OS_Set_Main_Window(os_window_id WindowID);
-os_window_id OS_Get_Main_Window();
-void         OS_Window_Set_Data(os_window_id WindowID, void* UserData);
-void*        OS_Window_Get_Data(os_window_id WindowID);
-void         OS_Window_Set_Title(os_window_id WindowID, string Title);
-dim2i        OS_Window_Get_Size(os_window_id WindowID);
-point2i      OS_Window_Get_Pos(os_window_id WindowID);
-point2i      OS_Window_Get_Client_Pos(os_window_id WindowID);
+os_window_id    OS_Open_Window(const os_open_window_info& OpenInfo);
+void            OS_Close_Window(os_window_id WindowID);
+bool            OS_Window_Is_Open(os_window_id WindowID);
+void            OS_Set_Main_Window(os_window_id WindowID);
+os_window_id    OS_Get_Main_Window();
+void            OS_Window_Set_Data(os_window_id WindowID, void* UserData);
+void*           OS_Window_Get_Data(os_window_id WindowID);
+void            OS_Window_Set_Title(os_window_id WindowID, string Title);
+dim2i           OS_Window_Get_Size(os_window_id WindowID);
+point2i         OS_Window_Get_Pos(os_window_id WindowID);
+point2i         OS_Window_Get_Client_Pos(os_window_id WindowID);
 gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID);
-bool OS_Window_Is_Resizing(os_window_id WindowID);
-bool OS_Window_Is_Focused(os_window_id WindowID);
+bool            OS_Window_Is_Resizing(os_window_id WindowID);
+bool            OS_Window_Is_Focused(os_window_id WindowID);
 
 #define OS_DRAW_WINDOW_CALLBACK_DEFINE(name) void name(os_window_id WindowID, void* UserData)
 typedef OS_DRAW_WINDOW_CALLBACK_DEFINE(os_draw_window_callback_func);
@@ -84,6 +84,13 @@ enum os_event_type {
     OS_EVENT_TYPE_WINDOW_CLOSED,
     OS_EVENT_TYPE_MOUSE_SCROLL,
     OS_EVENT_TYPE_MOUSE_DELTA,
+    OS_EVENT_TYPE_KEY_PRESSED,
+    OS_EVENT_TYPE_KEY_RELEASED,
+    OS_EVENT_TYPE_MOUSE_PRESSED,
+    OS_EVENT_TYPE_MOUSE_RELEASED,
+    OS_EVENT_TYPE_MOUSE_MOVE,
+    OS_EVENT_TYPE_MOUSE_ENTERED,
+    OS_EVENT_TYPE_MOUSE_EXITED,
     OS_EVENT_TYPE_COUNT
 };
 
@@ -92,8 +99,21 @@ struct os_event {
     os_window_id  Window;
 };
 
+
+struct os_keyboard_event : os_event {
+    os_keyboard_key Key;  
+};
+
+struct os_mouse_event : os_event {
+    os_mouse_key Key;
+};
+
 struct os_mouse_delta_event : os_event {
     vec2i Delta;
+};
+
+struct os_mouse_move_event : os_event {
+    point2i Pos;
 };
 
 struct os_mouse_scroll_event : os_event {
@@ -101,8 +121,6 @@ struct os_mouse_scroll_event : os_event {
 };
 
 const os_event* OS_Next_Event();
-bool            OS_Keyboard_Get_Key_State(os_keyboard_key Key);
-bool            OS_Mouse_Get_Key_State(os_mouse_key Key);
 point2i         OS_Mouse_Get_Position();
 
 //Input keys

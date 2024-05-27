@@ -9,9 +9,6 @@
 *.shader
 *.ttf
 
-## vscode 
-.vscode/settings.json
-
 ## Remedybg
 *.rdbg
 

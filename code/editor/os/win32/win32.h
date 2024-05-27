@@ -26,6 +26,8 @@ struct os_window {
     ak_atomic_u64 ClientPosPacked;
     ak_atomic_u64 SizePacked;
     ak_atomic_u32 IsResizing;
+    ak_atomic_u32 IsPainting;
+    b32           MouseTracked;
     void*         UserData;
 };
 

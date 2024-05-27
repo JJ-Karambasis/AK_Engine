@@ -5,7 +5,6 @@
 #include "editor_modules.h"
 #include <os.h>
 
-#include "editor_input.h"
 #include "windows.h"
 #include "ui/ui.h"
 
@@ -24,11 +23,10 @@ struct editor {
     gdi_handle<gdi_bind_group_layout> GlobalLayout;
     gdi_handle<gdi_render_pass>       UIRenderPass;
     gdi_handle<gdi_pipeline>          UIPipeline;
-    editor_input_manager              InputManager;
     renderer_texture                  DefaultTexture;
     const_buffer                      MainFontBuffer;
     font_id                           MainFont;
-    ak_mutex                          RenderLock;
+    ak_mutex                          UpdateLock;
 };
 
 void Window_Update(editor* Editor, window* Window);

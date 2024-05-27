@@ -163,23 +163,7 @@ internal bool VK_Create_Swapchain(gdi_context* Context, vk_swapchain* Swapchain,
     u32 ImageCount;
     vkGetSwapchainImagesKHR(Context->Device, Swapchain->Handle, &ImageCount, VK_NULL_HANDLE);
 
-    Array_Init(&Swapchain->AcquireLocks, Context->GDI->MainAllocator, ImageCount);
-    Array_Init(&Swapchain->ExecuteLocks, Context->GDI->MainAllocator, ImageCount); 
-
-    VkSemaphoreCreateInfo SemaphoreCreateInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-    for(u32 i = 0; i < ImageCount; i++) {
-        if(vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &Swapchain->AcquireLocks[i]) != VK_SUCCESS) {
-            //todo: Diagnostics
-            return false;
-        }
-
-        if(vkCreateSemaphore(Context->Device, &SemaphoreCreateInfo, Context->VKAllocator, &Swapchain->ExecuteLocks[i]) != VK_SUCCESS) {
-            //todo: Diagnostics
-            return false;
-        }
-    }
-
-    Swapchain->Status = GDI_SWAPCHAIN_STATUS_OK;
+    Swapchain->AcquireSemaphore = nullptr;
 
     return true;
 }
@@ -221,22 +205,6 @@ internal bool VK_Create_Swapchain_Textures(gdi_context* Context, vk_swapchain* S
 }
 
 internal void VK_Delete_Swapchain(gdi_context* Context, vk_swapchain* Swapchain) {
-    Assert(Swapchain->AcquireLocks.Count == Swapchain->ExecuteLocks.Count);
-    for(u32 i = 0; i < Swapchain->AcquireLocks.Count; i++) {
-        if(Swapchain->AcquireLocks[i]) {
-            vkDestroySemaphore(Context->Device, Swapchain->AcquireLocks[i], Context->VKAllocator);
-            Swapchain->AcquireLocks[i] = VK_NULL_HANDLE;
-        }
-
-        if(Swapchain->ExecuteLocks[i]) {
-            vkDestroySemaphore(Context->Device, Swapchain->ExecuteLocks[i], Context->VKAllocator);
-            Swapchain->ExecuteLocks[i] = VK_NULL_HANDLE;
-        }
-    }
-
-    Array_Free(&Swapchain->AcquireLocks, Context->GDI->MainAllocator);
-    Array_Free(&Swapchain->ExecuteLocks, Context->GDI->MainAllocator);
-    
     if(Swapchain->Handle) {
         vkDestroySwapchainKHR(Context->Device, Swapchain->Handle, Context->VKAllocator);
         Swapchain->Handle = VK_NULL_HANDLE;

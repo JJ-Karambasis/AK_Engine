@@ -388,12 +388,6 @@ enum gdi_resource_state {
     GDI_RESOURCE_STATE_COUNT
 };
 
-enum gdi_swapchain_status {
-    GDI_SWAPCHAIN_STATUS_OK,
-    GDI_SWAPCHAIN_STATUS_RESIZE,
-    GDI_SWAPCHAIN_STATUS_ERROR
-};
-
 struct gdi_swapchain_present_info {
     gdi_handle<gdi_swapchain> Swapchain;
     gdi_resource_state        InitialState;
@@ -461,7 +455,6 @@ dim2i                             GDI_Context_Get_Swapchain_Size(gdi_context* Co
 bool                              GDI_Context_Resize_Swapchain(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 span<gdi_handle<gdi_texture>>     GDI_Context_Get_Swapchain_Textures(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 s32                               GDI_Context_Get_Swapchain_Texture_Index(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
-gdi_swapchain_status              GDI_Context_Get_Swapchain_Status(gdi_context* Context, gdi_handle<gdi_swapchain> Handle);
 
 gdi_cmd_list*                     GDI_Context_Begin_Cmd_List(gdi_context* Context, gdi_cmd_list_type Type, gdi_handle<gdi_render_pass> RenderPass, gdi_handle<gdi_framebuffer> Framebuffer);
 bool                              GDI_Context_Execute(gdi_context* Context, span<gdi_swapchain_present_info> PresentInfo);

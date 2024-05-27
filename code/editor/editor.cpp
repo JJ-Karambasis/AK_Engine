@@ -261,15 +261,11 @@ void Window_Update_Panel_Tree(editor* Editor, ui* UI, panel* Panel, vec2 PanelDi
 
 void Window_Update_UI(editor* Editor, window* Window) {
     ui* UI = Window->UI;
-    
-    local_persist editor_input_manager sZeroManager;
-
-
 
     point2i GlobalMousePos = OS_Mouse_Get_Position();
     point2i WindowMousePos = GlobalMousePos - vec2i(OS_Window_Get_Client_Pos(Window->OSHandle));
 
-    UI_Begin_Build(UI, window_handle(Window), &Editor->InputManager, WindowMousePos);
+    UI_Begin_Build(UI, Window);
 
     UI_Push_Font(UI, {
         .Font     = Editor->MainFont,
@@ -427,67 +423,101 @@ void Window_Update(editor* Editor, window* Window) {
 #endif
 }
 
-bool Editor_Render(editor* Editor, span<window*> WindowsToRender) {
+void Editor_Update_And_Render(editor* Editor, span<window_handle> WindowsToUpdate, bool ProcessInputs) {
     scratch Scratch = Scratch_Get();
-    render_graph_id RenderGraph = Renderer_Create_Graph(Editor->Renderer);
-    gdi_context* Context = Renderer_Get_Context(Editor->Renderer);
+    window_manager* WindowManager = &Editor->WindowManager;
+      
+    //First reset all the window inputs and check if we need to resize
+    for(window_handle WindowHandle : WindowsToUpdate) {
+        window* Window = Window_Get(WindowHandle);
+        Window_New_Frame(Window);
 
-    array<gdi_handle<gdi_swapchain>> Swapchains(&Scratch, WindowsToRender.Count);
-    for(uptr i = 0; i < WindowsToRender.Count; i++) {
-        window* Window = WindowsToRender[i];
-        if(Window->Size.width == 0 || Window->Size.height == 0) continue;
-
-        Window_Update_UI(Editor, Window);
-
-        s32 Texture = GDI_Context_Get_Swapchain_Texture_Index(Context, Window->Swapchain);
-        if(Texture == -1) {
-            Renderer_Delete_Graph(Editor->Renderer, RenderGraph);
-            return false;
+        dim2i CurrentWindowSize = OS_Window_Get_Size(Window->OSHandle);
+        if(CurrentWindowSize != Window->Size) {
+            Window_Resize(WindowManager, Window);
+            Assert(CurrentWindowSize == Window->Size);
         }
-
-        Assert(Texture >= 0);
-
-        im_renderer* UIRenderer = Window->UI->Renderer;
-
-        Render_Task_Attach_Render_Pass(Editor->Renderer, UIRenderer->RenderTask, {
-            .RenderPass = Editor->UIRenderPass,
-            .Framebuffer = Window->Framebuffers[(uptr)Texture],
-            .ClearValues = {
-                gdi_clear::Color(0.0f, 0.0f, 1.0f, 1.0f)
-            }
-        },
-        {GDI_RESOURCE_STATE_COLOR});
-
-        Array_Push(&Swapchains, Window->Swapchain);
-        Render_Graph_Add_Task(RenderGraph, UIRenderer->RenderTask, 0);
     }
 
-    bool Result = Renderer_Execute(Editor->Renderer, RenderGraph, Swapchains);
-    Renderer_Delete_Graph(Editor->Renderer, RenderGraph);
-    Glyph_Cache_Update(Editor->GlyphCache);
+    //Next process inputs if we are rendering normally 
+    if(ProcessInputs) {
+        while(const os_event* Event = OS_Next_Event()) {
+            window* Window = (window*)OS_Window_Get_Data(Event->Window);
+            switch(Event->Type) {
+                case OS_EVENT_TYPE_WINDOW_CLOSED: {
+                    Window_Close(WindowManager, window_handle(Window));
+                } break;
 
-    return Result;
+                case OS_EVENT_TYPE_MOUSE_SCROLL: {
+                    const os_mouse_scroll_event* ScrollEvent = (const os_mouse_scroll_event*)Event;
+                    Window->Input.MouseScroll = ScrollEvent->Scroll;
+                } break;
+
+                case OS_EVENT_TYPE_KEY_PRESSED: {
+                    const os_keyboard_event* KeyboardEvent = (const os_keyboard_event*)Event;
+                    Window->Input.KeyboardInput[KeyboardEvent->Key].IsDown = true;
+                } break;
+
+                case OS_EVENT_TYPE_KEY_RELEASED: {
+                    const os_keyboard_event* KeyboardEvent = (const os_keyboard_event*)Event;
+                    Window->Input.KeyboardInput[KeyboardEvent->Key].IsDown = false;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_PRESSED: {
+                    const os_mouse_event* MouseEvent = (const os_mouse_event*)Event;
+                    Window->Input.MouseInput[MouseEvent->Key].IsDown = true;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_RELEASED: {
+                    const os_mouse_event* MouseEvent = (const os_mouse_event*)Event;
+                    Window->Input.MouseInput[MouseEvent->Key].IsDown = false;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_MOVE: {
+                    const os_mouse_move_event* MoveEvent = (const os_mouse_move_event*)Event;
+                    Window->Input.MousePosition = MoveEvent->Pos;
+                } break;
+
+                case OS_EVENT_TYPE_MOUSE_EXITED: {
+                    //Clear all keyboard data when mouse has exited since sometimes
+                    Window->Input.MousePosition = point2i(-20000, -20000);
+                } break;
+            }
+        }
+    }
+
+    //Now update the window
+    array<window*> WindowsToRender(&Scratch, WindowsToUpdate.Count);
+    for(window_handle WindowHandle : WindowsToUpdate) {
+        //Window can be closed after event processing so make sure the window 
+        //is still valid using the handle
+        window* Window = Window_Get(WindowHandle);
+        if(Window && Window->Size.width != 0 && Window->Size.height != 0) {
+            Window_Update_UI(Editor, Window);
+            Array_Push(&WindowsToRender, Window);
+        }
+    }
+
+    Windows_Render(WindowManager, WindowsToRender);    
+    Glyph_Cache_Update(WindowManager->GlyphCache);
 }
 
 internal OS_DRAW_WINDOW_CALLBACK_DEFINE(Application_Draw_Window) {
     editor* Editor = (editor*)UserData;
 
+    AK_Mutex_Lock(&Editor->UpdateLock);
+    
     scratch Scratch = Scratch_Get();
-    array<window*> WindowsToRender(&Scratch);
+    array<window_handle> WindowsToUpdate(&Scratch);
     window_manager* WindowManager = &Editor->WindowManager;
     for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
-        Array_Push(&WindowsToRender, Window);
+        Array_Push(&WindowsToUpdate, window_handle(Window));
     }
 
-    AK_Mutex_Lock(&Editor->RenderLock);
-    bool Failed = false;
-    for(window* Window : WindowsToRender) {
-        Window_Handle_Resize(Editor, Window);
-    }
-    Editor_Render(Editor, WindowsToRender);
+    Editor_Update_And_Render(Editor, WindowsToUpdate, false);
     // Window_Handle_Resize(Editor, Window);
     // Editor_Render(Editor, {Window});
-    AK_Mutex_Unlock(&Editor->RenderLock);
+    AK_Mutex_Unlock(&Editor->UpdateLock);
 }
 
 bool Application_Main() {
@@ -644,9 +674,7 @@ bool Application_Main() {
 
         window_handle Handle = Window_Open_With_Handle(&Editor.WindowManager, MainWindowID, Swapchain);
     }
-    
-    editor_input_manager* InputManager = &Editor.InputManager;
-    
+        
     if(!Editor.GlyphCache) {
         Fatal_Error_Message();
         return false;
@@ -669,81 +697,36 @@ bool Application_Main() {
     u64 Frequency = AK_Query_Performance_Frequency();
     u64 LastCounter = AK_Query_Performance_Counter();
 
-    AK_Mutex_Create(&Editor.RenderLock);
+    AK_Mutex_Create(&Editor.UpdateLock);
     OS_Set_Draw_Window_Callback(Application_Draw_Window, &Editor);
 
 
     while(OS_Window_Is_Open(OS_Get_Main_Window())) {
-        u64 StartCounter = AK_Query_Performance_Counter();
-        f64 dt = (double)(StartCounter-LastCounter)/(double)Frequency;
-        LastCounter = StartCounter;
-        Editor_Input_Manager_New_Frame(InputManager, dt);
+        //Update can only happen once and only one one thread
+        AK_Mutex_Lock(&Editor.UpdateLock);
 
-        for(u32 KeyIndex = 0; KeyIndex < OS_KEYBOARD_KEY_COUNT; KeyIndex++) {
-            if(OS_Keyboard_Get_Key_State((os_keyboard_key)KeyIndex)) {
-                InputManager->KeyboardInput[KeyIndex].IsDown = true;
-            }
-        }
-
-        for(u32 KeyIndex = 0; KeyIndex < OS_MOUSE_KEY_COUNT; KeyIndex++) {
-            if(OS_Mouse_Get_Key_State((os_mouse_key)KeyIndex)) {
-                InputManager->MouseInput[KeyIndex].IsDown = true;
-            }
-        }
-
-        while(const os_event* Event = OS_Next_Event()) {
-            switch(Event->Type) {
-                case OS_EVENT_TYPE_WINDOW_CLOSED: {
-                    window* Window = (window*)OS_Window_Get_Data(Event->Window);
-                    Window_Close(&Editor.WindowManager, window_handle(Window));
-                } break;
-
-                case OS_EVENT_TYPE_MOUSE_DELTA: {
-                    const os_mouse_delta_event* DeltaEvent = (const os_mouse_delta_event*)Event;
-                    InputManager->MouseDelta = vec2(DeltaEvent->Delta);
-                } break;
-
-                case OS_EVENT_TYPE_MOUSE_SCROLL: {
-                    const os_mouse_scroll_event* ScrollEvent = (const os_mouse_scroll_event*)Event;
-                    InputManager->MouseScroll = ScrollEvent->Scroll;
-                } break;
-            }
-        }
-
-        if(InputManager->Is_Key_Down(OS_KEYBOARD_KEY_ALT)) {
-            if(InputManager->Is_Key_Pressed(OS_KEYBOARD_KEY_B)) {
-                DebugBreak();
-            }
-        }
-
-        window_manager* WindowManager = &Editor.WindowManager;
         scratch Scratch = Scratch_Get();
-
-        //If any window is resizing, we will not render
-
-        //Sometimes a window can fail to render because it resizes so we need
-        //to keep a sepearate list of windows to render 
-        bool RenderResult = true;
-        array<window*> WindowsToRender(&Scratch);
+        array<window_handle> WindowsToUpdate(&Scratch);
+        window_manager* WindowManager = &Editor.WindowManager;
         for(window* Window = WindowManager->FirstWindow; Window; Window = Window->Next) {
-            Array_Push(&WindowsToRender, Window);
+            Array_Push(&WindowsToUpdate, window_handle(Window));
         }
-        
-        AK_Mutex_Lock(&Editor.RenderLock);
-        bool Render = true;
-        for(window* Window : WindowsToRender) {
+
+        bool Update = true;
+        for(window_handle WindowHandle : WindowsToUpdate) {
+            window* Window = Window_Get(WindowHandle);
+            Assert(Window);
             if(Window_Is_Resizing(Window)) {
-                Render = false;
+                Update = false;
                 break;
             }
         }
 
-        for(window* Window : WindowsToRender) {
-            Window_Handle_Resize(&Editor, Window);
+        if(Update) {
+            Editor_Update_And_Render(&Editor, WindowsToUpdate, true);
         }
 
-        if(Render) Editor_Render(&Editor, WindowsToRender);
-        AK_Mutex_Unlock(&Editor.RenderLock);
+        AK_Mutex_Unlock(&Editor.UpdateLock);
     }
 
     AK_Job_System_Delete(Editor.JobSystemHigh);
@@ -757,5 +740,4 @@ bool Application_Main() {
 
 #include "windows.cpp"
 #include "ui/ui.cpp"
-#include "editor_input.cpp"
 #include <engine_source.cpp>

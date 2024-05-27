@@ -372,12 +372,9 @@ void UI_Delete(ui* UI) {
     }
 }
 
-void UI_Begin_Build(ui* UI, window_handle WindowHandle, editor_input_manager* InputManager, const point2i& MousePos) {
+void UI_Begin_Build(ui* UI, window* Window) {
     UI_Reset_Stacks(UI);
-    UI->InputManager = InputManager;
-    UI->MousePosition = MousePos;
-
-    window* Window = Window_Get(WindowHandle);
+    UI->Window = Window;
 
     //First setup top level root
     {
@@ -577,12 +574,13 @@ dim2 UI_Box_Get_Dim(ui_box* Box) {
 
 ui_signal UI_Signal_From_Box(ui* UI, ui_box* Box) {
     ui_signal Result = {};
-    editor_input_manager* InputManager = UI->InputManager;
+
 
     bool ShouldHoverCheck = Box->Flags & UI_BOX_FLAG_MOUSE_CLICKABLE; 
 
+    window_input* Input = &UI->Window->Input;
     if(ShouldHoverCheck) {
-        if(Rect2_Contains_Point(Box->Rect, point2(UI->MousePosition))) {
+        if(Rect2_Contains_Point(Box->Rect, point2(Input->MousePosition))) {
             Result.Flags |= UI_SIGNAL_FLAG_HOVERING_BIT;
         }
     }
@@ -590,15 +588,15 @@ ui_signal UI_Signal_From_Box(ui* UI, ui_box* Box) {
     if(Box->Flags & UI_BOX_FLAG_MOUSE_CLICKABLE) {
         //Make sure we are hovering before recording click commands 
         if(Result.Flags & UI_SIGNAL_FLAG_HOVERING_BIT) {
-            if(InputManager->Is_Mouse_Pressed(OS_MOUSE_KEY_LEFT)) {
+            if(Input->Is_Mouse_Pressed(OS_MOUSE_KEY_LEFT)) {
                 Result.Flags |= UI_SIGNAL_FLAG_LEFT_PRESSED_BIT;
             } 
             
-            if(InputManager->Is_Mouse_Down(OS_MOUSE_KEY_LEFT)) {
+            if(Input->Is_Mouse_Down(OS_MOUSE_KEY_LEFT)) {
                 Result.Flags |= UI_SIGNAL_FLAG_LEFT_DOWN_BIT;
             }
 
-            if(InputManager->Is_Mouse_Released(OS_MOUSE_KEY_LEFT)) {
+            if(Input->Is_Mouse_Released(OS_MOUSE_KEY_LEFT)) {
                 Result.Flags |= UI_SIGNAL_FLAG_LEFT_RELEASED_BIT;
             }
         }

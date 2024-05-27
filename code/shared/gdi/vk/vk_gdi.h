@@ -62,18 +62,32 @@ struct vk_device {
 };
 
 struct vk_fence {
-    VkFence Fence;
-    u64     Value;
-    u32     NextFreeIndex;
-};
-
-struct vk_frame_context {
-    u64             Fence;
+    VkFence   Fence;
+    vk_fence* Next;
 };
 
 struct vk_fence_storage {
-    array<vk_fence> Array;
-    u32             FirstFreeIndex;
+    vk_fence* Free;
+    vk_fence* First;
+    vk_fence* Last;
+    u32       Count;
+};
+
+struct vk_semaphore {
+    VkSemaphore   Semaphore;
+    vk_semaphore* Next;
+};
+
+struct vk_semaphore_storage {
+    vk_semaphore* Free;
+    vk_semaphore* First;
+    vk_semaphore* Last;
+};
+
+struct vk_frame_context {
+    vk_semaphore_storage QueueSemaphores;
+    vk_semaphore_storage PresentSemaphores;
+    vk_fence_storage     Fences;
 };
 
 struct gdi_context {
@@ -90,7 +104,6 @@ struct gdi_context {
     vk_descriptor_pool      DescriptorPool;
     u64                     TotalFramesRendered;
     array<vk_frame_context> Frames;
-    vk_fence_storage        Fences;
 
     vk_thread_context_manager ThreadContextManager;
     vk_resource_context       ResourceContext;

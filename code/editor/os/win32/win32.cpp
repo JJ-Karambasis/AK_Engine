@@ -1,5 +1,7 @@
 #include "win32.h"
 
+#define GET_X_LPARAM(lp)    ((int)(short)LOWORD(lp))
+#define GET_Y_LPARAM(lp)    ((int)(short)HIWORD(lp))
 #define Win32_Message(message) (WM_USER+WIN32_MESSAGE_##message)
 #define OS_Monitor_ID(index) (((u64)index << 32) | UINT32_MAX)
 #define OS_Monitor_Index(ID) (u32)(ID >> 32)
@@ -248,7 +250,7 @@ gdi_window_data OS_Window_Get_GDI_Data(os_window_id WindowID) {
 bool OS_Window_Is_Resizing(os_window_id WindowID) {
     os_window* Window = OS_Window_Get(WindowID);
     if(!Window) return false;
-    return AK_Atomic_Load_U32_Relaxed(&Window->IsResizing) == true32;
+    return AK_Atomic_Load_U32_Relaxed(&Window->IsResizing) == true32 || AK_Atomic_Load_U32_Relaxed(&Window->IsPainting) == true32;
 }
 
 bool OS_Window_Is_Focused(os_window_id WindowID) {
@@ -372,11 +374,95 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
             DefaultMessage = true; //Other we will not get WM_SIZE messages
         } break;
 
+        case WM_SYSKEYDOWN:
+        case WM_KEYDOWN: 
+        case WM_SYSKEYUP:
+        case WM_KEYUP:
+        {
+            os_keyboard_key Key = Win32_Translate_Key((int)WParam);
+            if(Key != -1) { 
+                os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+                Assert(OSWindow->Handle == Window);
+
+                bool WasDown = (LParam & (1 << 30)) != 0;
+                bool IsDown = (LParam & (1 << 31)) == 0;
+                if(WasDown != IsDown) {
+                    if(IsDown) {
+                        os_keyboard_event* Event = (os_keyboard_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_KEY_PRESSED);
+                        Event->Window = OSWindow->ID;
+                        Event->Key = Key;
+                    } else {
+                        os_keyboard_event* Event = (os_keyboard_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_KEY_RELEASED);
+                        Event->Window = OSWindow->ID;
+                        Event->Key = Key;
+                    }
+                }
+            }
+        } break;
+
+        case WM_LBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+        case WM_RBUTTONDOWN: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+            os_mouse_key MouseKey = (Message == WM_LBUTTONDOWN) ? OS_MOUSE_KEY_LEFT : (Message == WM_MBUTTONDOWN ? OS_MOUSE_KEY_MIDDLE : OS_MOUSE_KEY_RIGHT); 
+            os_mouse_event* MouseEvent = (os_mouse_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_PRESSED);
+            MouseEvent->Window = OSWindow->ID;
+            MouseEvent->Key = MouseKey;
+        } break;
+
+        case WM_LBUTTONUP:
+        case WM_MBUTTONUP:
+        case WM_RBUTTONUP: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+            os_mouse_key MouseKey = (Message == WM_LBUTTONUP) ? OS_MOUSE_KEY_LEFT : (Message == WM_MBUTTONUP ? OS_MOUSE_KEY_MIDDLE : OS_MOUSE_KEY_RIGHT); 
+            os_mouse_event* MouseEvent = (os_mouse_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_RELEASED);
+            MouseEvent->Window = OSWindow->ID;
+            MouseEvent->Key = MouseKey;
+        } break;
+
+        case WM_MOUSEMOVE: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+            if(!OSWindow->MouseTracked) {
+                TRACKMOUSEEVENT TrackEvent = {sizeof(TrackEvent), TME_LEAVE, Window, 0};
+                TrackMouseEvent(&TrackEvent);
+                OSWindow->MouseTracked = true;
+
+                os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_ENTERED);
+                Event->Window = OSWindow->ID;
+            }
+
+            os_mouse_move_event* MouseEvent = (os_mouse_move_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_MOVE);
+            MouseEvent->Window = OSWindow->ID;
+            MouseEvent->Pos = point2i(GET_X_LPARAM(LParam), GET_Y_LPARAM(LParam));
+        } break;
+
+        case WM_MOUSELEAVE: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+            OSWindow->MouseTracked = false;
+            os_event* Event = OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_EXITED);
+            Event->Window = OSWindow->ID;
+        } break;
+
+        case WM_MOUSEWHEEL: {
+            os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
+            Assert(OSWindow->Handle == Window);
+            f32 Scroll = (f32)GET_WHEEL_DELTA_WPARAM(WParam)/(f32)WHEEL_DELTA;
+            os_mouse_scroll_event* Event = (os_mouse_scroll_event*)OS_Event_Stream_Allocate_Event(OS->EventStream, OS_EVENT_TYPE_MOUSE_SCROLL);
+            Event->Window = OSWindow->ID;
+            Event->Scroll = Scroll;     
+        } break;
+
         case WM_SIZE:
         case WM_PAINT:
         {
             os_window* OSWindow = (os_window*)GetWindowLongPtrW(Window, GWLP_USERDATA);
             Assert(OSWindow->Handle == Window);
+
+            AK_Atomic_Store_U32_Relaxed(&OSWindow->IsPainting, true);
 
             RECT WindowRect;
             GetClientRect(Window, &WindowRect);
@@ -393,6 +479,8 @@ internal LRESULT Win32_OS_Main_Window_Proc(HWND Window, UINT Message, WPARAM WPa
             } else {
                 DefaultMessage = true;
             }
+
+            AK_Atomic_Store_U32_Relaxed(&OSWindow->IsPainting, false);
         } break;
 
         case WM_NCCALCSIZE: {
@@ -627,12 +715,6 @@ int main() {
                             os_mouse_delta_event* Event = (os_mouse_delta_event*)OS_Event_Stream_Allocate_Event(OS.EventStream, OS_EVENT_TYPE_MOUSE_DELTA);
                             Event->Delta = Delta;
                         }
-
-                        if(Mouse->usButtonFlags & RI_MOUSE_WHEEL) {
-                            f32 Scroll = (f32)((SHORT)Mouse->usButtonData/WHEEL_DELTA);
-                            os_mouse_scroll_event* Event = (os_mouse_scroll_event*)OS_Event_Stream_Allocate_Event(OS.EventStream, OS_EVENT_TYPE_MOUSE_SCROLL);
-                            Event->Scroll = Scroll;
-                        }
                     } break;
                 }
             } break;
@@ -663,3 +745,72 @@ void OS_Set(os* OS) {
 #pragma comment(lib, "Dwmapi.lib")
 #include <core/core.cpp>
 #include <os_event.cpp>
+
+internal os_keyboard_key Win32_Translate_Key(int VKCode) {
+    switch(VKCode) {
+        case 'A': return OS_KEYBOARD_KEY_A;
+        case 'B': return OS_KEYBOARD_KEY_B;
+        case 'C': return OS_KEYBOARD_KEY_C;
+        case 'D': return OS_KEYBOARD_KEY_D;
+        case 'E': return OS_KEYBOARD_KEY_E;
+        case 'F': return OS_KEYBOARD_KEY_F;
+        case 'G': return OS_KEYBOARD_KEY_G;
+        case 'H': return OS_KEYBOARD_KEY_H;
+        case 'I': return OS_KEYBOARD_KEY_I; 
+        case 'J': return OS_KEYBOARD_KEY_J;
+        case 'K': return OS_KEYBOARD_KEY_K;
+        case 'L': return OS_KEYBOARD_KEY_L;
+        case 'M': return OS_KEYBOARD_KEY_M;
+        case 'N': return OS_KEYBOARD_KEY_N;
+        case 'O': return OS_KEYBOARD_KEY_O;
+        case 'P': return OS_KEYBOARD_KEY_P;
+        case 'Q': return OS_KEYBOARD_KEY_Q;
+        case 'R': return OS_KEYBOARD_KEY_R;
+        case 'S': return OS_KEYBOARD_KEY_S;
+        case 'T': return OS_KEYBOARD_KEY_T;
+        case 'U': return OS_KEYBOARD_KEY_U;
+        case 'V': return OS_KEYBOARD_KEY_V;
+        case 'W': return OS_KEYBOARD_KEY_W;
+        case 'X': return OS_KEYBOARD_KEY_X;
+        case 'Y': return OS_KEYBOARD_KEY_Y;
+        case 'Z': return OS_KEYBOARD_KEY_Z;
+        case '0': return OS_KEYBOARD_KEY_ZERO;
+        case '1': return OS_KEYBOARD_KEY_ONE;
+        case '2': return OS_KEYBOARD_KEY_TWO;
+        case '3': return OS_KEYBOARD_KEY_THREE;
+        case '4': return OS_KEYBOARD_KEY_FOUR;
+        case '5': return OS_KEYBOARD_KEY_FIVE;
+        case '6': return OS_KEYBOARD_KEY_SIX;
+        case '7': return OS_KEYBOARD_KEY_SEVEN;
+        case '8': return OS_KEYBOARD_KEY_EIGHT;
+        case '9': return OS_KEYBOARD_KEY_NINE;
+        case VK_SPACE: return OS_KEYBOARD_KEY_SPACE;
+        case VK_TAB: return OS_KEYBOARD_KEY_TAB;
+        case VK_ESCAPE: return OS_KEYBOARD_KEY_ESCAPE;
+        case VK_UP: return OS_KEYBOARD_KEY_UP;
+        case VK_DOWN: return OS_KEYBOARD_KEY_DOWN;
+        case VK_LEFT: return OS_KEYBOARD_KEY_LEFT;
+        case VK_RIGHT: return OS_KEYBOARD_KEY_RIGHT;
+        case VK_BACK: return OS_KEYBOARD_KEY_BACKSPACE;
+        case VK_RETURN: return OS_KEYBOARD_KEY_RETURN;
+        case VK_DELETE: return OS_KEYBOARD_KEY_DELETE;
+        case VK_INSERT: return OS_KEYBOARD_KEY_INSERT;
+        case VK_SHIFT: return OS_KEYBOARD_KEY_SHIFT;
+        case VK_CONTROL: return OS_KEYBOARD_KEY_CONTROL;
+        case VK_MENU: return OS_KEYBOARD_KEY_ALT;
+        case VK_F1: return OS_KEYBOARD_KEY_F1;
+        case VK_F2: return OS_KEYBOARD_KEY_F2;
+        case VK_F3: return OS_KEYBOARD_KEY_F3;
+        case VK_F4: return OS_KEYBOARD_KEY_F4;
+        case VK_F5: return OS_KEYBOARD_KEY_F5;
+        case VK_F6: return OS_KEYBOARD_KEY_F6;
+        case VK_F7: return OS_KEYBOARD_KEY_F7;
+        case VK_F8: return OS_KEYBOARD_KEY_F8;
+        case VK_F9: return OS_KEYBOARD_KEY_F9;
+        case VK_F10: return OS_KEYBOARD_KEY_F10;
+        case VK_F11: return OS_KEYBOARD_KEY_F11;
+        case VK_F12: return OS_KEYBOARD_KEY_F12;
+    }
+
+    return (os_keyboard_key)-1;
+}

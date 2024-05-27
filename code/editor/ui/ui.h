@@ -111,9 +111,8 @@ struct ui {
     //Dependencies
     glyph_cache*          GlyphCache;
 
-    //Input manager
-    editor_input_manager* InputManager;
-    point2i               MousePosition;               
+    //Window
+    window* Window;
 
     //Rendering
     im_renderer*               Renderer;
@@ -148,7 +147,7 @@ ui*  UI_Create(const ui_create_info& CreateInfo);
 void UI_Delete(ui* UI);
 
 //Build API
-void UI_Begin_Build(ui* UI, window_handle Window, editor_input_manager* InputManager, const point2i& MousePos);
+void UI_Begin_Build(ui* UI, window* Window);
 void UI_End_Build(ui* UI);
 
 //Cache lookup

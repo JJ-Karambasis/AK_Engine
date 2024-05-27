@@ -1,6 +1,8 @@
 #ifndef VK_SWAPCHAIN_H
 #define VK_SWAPCHAIN_H
 
+struct vk_semaphore;
+
 struct vk_swapchain : vk_resource_base {
     gdi_format                     Format;
     gdi_texture_usage_flags        UsageFlags;
@@ -9,9 +11,7 @@ struct vk_swapchain : vk_resource_base {
     array<gdi_handle<gdi_texture>> Textures;
     dim2i                          Size;
     s32                            TextureIndex;
-    fixed_array<VkSemaphore>       AcquireLocks;
-    fixed_array<VkSemaphore>       ExecuteLocks;
-    gdi_swapchain_status           Status;
+    vk_semaphore*                  AcquireSemaphore;
 };
 
 internal string VK_Get_Surface_Extension_Name();
