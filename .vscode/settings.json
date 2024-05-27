@@ -1,6 +1,6 @@
 {
     "compiler": "msvc",
-    "build_mode": "release",
+    "build_mode": "debug",
     "env": "env64",
     "C_Cpp.errorSquiggles": "disabled"
 }
